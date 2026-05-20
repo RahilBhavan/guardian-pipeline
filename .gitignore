@@ -1,0 +1,28 @@
+# Foundry
+out/
+cache/
+broadcast/
+# .gas-snapshot IS committed — it is the baseline for `forge snapshot --check` in CI.
+docs/aderyn-report.md
+slither-report.md
+invariant-results.txt
+coverage-summary.txt
+gas-diff.txt
+lcov.info
+
+# Dependencies
+node_modules/
+lib/
+
+# Build output
+dist/
+
+# Environment — never commit real keys
+.env
+.env.local
+guardian/.env
+dashboard/.env
+
+# Editor / OS
+.DS_Store
+*.log

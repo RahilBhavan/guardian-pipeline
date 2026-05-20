@@ -1,0 +1,731 @@
+/* ===========================================================================
+   Guardian Pipeline — dashboard styles.
+   Design system: Linear marketing canvas (dark-canvas, lavender accent,
+   four-step surface ladder, hairline borders, no drop shadows).
+   Variable names are kept stable so components reference them unchanged.
+   =========================================================================== */
+
+:root {
+  /* --- Canvas + four-step surface ladder ------------------------------- */
+  --bg: #010102; /* canvas — near-pure black, faint blue tint */
+  --bg-panel: #0b0c0e; /* surface-1 — cards, panels */
+  --bg-elevated: #141518; /* surface-2 — featured / hovered, inset wells */
+  --surface-3: #1c1d21; /* surface-3 — nested fills, bar tracks */
+  --surface-4: #232529; /* surface-4 — deepest lifted surface */
+
+  /* --- Hairline borders ------------------------------------------------ */
+  --border: #23252a; /* hairline */
+  --border-strong: #2e3036; /* hairline-strong */
+  --border-tertiary: #1a1b1f; /* hairline-tertiary */
+
+  /* --- Text ------------------------------------------------------------ */
+  --text: #f7f8f8; /* ink — headlines, emphasis */
+  --ink-muted: #d0d6e0; /* ink-muted — bright secondary */
+  --text-dim: #8a8f98; /* ink-subtle — secondary */
+  --text-faint: #62666d; /* ink-tertiary — tertiary / disabled */
+
+  /* --- Brand accent: Linear lavender-blue (used scarcely) -------------- */
+  --primary: #5e6ad2;
+  --primary-hover: #828fff;
+  --primary-focus: #5e69d1;
+  --on-primary: #ffffff;
+  --primary-dim: #181a2e; /* faint lavender fill for chips */
+  /* Legacy aliases — components still reference these names. */
+  --blue: #5e6ad2;
+  --base-blue: #5e6ad2;
+
+  /* --- Semantic (monitoring requires pass/fail signalling) ------------- */
+  --green: #27a644; /* semantic-success */
+  --green-dim: #0f2a18; /* success pill fill */
+  --red: #e5484d; /* alert — a monitoring dashboard's necessary semantic */
+  --red-dim: #3a1618; /* alert pill fill */
+  --amber: #8a8f98; /* deprecated — partial states now use neutral ink */
+
+  /* --- Type ------------------------------------------------------------ */
+  --sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
+    monospace;
+
+  /* --- Radius scale ---------------------------------------------------- */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-pill: 9999px;
+  --radius: 12px; /* legacy alias */
+
+  /* --- Spacing scale (4px base) --------------------------------------- */
+  --s-xxs: 4px;
+  --s-xs: 8px;
+  --s-sm: 12px;
+  --s-md: 16px;
+  --s-lg: 24px;
+  --s-xl: 32px;
+
+  /* Subtle white top-edge highlight on lifted panels. */
+  --edge-highlight: inset 0 1px 0 0 rgba(255, 255, 255, 0.035);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  min-width: 0; /* flex/grid children shrink instead of overflowing */
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: var(--primary-hover);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--primary);
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--primary-focus);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+
+/* ---------- Layout shell ---------- */
+.app {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 32px 32px 80px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-lg);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s-sm);
+}
+
+.header h1 {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: var(--s-xs);
+}
+
+.header h1 .shield {
+  color: var(--primary);
+  font-size: 17px;
+}
+
+.header .vault {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0;
+  color: var(--text-dim);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 5px 10px;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Grids ---------- */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-lg);
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Traceability + exploit rows carry wide content — give them a full-width
+   column earlier so their inner rows never crowd. */
+@media (max-width: 1024px) {
+  .grid-assurance {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Panels ---------- */
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--s-lg);
+  box-shadow: var(--edge-highlight);
+}
+
+.panel-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: var(--s-md);
+}
+
+/* ---------- Latency strip ---------- */
+.latency-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-md) var(--s-lg);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 14px 20px;
+  box-shadow: var(--edge-highlight);
+}
+
+.latency-strip .item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.latency-strip .item .label {
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.latency-strip .item .value {
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0;
+  color: var(--text);
+}
+
+.live-pill {
+  display: flex;
+  align-items: center;
+  gap: var(--s-xs);
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-pill);
+  flex: none;
+}
+.dot.live {
+  background: var(--green);
+  animation: pulse 1.8s infinite;
+}
+.dot.down {
+  background: var(--red);
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(39, 166, 68, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(39, 166, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(39, 166, 68, 0);
+  }
+}
+
+/* ---------- Invariant health cards ---------- */
+.invariant-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-sm);
+}
+@media (max-width: 520px) {
+  .invariant-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.inv-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: var(--r-md);
+  padding: 12px 13px;
+}
+
+.inv-card .top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s-xs);
+  margin-bottom: 5px;
+}
+.inv-card .id {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0;
+  color: var(--text-dim);
+}
+.inv-card .name {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.inv-card .desc {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0;
+  color: var(--text-faint);
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Badges ---------- */
+.badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 3px 7px;
+  border-radius: var(--r-sm);
+  white-space: nowrap;
+  flex: none;
+}
+.badge.healthy {
+  background: var(--green-dim);
+  color: var(--green);
+}
+.badge.violated {
+  background: var(--red-dim);
+  color: var(--red);
+}
+.badge.checking {
+  background: var(--surface-3);
+  color: var(--text-dim);
+}
+
+/* ---------- Alert feed ---------- */
+.alert-list {
+  max-height: 412px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-xs);
+}
+.alert-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-sm);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 11px 12px;
+}
+.alert-row .pill {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0;
+  background: var(--red-dim);
+  color: var(--red);
+  padding: 3px 7px;
+  border-radius: var(--r-sm);
+  white-space: nowrap;
+  flex: none;
+}
+.alert-row .body {
+  flex: 1;
+}
+.alert-row .body .name {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.alert-row .body .meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0;
+  color: var(--text-faint);
+  margin-top: 3px;
+}
+
+.empty {
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 13px;
+  padding: 40px 12px;
+}
+
+/* ---------- Latency chart ---------- */
+.chart {
+  width: 100%;
+  height: 120px;
+  display: block;
+}
+
+/* ---------- Scrollbar ---------- */
+.scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+.scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--r-xs);
+}
+.scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ===========================================================================
+   Assurance score panel
+   =========================================================================== */
+.assurance-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s-md) var(--s-lg);
+  padding-bottom: var(--s-md);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--s-md);
+}
+
+.score-readout {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.score-num {
+  font-family: var(--sans);
+  font-size: 52px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+.score-denom {
+  font-family: var(--mono);
+  font-size: 17px;
+  letter-spacing: 0;
+  color: var(--text-faint);
+}
+.score-grade {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0;
+  border: 1.5px solid;
+  border-radius: var(--r-md);
+  padding: 4px 10px;
+}
+.score-meta {
+  text-align: right;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.score-meta-dim {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0;
+  color: var(--text-faint);
+  margin-top: 3px;
+}
+
+.score-comps {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-md) var(--s-lg);
+}
+@media (max-width: 560px) {
+  .score-comps {
+    grid-template-columns: 1fr;
+  }
+}
+
+.score-comp-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-xs);
+  margin-bottom: 7px;
+}
+.score-comp-label {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.score-comp-weight {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+.score-comp-value {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.score-comp-detail {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0;
+  color: var(--text-faint);
+  margin-top: 6px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.score-bar-track {
+  height: 6px;
+  background: var(--surface-3);
+  border-radius: var(--r-pill);
+  overflow: hidden;
+}
+.score-bar-fill {
+  height: 100%;
+  border-radius: var(--r-pill);
+  transition: width 0.4s ease;
+}
+
+.gate-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--s-xs);
+  margin-top: var(--s-md);
+  padding: 10px 13px;
+  border-radius: var(--r-md);
+  font-size: 12px;
+  font-weight: 600;
+}
+.gate-strip.gate-pass {
+  background: var(--green-dim);
+  color: var(--green);
+}
+.gate-strip.gate-fail {
+  background: var(--red-dim);
+  color: var(--red);
+}
+.gate-mark {
+  font-size: 13px;
+}
+
+/* ===========================================================================
+   Traceability matrix + exploit replay (shared)
+   =========================================================================== */
+.trace-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-md) var(--s-xl);
+  padding-bottom: var(--s-md);
+  margin-bottom: var(--s-sm);
+  border-bottom: 1px solid var(--border);
+}
+.trace-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.trace-stat-num {
+  font-family: var(--mono);
+  font-size: 21px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.trace-stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.trace-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-xs);
+}
+
+.trace-row,
+.exploit-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--s-xs) var(--s-md);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+}
+
+.trace-main,
+.exploit-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px var(--s-xs);
+}
+.trace-side,
+.exploit-side {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px var(--s-xs);
+}
+
+@media (max-width: 560px) {
+  .trace-row,
+  .exploit-row {
+    grid-template-columns: 1fr;
+  }
+  .trace-side,
+  .exploit-side {
+    justify-content: flex-start;
+  }
+}
+
+.trace-id {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.trace-title,
+.exploit-name {
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.exploit-class {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.exploit-net {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0;
+  color: var(--text-faint);
+}
+
+.trace-warn {
+  margin-top: var(--s-sm);
+  padding: 10px 12px;
+  background: var(--red-dim);
+  color: var(--red);
+  border-radius: var(--r-md);
+  font-size: 11.5px;
+}
+
+/* Severity tags — neutral by design; only the dot of colour distinguishes. */
+.sev-tag,
+.tier-tag,
+.outcome-tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: var(--r-sm);
+  white-space: nowrap;
+  flex: none;
+}
+
+.sev-critical {
+  background: var(--red-dim);
+  color: var(--red);
+}
+.sev-high {
+  background: rgba(229, 72, 77, 0.12);
+  color: #f08a8d;
+}
+.sev-medium {
+  background: var(--surface-3);
+  color: var(--ink-muted);
+}
+.sev-low,
+.sev-info,
+.sev-gas {
+  background: var(--surface-3);
+  color: var(--text-dim);
+}
+
+/* Coverage tier tags */
+.tier-full {
+  background: var(--green-dim);
+  color: var(--green);
+}
+.tier-partial {
+  background: var(--surface-3);
+  color: var(--ink-muted);
+}
+.tier-gap {
+  background: var(--red-dim);
+  color: var(--red);
+}
+.tier-na {
+  background: var(--surface-3);
+  color: var(--text-faint);
+}
+
+/* Layer chips */
+.layer-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.layer-chip {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0;
+  padding: 3px 6px;
+  border-radius: var(--r-xs);
+  white-space: nowrap;
+}
+.layer-on {
+  background: var(--primary-dim);
+  color: var(--primary-hover);
+}
+.layer-off {
+  background: var(--surface-3);
+  color: var(--text-faint);
+}
+
+/* Exploit outcome tags */
+.out-prevented {
+  background: var(--green-dim);
+  color: var(--green);
+}
+.out-detected {
+  background: var(--primary-dim);
+  color: var(--primary-hover);
+}
+.out-missed {
+  background: var(--red-dim);
+  color: var(--red);
+}

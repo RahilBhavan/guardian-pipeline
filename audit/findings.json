@@ -1,0 +1,159 @@
+{
+  "report": {
+    "title": "Vault Security Review",
+    "subject": "src/Vault.sol",
+    "auditor": "Meridian Audit Collective (illustrative)",
+    "reportDate": "2026-05-10",
+    "reviewedCommit": "vault-v1",
+    "methodology": "Manual line-by-line review, property enumeration, and adversarial scenario modelling against an over-collateralised single-asset lending vault.",
+    "note": "This is an illustrative audit report produced for the Guardian Pipeline. It demonstrates how a static, point-in-time review (the artifact Landsman et al. 2025 found weakly correlated with exploit prevention) is converted into continuous, multi-layered assurance (Bourveau et al. 2024) by binding every security-relevant finding to a fuzz-harness invariant, a live monitor, and an exploit replay."
+  },
+  "severityScale": ["Critical", "High", "Medium", "Low", "Informational", "Gas"],
+  "statusScale": ["Open", "Acknowledged", "Resolved", "Mitigated"],
+  "findings": [
+    {
+      "id": "GUA-01",
+      "title": "Privileged attack() function can force protocol insolvency",
+      "severity": "Critical",
+      "status": "Mitigated",
+      "category": "Access Control",
+      "location": "src/Vault.sol:183-187",
+      "securityRelevant": true,
+      "description": "The attack() function, callable by the immutable `attacker` address, sets totalBorrowed = totalDeposited + 1 with no transfer or accounting basis. It exists solely to demonstrate live detection. A `block.chainid == BASE_MAINNET` backstop now reverts the call on Base mainnet, but it remains fully callable on testnets and local chains; while it executes, the vault is insolvent — liabilities exceed assets.",
+      "recommendation": "The mainnet chainid backstop (MainnetDisabled) is defence-in-depth, not a fix: remove attack() entirely before any production deployment. The function is retained in this codebase only as the controlled breach used by the Loom demo and the EXP-01 exploit replay.",
+      "continuousAssurance": {
+        "invariants": ["INV-01", "INV-07"],
+        "harnessTests": ["invariant_solvency", "invariant_nonNegativeNet"],
+        "liveMonitors": ["INV-01", "INV-07"],
+        "exploitReplays": ["EXP-01"],
+        "rationale": "A static review can flag attack() but cannot guarantee it is removed or that no equivalent privileged path is added later. INV-01/INV-07 are fuzz-proven pre-deploy and monitored every block, so any state where borrows exceed deposits is caught within one block regardless of the cause."
+      }
+    },
+    {
+      "id": "GUA-02",
+      "title": "Reentrancy exposure on state-mutating functions",
+      "severity": "Medium",
+      "status": "Resolved",
+      "category": "Reentrancy",
+      "location": "src/Vault.sol:99-175",
+      "securityRelevant": true,
+      "description": "As raised: deposit, withdraw, borrow and repay performed ERC-20 transfers with no reentrancy protection — safe only while the asset is a standard non-callback ERC-20. A token with transfer hooks (ERC-777-style) would open a reentrancy surface against the liquidity and collateral checks. Remediation: the contract now inherits OpenZeppelin's ReentrancyGuard and all four mutating functions are marked `nonReentrant`, closing the reentrancy surface for any asset.",
+      "recommendation": "Resolved — retain the ReentrancyGuard. Note that the fuzz harness still exercises a non-callback MockERC20 and cannot reproduce a reentrant sequence, so INV-02 remains the continuous safety net for this class rather than the harness.",
+      "continuousAssurance": {
+        "invariants": ["INV-02"],
+        "harnessTests": [],
+        "liveMonitors": ["INV-02"],
+        "exploitReplays": [],
+        "rationale": "Although the ReentrancyGuard now blocks this class structurally, the fuzz harness exercises a non-callback MockERC20 and cannot reproduce a reentrant call sequence — so the finding is not proven absent by the harness. It is monitored live: any reentrancy that drained the liquidity buffer would break INV-02 and alert within one block. The traceability map surfaces this as monitored-only — a deliberately partial-coverage finding."
+      }
+    },
+    {
+      "id": "GUA-03",
+      "title": "sharePrice and collateralRatio are mutable storage with no setter",
+      "severity": "Low",
+      "status": "Acknowledged",
+      "category": "Code Quality",
+      "location": "src/Vault.sol:57-60",
+      "securityRelevant": true,
+      "description": "sharePrice and collateralRatio are declared as mutable storage but the contract exposes no function to change them. They are effectively constants fixed at construction (1e18 and 8000 bps). A reader cannot tell from the type whether a future upgrade intends them to move, which obscures the security model around the share price floor.",
+      "recommendation": "Either mark the intent explicit (immutable / constant) or add governed setters with bounds. Until then, the fixed 1e18 sharePrice is the assumption the share-price-floor invariant protects.",
+      "continuousAssurance": {
+        "invariants": ["INV-03"],
+        "harnessTests": ["invariant_sharePriceFloor"],
+        "liveMonitors": ["INV-03"],
+        "exploitReplays": [],
+        "rationale": "INV-03 asserts sharePrice >= 1e18. If a future setter is added and ever drives the price below the peg, the harness fails pre-deploy and the live monitor alerts post-deploy — the finding stays covered even as the code evolves."
+      }
+    },
+    {
+      "id": "GUA-04",
+      "title": "Zero-share deposit possible if sharePrice ever exceeds the deposit amount",
+      "severity": "Low",
+      "status": "Acknowledged",
+      "category": "Accounting",
+      "location": "src/Vault.sol:102",
+      "securityRelevant": true,
+      "description": "deposit computes sharesMinted = amount * 1e18 / sharePrice with no `require(sharesMinted > 0)`. With the current fixed 1e18 sharePrice this is unreachable, but if sharePrice ever rises above `amount`, a depositor would increase totalDeposited while minting zero shares — donating funds to existing shareholders and desynchronising share accounting.",
+      "recommendation": "Add `require(sharesMinted > 0)` to deposit so a dust deposit at a high share price reverts rather than silently gifting value.",
+      "continuousAssurance": {
+        "invariants": ["INV-04", "INV-06"],
+        "harnessTests": ["invariant_shareAccounting", "invariant_noShareInflation"],
+        "liveMonitors": ["INV-04", "INV-06"],
+        "exploitReplays": ["EXP-02"],
+        "rationale": "A zero-share deposit makes implied share value drift below deposits; INV-06 (no inflation) and INV-04 (share accounting) bound that drift. EXP-02 replays the ERC-4626 inflation class that this rounding latency belongs to."
+      }
+    },
+    {
+      "id": "GUA-05",
+      "title": "InsufficientLiquidity guards are provably unreachable at an 80% collateral ratio",
+      "severity": "Informational",
+      "status": "Acknowledged",
+      "category": "Dead Code",
+      "location": "src/Vault.sol:124,153",
+      "securityRelevant": true,
+      "description": "withdraw and borrow revert with InsufficientLiquidity when free liquidity cannot cover the requested amount. With collateralRatio fixed at 80%, free liquidity (totalDeposited - totalBorrowed >= 0.2*totalDeposited + 0.8*W) always covers any single user's withdrawable or borrowable value W, so the guards never trigger.",
+      "recommendation": "Keep the guards as defence-in-depth — they cost little and protect against a future collateralRatio change that would make them reachable. Document the unreachability proof so the dead branches are not mistaken for a coverage gap.",
+      "continuousAssurance": {
+        "invariants": ["INV-02"],
+        "harnessTests": ["invariant_liquidityBuffer"],
+        "liveMonitors": ["INV-02"],
+        "exploitReplays": ["EXP-04"],
+        "rationale": "INV-02 is the property the unreachable guards exist to uphold. If a parameter change ever makes the guards reachable — or fails to — INV-02 still holds the line both in the harness and live. EXP-04 confirms the buffer survives a maximal borrow."
+      }
+    },
+    {
+      "id": "GUA-06",
+      "title": "Direct token donations desynchronise tokenBalance from accounting",
+      "severity": "Informational",
+      "status": "Acknowledged",
+      "category": "Accounting",
+      "location": "src/Vault.sol:48-51",
+      "securityRelevant": true,
+      "description": "Anyone can transfer the asset directly to the vault, raising token.balanceOf(vault) above totalDeposited - totalBorrowed. This is benign for solvency (the balance only ever exceeds the requirement) but means tokenBalance is not a faithful proxy for protocol accounting, and a monitor naively equating the two would misreport.",
+      "recommendation": "Treat tokenBalance >= free liquidity as the correct relation (not equality). The Guardian evaluator already uses >=; no code change required.",
+      "continuousAssurance": {
+        "invariants": ["INV-02"],
+        "harnessTests": ["invariant_liquidityBuffer"],
+        "liveMonitors": ["INV-02"],
+        "exploitReplays": ["EXP-04"],
+        "rationale": "INV-02 is intentionally a >= relation, so donations cannot break it. The harness and live monitor both encode the inequality, keeping the finding covered without a code change."
+      }
+    },
+    {
+      "id": "GUA-07",
+      "title": "collateralRatio could be immutable to save an SLOAD per borrow/withdraw",
+      "severity": "Gas",
+      "status": "Acknowledged",
+      "category": "Gas Optimisation",
+      "location": "src/Vault.sol:60",
+      "securityRelevant": false,
+      "description": "collateralRatio is read on every borrow and withdraw from storage. As it is never written after construction it could be `immutable`, replacing the SLOAD with a code constant.",
+      "recommendation": "Mark collateralRatio immutable if no governed setter is planned.",
+      "continuousAssurance": {
+        "invariants": [],
+        "harnessTests": [],
+        "liveMonitors": [],
+        "exploitReplays": [],
+        "rationale": "This is a gas optimisation, not a security property. It is deliberately left out of the continuous-assurance map: the traceability tool excludes non-security-relevant findings from the coverage denominator so the metric is not inflated by unmonitorable items."
+      }
+    },
+    {
+      "id": "GUA-08",
+      "title": "No interest accrual leaves the vault unable to build a bad-debt reserve",
+      "severity": "Medium",
+      "status": "Acknowledged",
+      "category": "Economic Design",
+      "location": "src/Vault.sol:146-175",
+      "securityRelevant": true,
+      "description": "borrow and repay move principal only; there is no interest accrual, so sharePrice never rises and the protocol accumulates no reserve. Lenders earn nothing, and the vault has no buffer to absorb bad debt should a future change (e.g. a price oracle or liquidations) introduce undercollateralised positions.",
+      "recommendation": "If the vault is extended toward production, add an interest model and a reserve factor so the protocol can absorb shortfalls. Until then, solvency depends entirely on the collateral cap holding.",
+      "continuousAssurance": {
+        "invariants": ["INV-01", "INV-07"],
+        "harnessTests": ["invariant_solvency", "invariant_nonNegativeNet"],
+        "liveMonitors": ["INV-01", "INV-07"],
+        "exploitReplays": ["EXP-03"],
+        "rationale": "Without a reserve, the only thing standing between the vault and bad debt is solvency itself. INV-01/INV-07 are the continuous tripwire; EXP-03 replays the bad-debt class this finding warns about and confirms the collateral cap currently holds it off."
+      }
+    }
+  ]
+}

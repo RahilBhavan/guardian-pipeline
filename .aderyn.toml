@@ -1,0 +1,7 @@
+[general]
+src = "src"
+out = "out"
+exclude = ["lib", "test", "script"]
+
+[output]
+markdown = "docs/aderyn-report.md"

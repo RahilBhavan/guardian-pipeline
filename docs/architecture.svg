@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="560" viewBox="0 0 900 560" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+  <defs>
+    <style>
+      .bg { fill: #0a0c10; }
+      .panel { fill: #11141b; stroke: #232936; stroke-width: 1.5; rx: 10; }
+      .box { fill: #161a23; stroke: #2f3747; stroke-width: 1.5; }
+      .accent { fill: #0052ff; }
+      .title { fill: #e6e9ef; font-size: 15px; font-weight: 650; }
+      .label { fill: #e6e9ef; font-size: 13px; font-weight: 600; }
+      .sub { fill: #9aa4b2; font-size: 11px; }
+      .layer { fill: #5c6675; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; }
+      .flow { stroke: #3b82f6; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .flowdim { stroke: #5c6675; stroke-width: 1.5; fill: none; stroke-dasharray: 4 3; marker-end: url(#arrowdim); }
+    </style>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#3b82f6"/>
+    </marker>
+    <marker id="arrowdim" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#5c6675"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="900" height="560"/>
+  <text x="32" y="40" class="title">Guardian Pipeline — multi-layer DeFi assurance</text>
+
+  <!-- Layer 1: CI/CD -->
+  <text x="32" y="74" class="layer">LAYER 1 · PRE-DEPLOYMENT (CI/CD)</text>
+  <rect class="panel" x="32" y="84" width="836" height="96" rx="10"/>
+  <rect class="box" x="48" y="104" width="150" height="58" rx="8"/>
+  <text x="123" y="129" class="label" text-anchor="middle">git push</text>
+  <text x="123" y="147" class="sub" text-anchor="middle">main / PR</text>
+  <rect class="box" x="238" y="104" width="170" height="58" rx="8"/>
+  <text x="323" y="129" class="label" text-anchor="middle">GitHub Actions</text>
+  <text x="323" y="147" class="sub" text-anchor="middle">5 jobs · &lt;4 min</text>
+  <rect class="box" x="448" y="104" width="190" height="58" rx="8"/>
+  <text x="543" y="129" class="label" text-anchor="middle">Forge invariant fuzz</text>
+  <text x="543" y="147" class="sub" text-anchor="middle">2,000+ runs · 8 invariants</text>
+  <rect class="box" x="678" y="104" width="174" height="58" rx="8"/>
+  <text x="765" y="129" class="label" text-anchor="middle">Slither · Aderyn</text>
+  <text x="765" y="147" class="sub" text-anchor="middle">static analysis</text>
+  <line class="flow" x1="198" y1="133" x2="232" y2="133"/>
+  <line class="flow" x1="408" y1="133" x2="442" y2="133"/>
+  <line class="flow" x1="638" y1="133" x2="672" y2="133"/>
+
+  <!-- Layer 2: Contracts -->
+  <text x="32" y="222" class="layer">LAYER 2 · SMART CONTRACT</text>
+  <rect class="panel" x="32" y="232" width="836" height="84" rx="10"/>
+  <rect class="box" x="48" y="252" width="804" height="48" rx="8"/>
+  <text x="450" y="272" class="label" text-anchor="middle">Vault.sol — over-collateralised lending vault</text>
+  <text x="450" y="290" class="sub" text-anchor="middle">deposit · withdraw · borrow · repay  ·  8 invariants as NatSpec + Foundry handlers</text>
+
+  <!-- Layer 3: Runtime guardian -->
+  <text x="32" y="358" class="layer">LAYER 3 · RUNTIME (BASE L2)</text>
+  <rect class="panel" x="32" y="368" width="836" height="150" rx="10"/>
+  <rect class="box" x="48" y="392" width="150" height="58" rx="8"/>
+  <text x="123" y="417" class="label" text-anchor="middle">Alchemy RPC</text>
+  <text x="123" y="435" class="sub" text-anchor="middle">WebSocket</text>
+  <rect class="box" x="238" y="392" width="160" height="58" rx="8"/>
+  <text x="318" y="417" class="label" text-anchor="middle">Guardian bot</text>
+  <text x="318" y="435" class="sub" text-anchor="middle">viem · per block</text>
+  <rect class="box" x="438" y="392" width="170" height="58" rx="8"/>
+  <text x="523" y="417" class="label" text-anchor="middle">Eval engine</text>
+  <text x="523" y="435" class="sub" text-anchor="middle">8 invariants (mirror)</text>
+  <rect class="box" x="648" y="372" width="204" height="44" rx="8"/>
+  <text x="750" y="399" class="label" text-anchor="middle">Discord webhook</text>
+  <rect class="box" x="648" y="426" width="204" height="44" rx="8"/>
+  <text x="750" y="453" class="label" text-anchor="middle">Supabase → Dashboard</text>
+  <line class="flow" x1="198" y1="421" x2="232" y2="421"/>
+  <line class="flow" x1="398" y1="421" x2="432" y2="421"/>
+  <path class="flow" d="M608,415 C628,415 628,394 642,394"/>
+  <path class="flow" d="M608,427 C628,427 628,448 642,448"/>
+  <text x="540" y="495" class="sub" text-anchor="middle">alert fired within one block (~2s) of any invariant violation</text>
+
+  <!-- Cross-layer arrows -->
+  <path class="flowdim" d="M543,162 C543,196 450,200 450,228"/>
+  <text x="560" y="206" class="sub">validates</text>
+  <path class="flowdim" d="M450,316 C450,340 318,344 318,388"/>
+  <text x="335" y="350" class="sub">monitors</text>
+</svg>

@@ -1,0 +1,25 @@
+{
+  "name": "guardian-bot",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Off-chain Guardian daemon — monitors Vault invariants live on Base L2.",
+  "scripts": {
+    "dev": "tsx watch src/bot.ts",
+    "start": "node dist/bot.js",
+    "build": "tsup src/bot.ts --format esm --dts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "viem": "^2.0.0",
+    "pino": "^9.0.0",
+    "pino-pretty": "^11.0.0",
+    "@supabase/supabase-js": "^2.0.0",
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "tsx": "^4.0.0",
+    "tsup": "^8.0.0",
+    "@types/node": "^20.0.0"
+  }
+}
