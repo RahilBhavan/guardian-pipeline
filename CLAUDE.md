@@ -5,7 +5,7 @@
 An automated DeFi security pipeline with two integrated layers:
 
 1. **CI/CD invariant fuzz harness** — Foundry runs 10,000+ randomised call sequences against a lending vault on every git push, asserting mathematical invariants hold before deployment.
-2. **Off-chain Guardian bot** — A TypeScript daemon that monitors the same invariants live on Base L2 after deployment, alerting Discord and updating a dashboard within one block of a violation.
+2. **Off-chain Guardian bot** — A TypeScript daemon that monitors the same invariants live on Base L2 after deployment, persisting any violation to Supabase and updating a dashboard within one block.
 
 **Research grounding** (cite both in the README):
 - Bourveau et al. (2024) *Decentralized Finance (DeFi) assurance: early evidence* — continuous multi-layered assurance across 8,500+ audit reports.
@@ -75,7 +75,7 @@ guardian-pipeline/
 | Chain target | Base Sepolia (testnet) + Base mainnet fork via Anvil |
 | RPC provider | Alchemy |
 | Chain ID (Base Sepolia) | `84532` |
-| Alert channel | Discord webhook |
+| Alert surface | Supabase real-time → dashboard |
 | Dashboard deploy | Vercel |
 | DB | Supabase (Postgres) |
 
@@ -115,7 +115,6 @@ Create a `.env` in `guardian/` before running the bot:
 ALCHEMY_KEY=your_alchemy_api_key
 BASE_SEPOLIA_RPC=https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}
 VAULT_ADDRESS=0x...deployed_vault_address
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
 SUPABASE_URL=https://xxx.supabase.co
 SUPABASE_ANON_KEY=...
 BLOCK_POLL_INTERVAL_MS=2000
@@ -129,12 +128,12 @@ INVARIANT_CHECK_DELAY_BLOCKS=1
 The Loom demo follows this exact sequence:
 
 1. Show green CI badge in GitHub Actions tab.
-2. Open two terminals side-by-side: Guardian bot running in left, Discord open in right.
+2. Open two windows side-by-side: Guardian bot running in one, the dashboard in the other.
 3. Open a third terminal. Run:
    ```bash
-   cast send $VAULT_ADDRESS "attack()" --private-key $ATTACKER_KEY --rpc-url $BASE_SEPOLIA_RPC
+   cast send $VAULT_ADDRESS "attack()" --account guardian-demo --rpc-url $BASE_SEPOLIA_RPC
    ```
-4. Guardian detects on the next block (~2 s). Discord alert fires. Dashboard turns red.
-5. Show the alert embed: invariant name, block number, violated condition.
+4. Guardian detects on the next block (~2 s). Dashboard turns red within one block.
+5. Show the dashboard alert: invariant name, block number, violated condition.
 
 Total runtime: under 90 seconds of footage.

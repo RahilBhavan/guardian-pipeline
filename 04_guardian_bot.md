@@ -6,7 +6,7 @@
 
 ## Context
 
-The vault is deployed on Base Sepolia. This bot connects via Alchemy WebSocket, subscribes to new blocks, fetches vault state on each block, evaluates all 8 invariants from Spec 01, and routes any violation to Discord and Supabase. It must mirror the Solidity invariant logic exactly — the same check that passes in Foundry must be the check the bot runs live.
+The vault is deployed on Base Sepolia. This bot connects via Alchemy WebSocket, subscribes to new blocks, fetches vault state on each block, evaluates all 8 invariants from Spec 01, and persists any violation to Supabase. It must mirror the Solidity invariant logic exactly — the same check that passes in Foundry must be the check the bot runs live.
 
 ---
 
@@ -106,7 +106,6 @@ export interface BotConfig {
   rpcUrl: string;
   vaultAddress: `0x${string}`;
   tokenAddress: `0x${string}`;
-  discordWebhookUrl: string;
   supabaseUrl: string;
   supabaseKey: string;
   blockPollIntervalMs: number;
@@ -225,38 +224,7 @@ function inv03(state: VaultState): InvariantResult {
 
 ## File 6: `guardian/src/router.ts`
 
-Routes alert payloads to Discord and Supabase. Only called when `violations.length > 0`.
-
-### Discord function
-
-```typescript
-export async function sendDiscordAlert(
-  webhookUrl: string,
-  payload: AlertPayload,
-  logger: Logger
-): Promise<void>
-```
-
-POST to `webhookUrl` with this body shape:
-
-```json
-{
-  "embeds": [{
-    "title": "🚨 Invariant violation detected",
-    "color": 15158332,
-    "fields": [
-      { "name": "Vault", "value": "0x...", "inline": true },
-      { "name": "Block", "value": "12345678", "inline": true },
-      { "name": "Violations", "value": "INV-01: Solvency\nINV-02: Liquidity buffer", "inline": false },
-      { "name": "Detected at", "value": "2024-01-15 14:23:01 UTC", "inline": true },
-      { "name": "Detection latency", "value": "1.4s", "inline": true }
-    ],
-    "footer": { "text": "Guardian Pipeline · Base L2" }
-  }]
-}
-```
-
-Color `15158332` = Discord red `#E74C3C`. Use `fetch` (Node 18+ built-in). Wrap in try/catch and log errors — do not let Discord failures crash the bot.
+Persists alert payloads to Supabase. Only called when `violations.length > 0`.
 
 ### Supabase function
 
@@ -286,7 +254,7 @@ import pino from 'pino';
 import { createClient } from '@supabase/supabase-js';
 import { fetchVaultState } from './fetcher.js';
 import { evaluateInvariants } from './evaluator.js';
-import { sendDiscordAlert, logAlertToSupabase } from './router.js';
+import { logAlertToSupabase } from './router.js';
 import type { BotConfig } from './types.js';
 ```
 
@@ -298,7 +266,7 @@ Read all env vars at startup. If any required var is missing, throw immediately 
 function loadConfig(): BotConfig {
   const required = [
     'ALCHEMY_KEY', 'VAULT_ADDRESS', 'TOKEN_ADDRESS',
-    'DISCORD_WEBHOOK_URL', 'SUPABASE_URL', 'SUPABASE_ANON_KEY'
+    'SUPABASE_URL', 'SUPABASE_ANON_KEY'
   ];
   for (const key of required) {
     if (!process.env[key]) throw new Error(`Missing required env var: ${key}`);
@@ -317,12 +285,12 @@ Use `client.watchBlockNumber` (viem's block subscription) rather than polling. O
 4. If `violations.length > 0`:
    - Log at `logger.error` level with structured fields.
    - Build `AlertPayload`.
-   - Call `sendDiscordAlert` and `logAlertToSupabase` in parallel (`Promise.allSettled`).
+   - Call `logAlertToSupabase` to persist one row per violation.
 5. If no violations: log at `logger.debug` level with block number and latency.
 
 ### Latency tracking
 
-Capture `Date.now()` before `fetchVaultState` and after the invariant check. Log `detectionLatencyMs` on every block. Include in the Discord embed.
+Capture `Date.now()` before `fetchVaultState` and after the invariant check. Log `detectionLatencyMs` on every block and persist it with each alert row.
 
 ### Graceful shutdown
 
@@ -336,7 +304,6 @@ Listen for `SIGINT` and `SIGTERM`. On signal: log "Guardian shutting down", unwa
 ALCHEMY_KEY=your_alchemy_api_key_here
 VAULT_ADDRESS=0x0000000000000000000000000000000000000000
 TOKEN_ADDRESS=0x0000000000000000000000000000000000000000
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR_ID/YOUR_TOKEN
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your_supabase_anon_key
 BLOCK_POLL_INTERVAL_MS=2000
@@ -350,6 +317,6 @@ CHAIN=base-sepolia
 - `npm run typecheck` exits 0 with no errors in strict mode.
 - `npm run dev` starts without crashing when `.env` is populated.
 - On a clean Base Sepolia connection, the bot logs a structured line per block.
-- When the `attack()` function is called on the vault, the next block's check emits a Discord embed.
-- Bot does NOT crash if Discord or Supabase is unreachable — it logs the error and continues.
+- When the `attack()` function is called on the vault, the next block's check writes alert rows to Supabase.
+- Bot does NOT crash if Supabase is unreachable — it logs the error and continues.
 - No `any` types anywhere. No `// @ts-ignore`.

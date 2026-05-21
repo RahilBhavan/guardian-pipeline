@@ -2,8 +2,8 @@
  * bot.ts — Guardian entry point.
  *
  * Subscribes to new Base L2 blocks, fetches vault state, evaluates all eight
- * invariants, and routes any violation to Discord and Supabase — typically
- * within one block (~2s) of the breach.
+ * invariants, and persists any violation to Supabase — typically within one
+ * block (~2s) of the breach — where the dashboard surfaces it in real time.
  */
 import 'dotenv/config';
 import { createPublicClient, webSocket, type Chain, type PublicClient } from 'viem';
@@ -12,7 +12,7 @@ import pino from 'pino';
 import { createClient } from '@supabase/supabase-js';
 import { fetchVaultState } from './fetcher.js';
 import { evaluateInvariants } from './evaluator.js';
-import { sendDiscordAlert, logAlertToSupabase, logBlockCheck } from './router.js';
+import { logAlertToSupabase, logBlockCheck } from './router.js';
 import type { AlertPayload, BotConfig } from './types.js';
 
 const logger = pino({
@@ -30,7 +30,6 @@ function loadConfig(): BotConfig {
     'ALCHEMY_KEY',
     'VAULT_ADDRESS',
     'TOKEN_ADDRESS',
-    'DISCORD_WEBHOOK_URL',
     'SUPABASE_URL',
     'SUPABASE_SERVICE_KEY',
   ];
@@ -62,7 +61,6 @@ function loadConfig(): BotConfig {
     rpcUrl,
     vaultAddress: process.env.VAULT_ADDRESS as `0x${string}`,
     tokenAddress: process.env.TOKEN_ADDRESS as `0x${string}`,
-    discordWebhookUrl: process.env.DISCORD_WEBHOOK_URL as string,
     supabaseUrl: process.env.SUPABASE_URL as string,
     supabaseKey,
     blockPollIntervalMs: Number(process.env.BLOCK_POLL_INTERVAL_MS ?? 2000),
@@ -161,10 +159,7 @@ async function main(): Promise<void> {
           detectionLatencyMs,
         };
 
-        await Promise.allSettled([
-          sendDiscordAlert(config.discordWebhookUrl, payload, logger),
-          logAlertToSupabase(supabase, payload, logger),
-        ]);
+        await logAlertToSupabase(supabase, payload, logger);
       } else {
         logger.debug(
           { block: blockNumber.toString(), allPassed: true, detectionLatencyMs },

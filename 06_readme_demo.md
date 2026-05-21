@@ -49,13 +49,13 @@ Git push → GitHub Actions → Forge fuzz (10,000+ runs) → Slither → Report
                                      ↓ validates
               Protocol Contracts (Vault · AMM · Lending) · Anvil fork
                                      ↓ monitors  
-  Alchemy RPC → Guardian Bot → Eval Engine → Alert Router → Discord + Dashboard
+  Alchemy RPC → Guardian Bot → Eval Engine → Alert Router → Supabase → Dashboard
 ```
 
 Three layers:
 1. **CI/CD layer** — Foundry invariant fuzz tests run on every commit. Green badge = all 8 invariants hold across 10,000 randomised call sequences.
 2. **Smart contract layer** — A simple over-collateralised lending vault with 8 mathematical invariants defined as NatSpec assertions and Foundry handlers.
-3. **Runtime guardian** — TypeScript bot on Base L2. On each block, fetches vault state, evaluates invariants, and fires structured Discord alerts within one block of a violation.
+3. **Runtime guardian** — TypeScript bot on Base L2. On each block, fetches vault state, evaluates invariants, and persists any violation to Supabase — surfaced on the dashboard within one block.
 
 ![Architecture diagram](docs/architecture.png)
 
@@ -93,7 +93,6 @@ This is the empirical validation that the fuzz harness catches violations Landsm
 - [Foundry](https://getfoundry.sh/) installed
 - Node.js ≥ 20
 - Alchemy API key (free tier works)
-- Discord webhook URL
 
 ### 1. Clone and install
 
@@ -140,11 +139,11 @@ npm run dev
 
 ```bash
 cast send $VAULT_ADDRESS "attack()" \
-  --private-key $ATTACKER_KEY \
+  --account guardian-demo \
   --rpc-url $BASE_SEPOLIA_RPC
 ```
 
-Guardian detects the violation on the next block. Discord alert fires. Dashboard turns red.
+Guardian detects the violation on the next block. The dashboard turns red within one block.
 
 ---
 
@@ -170,7 +169,7 @@ guardian-pipeline/
 | Static analysis | Slither · Aderyn |
 | CI/CD | GitHub Actions |
 | Guardian bot | TypeScript · viem · Alchemy SDK · WebSocket · pino |
-| Alerts | Discord webhooks |
+| Alerting | Supabase real-time → dashboard |
 | Dashboard | React · Vite · Supabase real-time |
 | Deploy | Vercel (dashboard) · Base Sepolia (contracts) |
 
@@ -203,14 +202,13 @@ Record in one take. No editing needed.
 - Narrate: "On every commit, Foundry runs 2,000 randomised call sequences. All 8 invariants pass."
 
 **Minute 1:00–1:45 — Guardian bot live**
-- Screen: Split — bot terminal (left), Discord channel (right).
+- Screen: Split — bot terminal (left), the live dashboard (right).
 - Bot terminal showing structured pino logs: `{"block":12345678,"allPassed":true,"latencyMs":1.4}`.
 - Narrate: "The Guardian bot checks invariants on every Base Sepolia block. Currently all healthy."
 
 **Minute 1:45–2:30 — Triggering the exploit**
 - Screen: Third terminal. Run `cast send ... "attack()"`.
 - Switch back to bot terminal. On next log line, violation fires: `{"block":12345679,"violations":["INV-01","INV-02"],"latencyMs":1.9}`.
-- Discord embed appears. Show it full-screen.
 - Narrate: "1.9 seconds. The Guardian caught the solvency violation on the next block."
 
 **Minute 2:30–3:00 — Dashboard**
@@ -228,7 +226,7 @@ Record in one take. No editing needed.
 ☐  Slither report committed to docs/
 ☐  counterexample.png in docs/
 ☐  Vercel dashboard live and loading
-☐  Discord alert fires on attack() call
+☐  Dashboard turns red on attack() call
 ☐  Loom link in README
 ☐  Both paper citations in README with descriptions
 ☐  rahilbhavan.com updated with project card

@@ -133,15 +133,30 @@ assurance layer was reconciled against the final code — `audit/findings.json`
 GUA-01 is now status `Mitigated`, GUA-02 status `Resolved`, and all `location`
 line numbers were corrected. All 31 Foundry tests still pass.
 
+## 2026-05-20 — Finalisation pass (start the bot + close out needs-attention)
+What: Made the initial git commit (`d8357c1`, 87 files, branch `master`→`main`,
+no secrets staged). Confirmed the repo name `rahilbhavan/guardian-pipeline`
+(README badge/clone URLs are already correct for it).
+Why: User asked to start the Guardian bot and fix the remaining open items.
+Blocked: Three actions were denied by the Claude Code permission classifier
+even with explicit user approval — they must be run by the user via `!`:
+(1) Supabase migration 0002 (`apply_migration` denied ×2), (2) `gh repo create
+--public` (denied ×2), (3) `gh secret set BASE_SEPOLIA_RPC` (depends on #2).
+Decisions: User accepted the leaked-key risk — NOT rotating the demo key.
+User will add `SUPABASE_SERVICE_KEY` themselves and redeploy the vault via `!`
+(`forge script DeployVault --rpc-url base_sepolia --account guardian-demo
+--broadcast`) — keystore password is interactive. Repo visibility: public.
+Note: `DeployVault.s.sol` reuses `TOKEN_ADDRESS` via `vm.envOr`, so a redeploy
+gives a fresh Vault against the existing MockERC20 — update `VAULT_ADDRESS` in
+root `.env` and `guardian/.env` after.
+
 ## Open decisions / needs attention
-- ROTATE the Base Sepolia demo key — its plaintext value was exposed in chat
-  history this session. Generate a fresh testnet wallet and re-import via
-  `cast wallet import guardian-demo --interactive`; update `ATTACKER_ADDRESS`
-  and redeploy if needed.
+- Demo key rotation: SKIPPED — user accepted the leaked-key risk (testnet only).
 - `guardian/.env` `SUPABASE_SERVICE_KEY` is blank — bot will not start until
   the service-role key is pasted in (Supabase dashboard > Settings > API).
-- Run `supabase/migrations/0002_lockdown_insert_rls.sql` against the live
-  `klbqkgyyqkmqoebxbawy` project to remove the open insert policies.
+- Migration `0002_lockdown_insert_rls.sql` still NOT applied — classifier
+  blocked `apply_migration`; run the two `drop policy` statements via the
+  Supabase SQL editor or `!`. Advisor still flags both open insert policies.
 - `dashboard` has 2 moderate npm audit findings (esbuild GHSA-67mh-4wv8-2f99,
   dev-server only). Fix requires Vite 5→8 — deferred as a breaking change; not
   exploitable in the deployed static build.
@@ -157,3 +172,28 @@ line numbers were corrected. All 31 Foundry tests still pass.
 - If `src/Vault.sol` changes, re-run `cd assurance && npm run report` and review
   `audit/findings.json` — `location` line numbers and GUA-01/GUA-02 status are
   pinned to the current source and may need updating.
+
+## 2026-05-20 — Removed the Discord alerting feature + documentation overhaul
+What: Deleted Discord from the project entirely. Code: removed `sendDiscordAlert`,
+`DISCORD_RED`, `formatUtc` from `guardian/src/router.ts`; removed the
+`sendDiscordAlert` call, the `DISCORD_WEBHOOK_URL` required-var, and the
+`discordWebhookUrl` config field from `bot.ts`/`types.ts`; dropped
+`DISCORD_WEBHOOK_URL` from both `.env` files; removed the Discord node from
+`docs/architecture.svg`. Discord references also stripped from `CLAUDE.md`,
+`04_guardian_bot.md`, `06_readme_demo.md`. Supabase + the dashboard are now the
+sole alert surface. Bot rebuilt (`dist/bot.js` 13.1→11.5 KB), typechecks clean,
+restarted healthy against vault `0x60a1bf…06f45`.
+Documentation overhaul: rewrote `README.md` (added the assurance layer,
+corrected CI to 6 jobs, refreshed repo structure); created `docs/architecture.md`,
+`docs/invariants.md`, `docs/setup.md`, `docs/assurance.md`; rewrote
+`docs/README.md` as a docs index; added `CONTRIBUTING.md` and an MIT `LICENSE`.
+Why: User asked to remove Discord and produce world-class docs. Clarified:
+dashboard-only alerting (no replacement webhook), full docs overhaul, update all
+spec files.
+Note: This session also created the `guardian-demo` keystore wallet
+(`0x2497c84b19676b71a1A730A06c4dFac728094D16`), funded it on Base Sepolia, and
+redeployed the vault to `0x60a1bfBBdEb931424fAd4b1721e48754fb106f45` — the
+earlier "redeploy + populate SUPABASE_SERVICE_KEY" needs-attention items are now
+resolved. `MEMORY.md`'s own historical Discord references are kept intact as
+record. `04_guardian_bot.md` still specifies `SUPABASE_ANON_KEY` (pre-hardening,
+unrelated to Discord) — left as-is; the live code uses `SUPABASE_SERVICE_KEY`.

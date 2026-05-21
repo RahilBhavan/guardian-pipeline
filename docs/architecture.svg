@@ -31,7 +31,7 @@
   <text x="123" y="147" class="sub" text-anchor="middle">main / PR</text>
   <rect class="box" x="238" y="104" width="170" height="58" rx="8"/>
   <text x="323" y="129" class="label" text-anchor="middle">GitHub Actions</text>
-  <text x="323" y="147" class="sub" text-anchor="middle">5 jobs · &lt;4 min</text>
+  <text x="323" y="147" class="sub" text-anchor="middle">6 jobs · &lt;4 min</text>
   <rect class="box" x="448" y="104" width="190" height="58" rx="8"/>
   <text x="543" y="129" class="label" text-anchor="middle">Forge invariant fuzz</text>
   <text x="543" y="147" class="sub" text-anchor="middle">2,000+ runs · 8 invariants</text>
@@ -61,14 +61,12 @@
   <rect class="box" x="438" y="392" width="170" height="58" rx="8"/>
   <text x="523" y="417" class="label" text-anchor="middle">Eval engine</text>
   <text x="523" y="435" class="sub" text-anchor="middle">8 invariants (mirror)</text>
-  <rect class="box" x="648" y="372" width="204" height="44" rx="8"/>
-  <text x="750" y="399" class="label" text-anchor="middle">Discord webhook</text>
-  <rect class="box" x="648" y="426" width="204" height="44" rx="8"/>
-  <text x="750" y="453" class="label" text-anchor="middle">Supabase → Dashboard</text>
+  <rect class="box" x="648" y="392" width="204" height="58" rx="8"/>
+  <text x="750" y="417" class="label" text-anchor="middle">Supabase</text>
+  <text x="750" y="435" class="sub" text-anchor="middle">real-time → dashboard</text>
   <line class="flow" x1="198" y1="421" x2="232" y2="421"/>
   <line class="flow" x1="398" y1="421" x2="432" y2="421"/>
-  <path class="flow" d="M608,415 C628,415 628,394 642,394"/>
-  <path class="flow" d="M608,427 C628,427 628,448 642,448"/>
+  <line class="flow" x1="608" y1="421" x2="642" y2="421"/>
   <text x="540" y="495" class="sub" text-anchor="middle">alert fired within one block (~2s) of any invariant violation</text>
 
   <!-- Cross-layer arrows -->

@@ -37,7 +37,7 @@ export interface InvariantResult {
   description: string;
 }
 
-/** A bundled set of violations ready to be routed to Discord and Supabase. */
+/** A bundled set of violations ready to be persisted to Supabase. */
 export interface AlertPayload {
   vaultAddress: string;
   blockNumber: bigint;
@@ -55,7 +55,6 @@ export interface BotConfig {
   rpcUrl: string;
   vaultAddress: `0x${string}`;
   tokenAddress: `0x${string}`;
-  discordWebhookUrl: string;
   supabaseUrl: string;
   supabaseKey: string;
   blockPollIntervalMs: number;

@@ -1,66 +1,71 @@
 # Guardian Pipeline
 
 [![Invariant CI](https://github.com/rahilbhavan/guardian-pipeline/actions/workflows/invariant-ci.yml/badge.svg)](https://github.com/rahilbhavan/guardian-pipeline/actions/workflows/invariant-ci.yml)
-[![Coverage](https://img.shields.io/badge/Vault%20coverage-100%25-brightgreen)](./docs/)
+[![Vault coverage](https://img.shields.io/badge/Vault%20coverage-100%25-brightgreen)](./docs/assurance.md)
+[![Assurance score](https://img.shields.io/badge/assurance%20score-gated%20%E2%89%A580-0052FF)](./docs/assurance.md)
 [![Built on Base](https://img.shields.io/badge/Base_L2-0052FF)](https://base.org)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.24-363636)](https://soliditylang.org)
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue)](./LICENSE)
 
-> An automated DeFi assurance pipeline that bridges the gap between
-> pre-deployment invariant fuzz testing and live on-chain protocol monitoring.
+> An automated DeFi assurance pipeline that closes the gap between
+> pre-deployment invariant fuzz testing and live on-chain monitoring — proving
+> the *same* mathematical property before deployment and enforcing it after.
 
-**Demo video:** [Watch 3-min Loom ↗](YOUR_LOOM_URL)
-**Live dashboard:** [guardian-pipeline.vercel.app ↗](YOUR_VERCEL_URL)
+**Demo video:** [Watch 3-min Loom ↗](YOUR_LOOM_URL) · **Live dashboard:** [guardian-pipeline.vercel.app ↗](YOUR_VERCEL_URL)
 
 ---
 
-## Research motivation
+## Why this exists
 
-This project is grounded in two empirical findings:
+Two empirical findings motivate this project:
 
 - **Bourveau et al. (2024)** — *Decentralized Finance (DeFi) assurance: early
-  evidence* — analysed 8,500+ smart-contract audit reports and found that
-  continuous, multi-layered assurance — not one-time audits — is the
-  distinguishing characteristic of protocols that survive.
+  evidence.* Across 8,500+ smart-contract audit reports, **continuous,
+  multi-layered assurance** — not one-time audits — is the distinguishing
+  characteristic of protocols that survive.
+- **Landsman et al. (2025)** — *Auditing Smart Contracts.* Traditional
+  point-in-time static audits show **little empirical evidence of preventing
+  runtime exploits** — flash-loan attacks, dynamic balance manipulation, and
+  other economic exploits land *after* the audit is signed off.
 
-- **Landsman et al. (2025)** — *Auditing Smart Contracts* — found that
-  traditional point-in-time static audits show little empirical evidence of
-  preventing complex runtime exploits, including economic flash-loan attacks
-  and dynamic balance manipulation.
-
-**The gap:** no existing open-source tool unifies (a) pre-deployment invariant
-fuzz testing in a CI pipeline with (b) live on-chain monitoring enforcing those
-*same* invariants post-launch. Guardian Pipeline builds both layers, and proves
-the property checked before deployment is byte-for-byte the property monitored
-after it.
+**The gap:** no open-source tool unifies (a) pre-deployment invariant fuzz
+testing in CI with (b) live on-chain monitoring that enforces those *same*
+invariants post-launch. Guardian Pipeline builds both, and proves the property
+checked before deployment is byte-for-byte the property monitored after it.
 
 ---
 
-## Architecture
+## How it works
 
 ![Architecture diagram](docs/architecture.svg)
 
-Three layers:
+Three runtime layers, plus an assurance layer that scores them:
 
-1. **CI/CD layer** — Foundry invariant fuzz tests run on every commit. A green
-   badge means all 8 invariants held across 2,000+ randomised call sequences
-   (300,000 calls) with zero reverts.
-2. **Smart-contract layer** — a simple over-collateralised lending vault whose
-   8 mathematical invariants are documented as NatSpec and exercised by Foundry
-   handlers.
-3. **Runtime guardian** — a TypeScript bot on Base L2. On each block it fetches
-   vault state, evaluates the same 8 invariants, and fires a structured Discord
-   alert within one block (~2 s) of any violation.
+1. **Pre-deployment (CI/CD)** — Foundry invariant fuzzing runs on every push.
+   A green badge means all 8 invariants held across 2,000+ randomised call
+   sequences (~300,000 calls) with zero reverts.
+2. **Smart contract** — a minimal over-collateralised lending vault
+   (`deposit` · `withdraw` · `borrow` · `repay`) whose 8 invariants are
+   documented as NatSpec and exercised by Foundry handlers.
+3. **Runtime guardian** — a TypeScript daemon on Base L2. On every block it
+   fetches vault state, evaluates the same 8 invariants, and persists any
+   violation to Supabase — surfaced on the live dashboard within one block
+   (~2 s) of the breach.
+4. **Assurance layer** — backtests 7 historical exploit classes, traces audit
+   findings to the layers that cover them, and rolls everything into a single
+   composite **Assurance Score** that CI gates on.
 
 The off-chain evaluator (`guardian/src/evaluator.ts`) is a deliberate 1:1
 mirror of the Solidity `invariant_*` functions in
-`test/invariant/InvariantVault.t.sol`.
+`test/invariant/InvariantVault.t.sol`. The same maths, on both sides of
+deployment. See **[docs/architecture.md](docs/architecture.md)**.
 
 ---
 
 ## The 8 invariants
 
-| ID | Name | Formula | Severity |
-|----|------|---------|----------|
+| ID | Name | Property | Severity |
+|----|------|----------|----------|
 | INV-01 | Solvency | `totalBorrowed ≤ totalDeposited` | Critical |
 | INV-02 | Liquidity buffer | `tokenBalance(vault) ≥ totalDeposited − totalBorrowed` | Critical |
 | INV-03 | Share price floor | `sharePrice ≥ 1e18` | High |
@@ -70,121 +75,57 @@ mirror of the Solidity `invariant_*` functions in
 | INV-07 | Non-negative net | `totalDeposited ≥ totalBorrowed` | Medium |
 | INV-08 | Zero-state consistency | `totalShares == 0 ⇔ totalDeposited == 0` | Low |
 
-The Foundry harness asserts each one with `public view` invariant functions;
-the Guardian bot evaluates each one in `evaluator.ts`. INV-04 and INV-05 use
-aggregate proxies off-chain (the bot has no per-user event index in the MVP —
-see the `TODO` comments in `evaluator.ts`).
+Each invariant is asserted by a `public view` function in the Foundry harness
+and mirrored in `evaluator.ts`. INV-04 and INV-05 use aggregate proxies
+off-chain (the bot has no per-user event index in the MVP). Full reference,
+including what breaks each one and which layer catches it:
+**[docs/invariants.md](docs/invariants.md)**.
 
 ---
 
-## Foundry counterexample
+## The assurance layer
 
-To validate that the harness genuinely catches violations, temporarily break
-`borrow()` so it forces `totalBorrowed = totalDeposited + 1`, then run the deep
-profile. Forge shrinks the failure to a minimal call sequence:
+A point-in-time audit produces a PDF. Guardian Pipeline produces a **living
+score** — recomputed on every commit — composed of four independent layers:
 
-```
-[FAIL] invariant_solvency()
-    Counterexample:
-      calldata=deposit(0, 1000000000000000000)
-               borrow(0, 1000000000000000001)
-```
+| Layer | Weight | What it measures |
+|-------|--------|------------------|
+| Static verification | 30% | Line/branch coverage + fuzz intensity on `Vault.sol` |
+| Exploit resistance | 25% | 7 historical exploit classes replayed (EXP-01…07) |
+| Continuous monitoring | 25% | Live uptime, liveness, and detection latency |
+| Audit traceability | 20% | % of audit findings provably covered by ≥1 invariant + harness test + live monitor |
 
-See [`docs/README.md`](docs/README.md) for the exact steps to reproduce and
-screenshot this as `docs/counterexample.png`. This is the empirical validation
-of the runtime-exploit gap that Landsman et al. (2025) describe.
-
----
-
-## Test status
-
-| Suite | Result |
-|-------|--------|
-| `InvariantVault` — 8 invariants, CI profile | ✅ 2,000 runs × 300,000 calls, 0 reverts |
-| `VaultUnit` — 15 unit tests (happy paths, every revert, `attack()`) | ✅ all passing |
-| `src/Vault.sol` line coverage | ✅ 100% (49/49) |
-
-> The two `InsufficientLiquidity` guards in `Vault.sol` are provably
-> unreachable given the 80% collateral cap — free liquidity always covers any
-> single user's withdrawable/borrowable amount. They are retained as
-> defence-in-depth and intentionally have no test.
+Every replayed exploit is classified **PREVENTED** (code blocked it),
+**DETECTED** (state corrupted, but an invariant caught it same-block), or
+**MISSED** (value extracted, no invariant noticed — a gap). Current result:
+**6 PREVENTED, 1 DETECTED, 0 MISSED.** CI fails the build if the composite
+score drops below **80**. See **[docs/assurance.md](docs/assurance.md)**.
 
 ---
 
 ## Quickstart
 
-### Prerequisites
-
-- [Foundry](https://getfoundry.sh/) installed
-- Node.js ≥ 20
-- Alchemy API key (free tier works)
-- Discord webhook URL
-- Supabase project (free tier works)
-
-### 1. Clone and install
+**Prerequisites:** [Foundry](https://getfoundry.sh/), Node.js ≥ 20, an Alchemy
+API key, and a Supabase project (all free tiers work).
 
 ```bash
 git clone https://github.com/rahilbhavan/guardian-pipeline
 cd guardian-pipeline
-forge install                       # forge-std + openzeppelin-contracts
+forge install                        # forge-std + openzeppelin-contracts
 cd guardian && npm install && cd ..
 cd dashboard && npm install && cd ..
-```
 
-### 2. Run the invariant test suite
-
-```bash
-# Fast (default profile — 500 runs)
+# Run the invariant suite locally
 forge test --match-contract InvariantVault -vvv
-
-# CI profile (2,000 runs)
-FOUNDRY_PROFILE=ci forge test --match-contract InvariantVault -vvv
-
-# Deep (10,000 runs — run before any release)
-FOUNDRY_PROFILE=deep forge test --match-contract InvariantVault -vvv
-
-# Unit suite + coverage
-forge test --match-contract VaultUnit -vvv
-forge coverage --report summary
 ```
 
-### 3. Deploy to Base Sepolia
+Full deploy-and-run instructions — keystore setup, Base Sepolia deployment,
+Supabase provisioning, starting the bot and dashboard — are in
+**[docs/setup.md](docs/setup.md)**.
 
-```bash
-cp guardian/.env.example guardian/.env   # then fill in your keys
+### See it catch a violation
 
-# One-time: import the testnet deploy key into an encrypted keystore.
-# Foundry stores it password-protected — no raw private key on disk.
-cast wallet import guardian-demo --interactive
-
-export ATTACKER_ADDRESS=0xYourAttackerAddress
-forge script script/DeployVault.s.sol \
-  --account guardian-demo \
-  --rpc-url $BASE_SEPOLIA_RPC --broadcast --verify
-# Copy the deployed addresses into guardian/.env (VAULT_ADDRESS, TOKEN_ADDRESS)
-```
-
-### 4. Provision Supabase
-
-Run the files in `supabase/migrations/` in order in the Supabase SQL editor (or
-apply them with the Supabase CLI). `0001_init.sql` creates the `alerts` and
-`blocks_checked` tables, enables row-level security with public read access, and
-adds both tables to the real-time publication. `0002_lockdown_insert_rls.sql`
-removes any public insert policy so writes require the service-role key.
-
-Row-level security is **public read, no public write**: the dashboard reads with
-the anon key, but inserts are denied to it — the Guardian bot must run with the
-service-role key (`SUPABASE_SERVICE_KEY`), which bypasses RLS. This stops anyone
-holding the public anon key from forging alerts.
-
-### 5. Start the Guardian bot
-
-```bash
-cd guardian
-npm run dev
-```
-
-### 6. Trigger the demo exploit (separate terminal)
+With the vault deployed and the Guardian bot running:
 
 ```bash
 cast send $VAULT_ADDRESS "attack()" \
@@ -192,16 +133,24 @@ cast send $VAULT_ADDRESS "attack()" \
   --rpc-url $BASE_SEPOLIA_RPC
 ```
 
-Guardian detects the violation on the next block, a Discord embed fires, and
-the dashboard turns red — all within ~2 seconds.
+`attack()` is a demo-only backdoor that forces the vault insolvent (it reverts
+on Base mainnet). The Guardian detects the INV-01 violation on the next block,
+writes it to Supabase, and the dashboard turns red — all within ~2 seconds.
 
-### 7. Run the dashboard locally
+---
 
-```bash
-cd dashboard
-cp .env.example .env                 # fill in VITE_SUPABASE_* + VITE_VAULT_ADDRESS
-npm run dev
-```
+## CI/CD pipeline
+
+`.github/workflows/invariant-ci.yml` runs **6 jobs** on every push/PR to `main`:
+
+| Job | What it does |
+|-----|--------------|
+| `build` | `forge build --sizes`; gates all other jobs |
+| `invariant-fuzz` | 2,000-run invariant campaign; fails on any `[FAIL]` |
+| `coverage` | LCOV report; gates `src/Vault.sol` at ≥ 85% line coverage |
+| `static-analysis` | Slither + Aderyn, uploaded as artifacts |
+| `assurance` | Exploit replays + composite Assurance Score; gates at ≥ 80 |
+| `gas-snapshot` | `forge snapshot --check`; posts the gas diff as a PR comment |
 
 ---
 
@@ -212,13 +161,16 @@ guardian-pipeline/
 ├── src/                  # Solidity contracts (Vault, MockERC20)
 ├── test/
 │   ├── invariant/        # Foundry fuzz harness + handlers
-│   └── unit/             # Deterministic unit coverage
-├── script/               # Foundry deployment script
-├── .github/workflows/    # CI/CD pipeline (5 jobs)
+│   ├── unit/             # Deterministic unit coverage
+│   └── exploit/          # 7 historical exploit-class replays
+├── script/               # Deployment + exploit-replay scripts
+├── audit/                # Illustrative audit report + machine-readable findings
+├── assurance/            # Assurance-Score tooling (Node)
+├── supabase/migrations/  # Database schema + RLS policies
+├── .github/workflows/    # CI/CD pipeline (6 jobs)
 ├── guardian/             # TypeScript Guardian bot (viem)
 ├── dashboard/            # React + Vite monitoring dashboard
-├── supabase/migrations/  # Database schema
-└── docs/                 # Architecture diagram, screenshots
+└── docs/                 # Architecture, invariants, setup, assurance
 ```
 
 ---
@@ -229,31 +181,26 @@ guardian-pipeline/
 |-------|-------|
 | Smart contracts | Solidity 0.8.24 · OpenZeppelin v5 · Foundry / Forge · Anvil · Cast |
 | Static analysis | Slither · Aderyn |
-| CI/CD | GitHub Actions (build · invariant-fuzz · coverage · static-analysis · gas-snapshot) |
+| CI/CD | GitHub Actions (6 jobs) |
 | Guardian bot | TypeScript (strict) · viem · Alchemy WebSocket · pino |
-| Alerts | Discord webhooks |
+| Persistence & alerting | Supabase (Postgres + real-time) → dashboard |
 | Dashboard | React 18 · Vite · Supabase real-time |
 | Deploy | Vercel (dashboard) · Base Sepolia (contracts) |
 
 ---
 
-## CI/CD pipeline
+## Documentation
 
-`.github/workflows/invariant-ci.yml` runs five jobs on every push/PR to `main`:
-
-1. **build** — `forge build --sizes`
-2. **invariant-fuzz** — runs the harness at the `ci` profile; fails the job on
-   any `[FAIL]` line.
-3. **coverage** — generates an LCOV report and gates `src/Vault.sol` at ≥ 85%
-   line coverage.
-4. **static-analysis** — Slither + Aderyn, uploaded as artifacts.
-5. **gas-snapshot** — `forge snapshot --check`; posts the diff as a PR comment.
-
-A deliberate invariant violation causes `invariant-fuzz` to fail with
-`::error::Invariant violation detected` in the Actions log.
+| Doc | Contents |
+|-----|----------|
+| [docs/architecture.md](docs/architecture.md) | The four layers and how data flows between them |
+| [docs/invariants.md](docs/invariants.md) | All 8 invariants — formulas, failure modes, coverage |
+| [docs/setup.md](docs/setup.md) | End-to-end local setup, deployment, and the demo |
+| [docs/assurance.md](docs/assurance.md) | Assurance Score, exploit replays, audit traceability |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow and conventions |
 
 ---
 
 ## Licence
 
-MIT
+MIT — see [LICENSE](./LICENSE).
