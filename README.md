@@ -191,12 +191,22 @@ guardian-pipeline/
 
 ## Documentation
 
+Full set in **[docs/](docs/README.md)** — start there for reading paths and a
+documentation map.
+
 | Doc | Contents |
 |-----|----------|
-| [docs/architecture.md](docs/architecture.md) | The four layers and how data flows between them |
+| [docs/architecture.md](docs/architecture.md) | The four layers and how state flows between them |
 | [docs/invariants.md](docs/invariants.md) | All 8 invariants — formulas, failure modes, coverage |
-| [docs/setup.md](docs/setup.md) | End-to-end local setup, deployment, and the demo |
+| [docs/contracts.md](docs/contracts.md) | `Vault` + `MockERC20` API — functions, events, errors, storage |
+| [docs/guardian-bot.md](docs/guardian-bot.md) | The off-chain bot, module by module |
+| [docs/database.md](docs/database.md) | The Supabase schema, RLS model, and migrations |
+| [docs/testing.md](docs/testing.md) | The three test tiers — unit, invariant fuzz, exploit replays |
+| [docs/ci.md](docs/ci.md) | The six-job CI/CD pipeline in detail |
 | [docs/assurance.md](docs/assurance.md) | Assurance Score, exploit replays, audit traceability |
+| [docs/setup.md](docs/setup.md) | End-to-end local setup, deployment, and the demo |
+| [docs/glossary.md](docs/glossary.md) | Every project identifier and term, defined |
+| [SECURITY.md](SECURITY.md) | Threat model, trust boundaries, responsible disclosure |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow and conventions |
 
 ---

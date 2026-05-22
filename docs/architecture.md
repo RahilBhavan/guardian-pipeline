@@ -65,6 +65,9 @@ collateral value.
 `mint` — intentionally hook-free, so the harness need not model ERC-777-style
 reentrancy.
 
+The full contract API — every function, event, error, and storage slot — is in
+[contracts.md](contracts.md).
+
 ## Layer 3 — Runtime guardian
 
 `guardian/` — a TypeScript daemon that monitors the deployed vault on Base L2.
@@ -88,6 +91,9 @@ watchBlockNumber ─▶ fetchVaultState ─▶ evaluateInvariants ─▶ router
 
 The bot requires the Supabase **service-role** key: RLS denies inserts to the
 public anon key, so only the server-side bot can write.
+
+Module-by-module detail is in [guardian-bot.md](guardian-bot.md); the schema it
+writes to is in [database.md](database.md).
 
 ## Layer 4 — Assurance
 
@@ -121,5 +127,11 @@ git push ──▶ GitHub Actions ──▶ Forge fuzz + Slither/Aderyn + Assura
 ## Related documents
 
 - [invariants.md](invariants.md) — the 8 invariants in full
+- [contracts.md](contracts.md) — the `Vault` / `MockERC20` API reference
+- [guardian-bot.md](guardian-bot.md) — the off-chain bot, module by module
+- [database.md](database.md) — the Supabase schema and RLS model
+- [testing.md](testing.md) — the three test tiers
+- [ci.md](ci.md) — the six-job CI/CD pipeline
 - [assurance.md](assurance.md) — the Assurance Score and exploit replays
 - [setup.md](setup.md) — running every layer locally
+- [glossary.md](glossary.md) — terminology

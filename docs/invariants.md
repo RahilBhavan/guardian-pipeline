@@ -133,3 +133,12 @@ index would close it; see the `TODO` notes in `evaluator.ts`.
 
 For how violations roll up into the Assurance Score, see
 [assurance.md](assurance.md).
+
+---
+
+## Related documents
+
+- [contracts.md](contracts.md) — the in-contract guards that protect each invariant.
+- [guardian-bot.md](guardian-bot.md#evaluatorts) — how the bot evaluates them off-chain.
+- [testing.md](testing.md) — how the harness and exploit replays exercise them.
+- [assurance.md](assurance.md) — how violations roll up into the Assurance Score.

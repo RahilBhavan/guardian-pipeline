@@ -171,4 +171,12 @@ to Supabase, and the dashboard cards turn red.
 | Supabase writes rejected | Using the anon key | The bot needs `SUPABASE_SERVICE_KEY` |
 | `npm start` uses old behaviour | Stale `dist/` | `npm run build`, or use `npm run dev` |
 
-See also [architecture.md](architecture.md) and [assurance.md](assurance.md).
+---
+
+## Related documents
+
+- [architecture.md](architecture.md) — what each layer you just started does.
+- [guardian-bot.md](guardian-bot.md) — the bot's configuration and lifecycle.
+- [database.md](database.md) — the Supabase schema and RLS model.
+- [contracts.md](contracts.md) — the deployed contract's API.
+- [assurance.md](assurance.md) — running the Assurance Score locally.

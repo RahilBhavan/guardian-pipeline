@@ -114,4 +114,12 @@ cd assurance && npm ci && npm run check -- --min-score 80 --no-supabase
 The output report feeds the dashboard's **Assurance Score**, **Traceability
 Matrix**, and **Exploit Replay** panels.
 
-See also [architecture.md](architecture.md) and [invariants.md](invariants.md).
+---
+
+## Related documents
+
+- [architecture.md](architecture.md) — the assurance layer among the four layers.
+- [invariants.md](invariants.md) — the eight invariants violations roll up from.
+- [testing.md](testing.md) — the exploit-replay tier in detail.
+- [ci.md](ci.md) — the `assurance` CI job that gates on the score.
+- [../assurance/README.md](../assurance/README.md) — the assurance engine's CLI.

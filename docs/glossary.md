@@ -1,0 +1,83 @@
+# Glossary
+
+Terms used across Guardian Pipeline's code and documentation. Project-specific
+identifiers (`INV-…`, `EXP-…`, `GUA-…`) are listed first; general DeFi and
+tooling terms follow.
+
+---
+
+## Project identifiers
+
+| Term | Meaning |
+|------|---------|
+| **`INV-01` … `INV-08`** | The eight **invariants** — mathematical properties the vault must hold in every reachable state. Defined identically in the Foundry harness, the Guardian evaluator, and the exploit replays. Full reference: [invariants.md](invariants.md). |
+| **`EXP-01` … `EXP-07`** | The seven **exploit-replay scenarios** — classes of real-world DeFi attack replayed against the vault. Each is classified PREVENTED / DETECTED / MISSED. Catalogue: [assurance.md](assurance.md#exploit-replays). |
+| **`GUA-01` … `GUA-08`** | The eight **audit findings** in the illustrative audit report (`audit/`), each traced to the layers that cover it. See [assurance.md](assurance.md#audit-traceability). |
+| **Assurance Score** | A composite 0–100 metric, recomputed every commit, weighting four assurance layers (static verification 30%, exploit resistance 25%, continuous monitoring 25%, audit traceability 20%). CI gates at ≥ 80. |
+| **Guardian bot** | The off-chain TypeScript daemon (`guardian/`) that monitors the deployed vault block by block. |
+| **The four layers** | Pre-deployment CI, the smart contract, the runtime Guardian, and the assurance layer. See [architecture.md](architecture.md). |
+
+---
+
+## Invariant outcomes
+
+| Term | Meaning |
+|------|---------|
+| **PREVENTED** | An exploit replay where the contract's own code blocked the attack — no state corruption. |
+| **DETECTED** | An exploit replay where state *was* corrupted, but an invariant caught it the same block. The runtime layer's reason to exist. |
+| **MISSED** | An exploit replay where value was extracted and no invariant noticed — a genuine coverage gap. Fails the CI build. |
+| **Aggregate proxy** | A weaker off-chain check the Guardian bot uses for INV-04 and INV-05, because it lacks a per-user event index. It checks a protocol-wide equivalent instead of iterating each user. |
+| **Detection latency** | Wall-clock milliseconds from fetching vault state to finishing the eight-invariant evaluation. Logged per block, charted on the dashboard. |
+
+---
+
+## Smart-contract terms
+
+| Term | Meaning |
+|------|---------|
+| **Invariant** | A property that must hold in *every* reachable state, as opposed to a single-input unit assertion. |
+| **Invariant fuzzing** | A testing technique (here, Foundry's) that drives a contract through random call sequences and asserts the invariants after every call. |
+| **Handler** | A wrapper contract that exposes a *bounded* action space to the fuzzer, so it explores meaningful states. Guardian uses `DepositHandler`, `BorrowHandler`, `WarpHandler`. |
+| **Counterexample** | The minimal failing call sequence Forge prints (after *shrinking*) when an invariant breaks. |
+| **Shrinking** | Forge's reduction of a failing fuzz sequence to the smallest sequence that still reproduces the failure. |
+| **Over-collateralised** | A loan backed by collateral worth more than the debt. Guardian's vault caps borrowing at 80% of collateral value. |
+| **Share / `sharePrice`** | An ERC-4626-style claim on the vault's assets. `sharePrice` is the WAD-scaled asset-per-share rate, fixed 1:1 at `1e18`. |
+| **WAD** | A fixed-point unit of `1e18`. All share maths is WAD-scaled. |
+| **BPS** | Basis points; `100_00` bps = 100%. The collateral ratio is `80_00` bps. |
+| **`nonReentrant`** | An OpenZeppelin modifier that blocks a function from being re-entered mid-execution. |
+| **Custom error** | A named, parameterised Solidity revert (e.g. `CollateralCapExceeded`) — cheaper than a `require` string and gives tests a precise selector. |
+| **NatSpec** | Solidity's documentation-comment standard (`@notice`, `@dev`, `@param`). |
+
+---
+
+## Tooling and infrastructure
+
+| Term | Meaning |
+|------|---------|
+| **Foundry** | The Solidity toolchain used here — `forge` (build/test), `cast` (CLI calls), `anvil` (local node). |
+| **Fuzz profile** | A named set of fuzz parameters in `foundry.toml` (`default`, `ci`, `deep`), selected with `FOUNDRY_PROFILE`. |
+| **`viem`** | The TypeScript Ethereum library the Guardian bot uses. The project standard — `ethers.js` is not used. |
+| **`multicall`** | A single RPC call that batches several contract reads. The bot fetches a whole vault snapshot in one `multicall`. |
+| **Base / Base L2 / Base Sepolia** | Base is Coinbase's Ethereum L2 (mainnet chain id `8453`); Base Sepolia is its testnet (chain id `84532`), the project's deploy target. |
+| **Alchemy** | The RPC provider. The bot connects over an Alchemy WebSocket endpoint. |
+| **Supabase** | The hosted Postgres + real-time service that is the bot↔dashboard boundary. |
+| **RLS (row-level security)** | Postgres access control evaluated per row. Guardian's RLS allows public reads and denies all writes except the service-role key's. |
+| **Anon key / service-role key** | Supabase API keys. The **anon** key is public and read-only (used by the dashboard); the **service-role** key bypasses RLS and is write-capable (used by the bot — keep it secret). |
+| **`pino`** | The structured JSON logger the bot uses. `console.log` is banned in bot paths. |
+| **Vite** | The dashboard's build tool. `create-react-app` is not used. |
+| **Slither / Aderyn** | Solidity static analysers run by the `static-analysis` CI job. |
+| **`forge snapshot`** | Records gas usage per test into `.gas-snapshot`; CI checks the diff against that baseline. |
+| **LCOV** | The coverage report format `forge coverage` emits; the `coverage` job gates `Vault.sol` on its line percentage. |
+
+---
+
+## Research references
+
+| Term | Meaning |
+|------|---------|
+| **Bourveau et al. (2024)** | *Decentralized Finance (DeFi) assurance: early evidence.* Finds continuous, multi-layered assurance — not one-time audits — distinguishes protocols that survive. |
+| **Landsman et al. (2025)** | *Auditing Smart Contracts.* Finds static point-in-time audits show little empirical evidence of preventing runtime exploits. |
+
+Guardian Pipeline is the open-source tool that closes the gap both papers
+identify. See the [root README](../README.md#why-this-exists).
+</content>
