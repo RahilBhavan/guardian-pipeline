@@ -78,9 +78,11 @@ tooling terms follow.
 
 | Term | Meaning |
 |------|---------|
-| **Bourveau et al. (2024)** | *Decentralized Finance (DeFi) assurance: early evidence.* Finds continuous, multi-layered assurance — not one-time audits — distinguishes protocols that survive. |
-| **Landsman et al. (2025)** | *Auditing Smart Contracts.* Finds static point-in-time audits show little empirical evidence of preventing runtime exploits. |
+| **Bourveau et al. (2024)** | *Decentralized Finance (DeFi) assurance: early evidence.* Argues continuous, multi-layered assurance — not one-time audits — distinguishes protocols that survive. |
+| **Landsman et al. (2025)** | *Auditing Smart Contracts.* Reports static point-in-time audits show little empirical evidence of preventing runtime exploits. |
 
-Guardian Pipeline is the open-source tool that closes the gap both papers
-identify. See the [root README](../README.md#why-this-exists).
+These two papers motivate the project's framing; Guardian Pipeline is a
+reference implementation demonstrating their argument, not a claim to have
+settled it. Verify both citations against the source papers before relying on
+them. See the [root README](../README.md#why-this-exists).
 </content>
