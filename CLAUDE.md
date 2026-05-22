@@ -4,8 +4,10 @@
 
 An automated DeFi security pipeline with two integrated layers:
 
-1. **CI/CD invariant fuzz harness** — Foundry runs 10,000+ randomised call sequences against a lending vault on every git push, asserting mathematical invariants hold before deployment.
+1. **CI/CD invariant fuzz harness** — Foundry runs 10,000+ randomised call sequences against an interest-bearing lending vault on every git push, asserting mathematical invariants hold before deployment.
 2. **Off-chain Guardian bot** — A TypeScript daemon that monitors the same invariants live on Base L2 after deployment, persisting any violation to Supabase and updating a dashboard within one block.
+
+A third **assurance layer** ties the two together: it maps each point-in-time audit finding to the invariant and exploit-replay test that now covers it, and emits a continuous assurance score consumed by the dashboard and CI.
 
 **Research grounding** (cite both in the README):
 - Bourveau et al. (2024) *Decentralized Finance (DeFi) assurance: early evidence* — continuous multi-layered assurance across 8,500+ audit reports.
@@ -15,51 +17,53 @@ This project is the open-source tool that closes the gap both papers identify.
 
 ---
 
-## Repo structure (build exactly this)
+## Repo structure
 
 ```
-guardian-pipeline/
-├── CLAUDE.md                    ← this file
-├── README.md                    ← populated in Phase 6
-├── foundry.toml
-├── .github/
-│   └── workflows/
-│       └── invariant-ci.yml
+Guard/
+├── CLAUDE.md                     ← this file
+├── README.md  CONTRIBUTING.md  SECURITY.md  LICENSE
+├── ERRORS.md  MEMORY.md          ← session logs (see ~/.claude/CLAUDE.md Memory Protocol)
+├── foundry.toml  foundry.lock
+├── slither.config.json  .aderyn.toml   ← static-analysis configs
+├── vercel.json
+├── .github/workflows/invariant-ci.yml
 ├── src/
-│   └── Vault.sol
+│   ├── Vault.sol                 ← interest-bearing lending vault
+│   ├── AttackableVault.sol       ← demo subclass exposing the attack() exploit hook
+│   └── MockERC20.sol
 ├── test/
-│   └── invariant/
-│       ├── InvariantVault.t.sol
-│       └── handlers/
-│           ├── DepositHandler.sol
-│           ├── BorrowHandler.sol
-│           └── WarpHandler.sol
-├── script/
-│   └── DeployVault.s.sol
-├── guardian/
-│   ├── package.json
-│   ├── tsconfig.json
-│   ├── src/
-│   │   ├── bot.ts
-│   │   ├── fetcher.ts
-│   │   ├── evaluator.ts
-│   │   ├── router.ts
-│   │   └── types.ts
-│   └── .env.example
-├── dashboard/
-│   ├── package.json
-│   ├── index.html
-│   ├── vite.config.ts
+│   ├── unit/VaultUnit.t.sol
+│   ├── invariant/
+│   │   ├── InvariantVault.t.sol
+│   │   └── handlers/{Deposit,Borrow,Liquidate,Warp}Handler.sol
+│   └── exploit/
+│       ├── ExploitReplay.t.sol
+│       ├── ExploitScenarios.sol
+│       └── InvariantChecks.sol
+├── script/{DeployVault,ExploitReplay}.s.sol
+├── guardian/                     ← off-chain monitoring bot
+│   ├── package.json  tsconfig.json  .env.example
+│   └── src/{bot,fetcher,evaluator,router,types}.ts
+├── dashboard/                    ← Vite + React dashboard (deployed to Vercel)
+│   ├── package.json  index.html  vite.config.ts  tsconfig.json
 │   └── src/
-│       ├── main.tsx
-│       ├── App.tsx
-│       └── components/
-│           ├── InvariantHealth.tsx
-│           ├── AlertFeed.tsx
-│           └── LatencyBadge.tsx
-└── docs/
-    ├── architecture.png         ← screenshot of the SVG diagram
-    └── counterexample.png       ← Forge counterexample terminal output
+│       ├── main.tsx  App.tsx  supabase.ts  assurance.ts  types.ts
+│       ├── data/assurance-report.json
+│       └── components/{InvariantHealth,AlertFeed,LatencyBadge,
+│                       AssuranceScore,ExploitReplay,TraceabilityMatrix}.tsx
+├── assurance/                    ← assurance-scoring CLI (audit ↔ invariant traceability)
+│   ├── package.json  tsconfig.json
+│   ├── src/{cli,score,traceability,findings,invariants,exploits,sources,report}.ts
+│   ├── test/{score,traceability}.test.ts
+│   └── data/{assurance-report.json,assurance-report.md,exploit-replays.json,history.jsonl}
+├── audit/                        ← point-in-time security review
+│   ├── findings.json
+│   └── Vault-Security-Review.md
+├── supabase/migrations/{0001_init,0002_lockdown_insert_rls}.sql
+└── docs/                         ← canonical documentation — start at docs/README.md
+    └── README.md  architecture.md  architecture.svg  contracts.md  invariants.md
+        testing.md  ci.md  guardian-bot.md  database.md  assurance.md  setup.md  glossary.md
 ```
 
 ---
@@ -90,34 +94,40 @@ guardian-pipeline/
 - Do not use `console.log` in production bot paths — use a structured logger (`pino`).
 - Do not hardcode the Alchemy key anywhere — always read from `process.env`.
 - Do not install Hardhat — this project is Foundry-only for the contract layer.
+- Do not expose the Supabase service-role key to the browser — the bot writes with it server-side; the dashboard reads with the anon key only.
 
 ---
 
 ## Documentation
 
-The original phase spec files (`specs/01_*`–`07_*.md`) were build scaffolding and
-were removed in commit `0ed2d5b` once the system was built. The canonical, current
-documentation now lives in `docs/` — start at `docs/architecture.md`.
+`docs/` is the single source of truth — start at `docs/README.md`. The original
+phase spec files (`specs/01_*`–`07_*.md`) were build scaffolding and were removed
+in commit `0ed2d5b` once the system was built.
 
 ---
 
 ## Environment variables
 
-Create a `.env` in `guardian/` before running the bot:
+Create a `.env` in `guardian/` before running the bot. The canonical list with
+inline notes is `guardian/.env.example`:
 
 ```env
-ALCHEMY_KEY=your_alchemy_api_key
-BASE_SEPOLIA_RPC=https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}
+ALCHEMY_KEY=your_alchemy_api_key_here
 VAULT_ADDRESS=0x...deployed_vault_address
+TOKEN_ADDRESS=0x...deployed_mock_erc20_address
+VAULT_DEPLOY_BLOCK=0            # deployment block — start of the per-user event scan
 SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_KEY=...        # service-role key — bypasses RLS, server-side only, never commit
 BLOCK_POLL_INTERVAL_MS=2000
-INVARIANT_CHECK_DELAY_BLOCKS=1
+CHAIN=base-sepolia
 ```
+
+The dashboard reads its own `dashboard/.env` (`VITE_`-prefixed: Supabase URL,
+anon key, vault address). See `dashboard/.env.example`.
 
 ---
 
-## Demo script (Phase 6)
+## Demo script
 
 The Loom demo follows this exact sequence:
 
@@ -127,6 +137,7 @@ The Loom demo follows this exact sequence:
    ```bash
    cast send $VAULT_ADDRESS "attack()" --account guardian-demo --rpc-url $BASE_SEPOLIA_RPC
    ```
+   (`attack()` lives on `AttackableVault` — the deployed demo vault.)
 4. Guardian detects on the next block (~2 s). Dashboard turns red within one block.
 5. Show the dashboard alert: invariant name, block number, violated condition.
 
