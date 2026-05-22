@@ -10,7 +10,7 @@ tooling terms follow.
 
 | Term | Meaning |
 |------|---------|
-| **`INV-01` … `INV-08`** | The eight **invariants** — mathematical properties the vault must hold in every reachable state. Defined identically in the Foundry harness, the Guardian evaluator, and the exploit replays. Full reference: [invariants.md](invariants.md). |
+| **`INV-01` … `INV-06`** | The six **invariants** — mathematical properties the vault must hold in every reachable state. Defined identically in the Foundry harness, the Guardian evaluator, and the exploit replays. Full reference: [invariants.md](invariants.md). |
 | **`EXP-01` … `EXP-07`** | The seven **exploit-replay scenarios** — classes of real-world DeFi attack replayed against the vault. Each is classified PREVENTED / DETECTED / MISSED. Catalogue: [assurance.md](assurance.md#exploit-replays). |
 | **`GUA-01` … `GUA-08`** | The eight **audit findings** in the illustrative audit report (`audit/`), each traced to the layers that cover it. See [assurance.md](assurance.md#audit-traceability). |
 | **Assurance Score** | A composite 0–100 metric, recomputed every commit, weighting four assurance layers (static verification 30%, exploit resistance 25%, continuous monitoring 25%, audit traceability 20%). CI gates at ≥ 80. |
@@ -26,8 +26,7 @@ tooling terms follow.
 | **PREVENTED** | An exploit replay where the contract's own code blocked the attack — no state corruption. |
 | **DETECTED** | An exploit replay where state *was* corrupted, but an invariant caught it the same block. The runtime layer's reason to exist. |
 | **MISSED** | An exploit replay where value was extracted and no invariant noticed — a genuine coverage gap. Fails the CI build. |
-| **Aggregate proxy** | A weaker off-chain check the Guardian bot uses for INV-04 and INV-05, because it lacks a per-user event index. It checks a protocol-wide equivalent instead of iterating each user. |
-| **Detection latency** | Wall-clock milliseconds from fetching vault state to finishing the eight-invariant evaluation. Logged per block, charted on the dashboard. |
+| **Detection latency** | Wall-clock milliseconds from fetching vault state to finishing the six-invariant evaluation. Logged per block, charted on the dashboard. |
 
 ---
 
@@ -37,13 +36,17 @@ tooling terms follow.
 |------|---------|
 | **Invariant** | A property that must hold in *every* reachable state, as opposed to a single-input unit assertion. |
 | **Invariant fuzzing** | A testing technique (here, Foundry's) that drives a contract through random call sequences and asserts the invariants after every call. |
-| **Handler** | A wrapper contract that exposes a *bounded* action space to the fuzzer, so it explores meaningful states. Guardian uses `DepositHandler`, `BorrowHandler`, `WarpHandler`. |
+| **Handler** | A wrapper contract that exposes a *bounded* action space to the fuzzer, so it explores meaningful states. Guardian uses `DepositHandler`, `BorrowHandler`, `WarpHandler`, `LiquidateHandler`. |
 | **Counterexample** | The minimal failing call sequence Forge prints (after *shrinking*) when an invariant breaks. |
 | **Shrinking** | Forge's reduction of a failing fuzz sequence to the smallest sequence that still reproduces the failure. |
 | **Over-collateralised** | A loan backed by collateral worth more than the debt. Guardian's vault caps borrowing at 80% of collateral value. |
-| **Share / `sharePrice`** | An ERC-4626-style claim on the vault's assets. `sharePrice` is the WAD-scaled asset-per-share rate, fixed 1:1 at `1e18`. |
-| **WAD** | A fixed-point unit of `1e18`. All share maths is WAD-scaled. |
-| **BPS** | Basis points; `100_00` bps = 100%. The collateral ratio is `80_00` bps. |
+| **Supply share / `userSupplyShares`** | A lender's claim on the vault's assets. Shares are minted on `deposit` against the stored `totalSupplyAssets`; their asset value *rises* as borrowers pay interest — it is not fixed 1:1. |
+| **`sharePrice`** | The WAD-scaled asset-per-share rate, `totalSupplyAssets * 1e18 / totalSupplyShares`. Starts at `1e18` and only rises (INV-04). |
+| **Borrow share / `userBorrowShares` / `borrowIndex`** | A borrower's debt is held as borrow shares; the asset value of one share is `borrowIndex`-scaled. `borrowIndex` starts at `1e18` and rises monotonically as `accrue` charges interest, so `userDebt = userBorrowShares * borrowIndex / 1e18`. |
+| **`accrue`** | Charges borrower interest since the last call by raising `borrowIndex`, then credits the same realised amount to `totalSupplyAssets`. Called at the start of every state-mutating function; idempotent within a block. |
+| **`liquidate`** | Clears an under-water borrower's position: repays part or all of their debt and seizes their collateral plus a 5% liquidation bonus. |
+| **WAD** | A fixed-point unit of `1e18`. All share and index maths is WAD-scaled. |
+| **BPS** | Basis points; `100_00` bps = 100%. The collateral ratio is `80_00` bps, the liquidation bonus `5_00` bps. |
 | **`nonReentrant`** | An OpenZeppelin modifier that blocks a function from being re-entered mid-execution. |
 | **Custom error** | A named, parameterised Solidity revert (e.g. `CollateralCapExceeded`) — cheaper than a `require` string and gives tests a precise selector. |
 | **NatSpec** | Solidity's documentation-comment standard (`@notice`, `@dev`, `@param`). |

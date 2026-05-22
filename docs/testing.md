@@ -8,10 +8,10 @@ behind the green CI badge and the `static-verification` slice of the
 | Tier | Directory | Question it answers | CI gate |
 |------|-----------|---------------------|---------|
 | Unit | `test/unit/` | Does every individual path behave exactly as specified? | via `coverage` (≥ 85% lines) |
-| Invariant fuzz | `test/invariant/` | Do the eight properties survive *any* call sequence? | `invariant-fuzz` (zero `[FAIL]`) |
+| Invariant fuzz | `test/invariant/` | Do the six properties survive *any* call sequence? | `invariant-fuzz` (zero `[FAIL]`) |
 | Exploit replay | `test/exploit/` | Does the vault resist known DeFi exploit *classes*? | `assurance` (no regression, no `MISSED`) |
 
-`forge test` runs all three — **31 tests across 3 suites** (15 unit, 8
+`forge test` runs all three — **38 tests across 3 suites** (24 unit, 6
 invariant, 8 exploit-replay).
 
 ---
@@ -20,9 +20,9 @@ invariant, 8 exploit-replay).
 
 `test/unit/VaultUnit.t.sol` — deterministic, example-based coverage.
 
-The invariant harness proves the eight properties hold; the unit suite pins
-down *behaviour*: every happy path, every revert path, every event, and the
-demo-only `attack()` function. It is what drives `src/Vault.sol` to 100% line
+The invariant harness proves the six properties hold; the unit suite pins
+down *behaviour*: every happy path, every revert path, every event, interest
+accrual, and liquidation. It is what drives `src/Vault.sol` to 100% line
 coverage — the `coverage` CI job gates at ≥ 85%, and the unit suite alone
 clears that, which is why the coverage job caps invariant fuzzing (it only
 needs the percentage, not a full campaign).
@@ -43,16 +43,16 @@ forge coverage --report summary          # see per-file coverage
 ### How it works
 
 Foundry's invariant fuzzer builds **random call sequences** and asserts all
-eight `invariant_*` functions after every call. Instead of fuzzing the vault
-directly, it drives three **handler contracts** — a standard Foundry pattern
+six `invariant_*` functions after every call. Instead of fuzzing the vault
+directly, it drives four **handler contracts** — a standard Foundry pattern
 that keeps the fuzzer inside a realistic, meaningful action space.
 
 ```
-setUp(): deploy Vault + MockERC20, register 3 handlers as targets,
+setUp(): deploy Vault + MockERC20, register 4 handlers as targets,
          exclude Vault + token from direct fuzzing
    │
    ▼
-fuzzer ─▶ random sequence of handler calls ─▶ assert invariant_01..08 ─▶ repeat
+fuzzer ─▶ random sequence of handler calls ─▶ assert invariant_01..06 ─▶ repeat
 ```
 
 ### The handlers
@@ -61,7 +61,8 @@ fuzzer ─▶ random sequence of handler calls ─▶ assert invariant_01..08 �
 |---------|------------------|----------------|
 | `DepositHandler` | `deposit`, `withdraw` | 5 actors, each funded `500_000e18` and pre-approved; deposit amount bounded to `1…100_000e18`. |
 | `BorrowHandler` | `borrow`, `repay` | Same 5 actors (deterministic `makeAddr` labels → identical addresses across handlers); borrow bounded to `1…50_000e18`. |
-| `WarpHandler` | `warp` | Advances `block.timestamp` by `1…365 days` and rolls block number by `seconds/2` (Base's ~2 s cadence). |
+| `WarpHandler` | `warp` | Advances `block.timestamp` by `1…30 days`, then calls `vault.accrue()` so interest is realised — every warp tensions the borrow index and lender claims. |
+| `LiquidateHandler` | `liquidate` | A pseudo-random actor liquidates another's position, repaying a bounded `1…debt`; redistributes collateral so INV-06 is exercised. |
 
 Two design choices make the campaign effective:
 
@@ -76,10 +77,11 @@ Two design choices make the campaign effective:
   five addresses, so a borrow can act on shares an earlier deposit minted —
   the sequences interleave into realistic histories.
 
-`DepositHandler` also exposes `sumUserShares()` and `getActors()` so
-`invariant_shareAccounting` (INV-04) and `invariant_collateralCap` (INV-05) can
-do a **true per-user** check — unlike the bot, the harness has every actor in
-hand.
+`DepositHandler` also exposes `sumSupplyShares()`, `sumBorrowShares()` and
+`getActors()` so `invariant_supplyShareIntegrity` (INV-02),
+`invariant_debtShareIntegrity` (INV-03) and `invariant_noUncollateralisedDebt`
+(INV-06) can do a **true per-user** check across every actor — the same per-user
+checks the Guardian bot mirrors live against its event-discovered user set.
 
 ### Fuzz profiles
 
@@ -103,7 +105,7 @@ When an invariant fails, Forge **shrinks** the failing sequence to a minimal
 reproduction and prints it under `[FAIL] invariant_<name>()`. To see this for
 yourself — and to capture `docs/counterexample.png` — temporarily break an
 invariant, as described in [docs/README.md](README.md#capturing-counterexamplepng).
-A green badge is therefore a precise claim: *all eight invariants survived the
+A green badge is therefore a precise claim: *all six invariants survived the
 profile's campaign with zero failures.*
 
 ---
@@ -172,7 +174,7 @@ covers the scoring and traceability logic. See
 ## Running everything
 
 ```bash
-# The whole contract suite — 31 tests
+# The whole contract suite — 38 tests
 forge test -vvv
 
 # What CI runs, in order
@@ -189,7 +191,7 @@ See [ci.md](ci.md) for how these map onto the six CI jobs, and
 
 ## Related documents
 
-- [invariants.md](invariants.md) — the eight invariants under test.
+- [invariants.md](invariants.md) — the six invariants under test.
 - [ci.md](ci.md) — how the tiers run as CI jobs.
 - [assurance.md](assurance.md) — exploit catalogue and the Assurance Score.
 - [contracts.md](contracts.md) — the contract these tests exercise.

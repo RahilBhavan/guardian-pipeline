@@ -1,4 +1,4 @@
-/** A single invariant health card — one of the eight in the 2×4 grid. */
+/** A single invariant health card — one of the six in the 2×3 grid. */
 
 interface Props {
   invariantId: string;

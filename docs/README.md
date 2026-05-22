@@ -11,7 +11,7 @@ The complete documentation set for Guardian Pipeline. New here? Read the
 | Document | What it covers |
 |----------|----------------|
 | [architecture.md](architecture.md) | The four layers and how state flows between them — the mental model for everything else. |
-| [invariants.md](invariants.md) | All eight invariants — formulas, failure modes, and which layer enforces each. |
+| [invariants.md](invariants.md) | All six invariants — formulas, failure modes, and which layer enforces each. |
 
 ## Reference
 
@@ -61,9 +61,9 @@ Pick the trail that matches what you are doing:
 ## Documentation map
 
 ```
-README.md (root)            project thesis, quickstart, the 8 invariants at a glance
+README.md (root)            project thesis, quickstart, the 6 invariants at a glance
 ├─ docs/architecture.md      the four layers, state flow
-├─ docs/invariants.md        INV-01..08 — formulas, failure modes, coverage
+├─ docs/invariants.md        INV-01..06 — formulas, failure modes, coverage
 ├─ docs/contracts.md         Vault + MockERC20 API reference
 ├─ docs/guardian-bot.md      the off-chain bot, module by module
 ├─ docs/database.md          Supabase schema + RLS
@@ -92,12 +92,12 @@ README.md (root)            project thesis, quickstart, the 8 invariants at a gl
 The fuzz harness is only convincing if you can see it *fail*. To produce the
 counterexample screenshot:
 
-1. In `src/Vault.sol`, temporarily replace the body of `borrow()` with a forced
-   violation:
+1. In `src/Vault.sol`, temporarily add a forced violation to `borrow()` — for
+   example, inflate the lender-side claim with no matching assets:
 
    ```solidity
    // BUG: forced INV-01 violation — delete after screenshot
-   totalBorrowed = totalDeposited + 1;
+   totalSupplyAssets += amount * 1_000;
    ```
 
 2. Run the deep profile:
@@ -110,6 +110,6 @@ counterexample screenshot:
    `[FAIL] invariant_solvency()`. Screenshot that terminal output and save it
    here as `counterexample.png`.
 
-4. **Restore `borrow()`** and re-run the suite to confirm all eight invariants
+4. **Restore `borrow()`** and re-run the suite to confirm all six invariants
    pass again.
 </content>

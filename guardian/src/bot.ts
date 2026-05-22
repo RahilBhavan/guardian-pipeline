@@ -1,7 +1,7 @@
 /**
  * bot.ts — Guardian entry point.
  *
- * Subscribes to new Base L2 blocks, fetches vault state, evaluates all eight
+ * Subscribes to new Base L2 blocks, fetches vault state, evaluates all six
  * invariants, and persists any violation to Supabase — typically within one
  * block (~2s) of the breach — where the dashboard surfaces it in real time.
  */
@@ -10,7 +10,7 @@ import { createPublicClient, webSocket, type Chain, type PublicClient } from 'vi
 import { base, baseSepolia } from 'viem/chains';
 import pino from 'pino';
 import { createClient } from '@supabase/supabase-js';
-import { fetchVaultState } from './fetcher.js';
+import { discoverUsers, fetchVaultState } from './fetcher.js';
 import { evaluateInvariants } from './evaluator.js';
 import { logAlertToSupabase, logBlockCheck } from './router.js';
 import type { AlertPayload, BotConfig } from './types.js';
@@ -61,6 +61,7 @@ function loadConfig(): BotConfig {
     rpcUrl,
     vaultAddress: process.env.VAULT_ADDRESS as `0x${string}`,
     tokenAddress: process.env.TOKEN_ADDRESS as `0x${string}`,
+    deployBlock: BigInt(process.env.VAULT_DEPLOY_BLOCK ?? '0'),
     supabaseUrl: process.env.SUPABASE_URL as string,
     supabaseKey,
     blockPollIntervalMs: Number(process.env.BLOCK_POLL_INTERVAL_MS ?? 2000),
@@ -71,11 +72,7 @@ function loadConfig(): BotConfig {
 async function main(): Promise<void> {
   const config = loadConfig();
   logger.info(
-    {
-      chain: config.chain,
-      vault: config.vaultAddress,
-      supabaseAuth: 'service-role',
-    },
+    { chain: config.chain, vault: config.vaultAddress, supabaseAuth: 'service-role' },
     'Guardian starting',
   );
 
@@ -90,8 +87,8 @@ async function main(): Promise<void> {
 
   // Preflight — fail fast (or warn loudly) instead of logging an obscure error
   // on every block when the RPC, vault address, or database is misconfigured.
-  const blockNumber = await client.getBlockNumber();
-  logger.info({ blockNumber: blockNumber.toString() }, 'RPC connection OK');
+  const headBlock = await client.getBlockNumber();
+  logger.info({ blockNumber: headBlock.toString() }, 'RPC connection OK');
 
   const code = await client.getCode({ address: config.vaultAddress });
   if (!code || code === '0x') {
@@ -110,6 +107,15 @@ async function main(): Promise<void> {
     logger.info('Supabase connection OK');
   }
 
+  // Seed the user set from every vault event since deployment. INV-02/03/06 are
+  // checked against this set, kept current by an incremental scan each block.
+  const knownUsers = new Set<`0x${string}`>();
+  for (const user of await discoverUsers(client, config.vaultAddress, config.deployBlock, headBlock)) {
+    knownUsers.add(user);
+  }
+  let lastScannedBlock = headBlock;
+  logger.info({ users: knownUsers.size }, 'Seeded user set from vault history');
+
   // Prevent overlapping checks if a block arrives before the previous finishes.
   let checking = false;
 
@@ -122,7 +128,25 @@ async function main(): Promise<void> {
     const startedAt = Date.now();
 
     try {
-      const state = await fetchVaultState(client, config.vaultAddress, config.tokenAddress, blockNumber);
+      // Pick up any accounts that appeared since the last checked block.
+      if (blockNumber > lastScannedBlock) {
+        const fresh = await discoverUsers(
+          client,
+          config.vaultAddress,
+          lastScannedBlock + 1n,
+          blockNumber,
+        );
+        for (const user of fresh) knownUsers.add(user);
+        lastScannedBlock = blockNumber;
+      }
+
+      const state = await fetchVaultState(
+        client,
+        config.vaultAddress,
+        config.tokenAddress,
+        blockNumber,
+        [...knownUsers],
+      );
       const results = evaluateInvariants(state);
       const violations = results.filter((r) => !r.passed);
       const detectionLatencyMs = Date.now() - startedAt;
@@ -153,7 +177,7 @@ async function main(): Promise<void> {
         const payload: AlertPayload = {
           vaultAddress: config.vaultAddress,
           blockNumber,
-          timestamp: state.timestamp,
+          timestamp: state.blockTimestamp,
           violations,
           detectedAt: Date.now(),
           detectionLatencyMs,

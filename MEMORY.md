@@ -197,3 +197,36 @@ earlier "redeploy + populate SUPABASE_SERVICE_KEY" needs-attention items are now
 resolved. `MEMORY.md`'s own historical Discord references are kept intact as
 record. `04_guardian_bot.md` still specifies `SUPABASE_ANON_KEY` (pre-hardening,
 unrelated to Discord) — left as-is; the live code uses `SUPABASE_SERVICE_KEY`.
+
+## 2026-05-22 — Vault redesigned as a real interest-bearing lending vault
+What: Replaced the trivial fixed-price `Vault` with a Morpho-style
+interest-bearing, over-collateralised lending vault so the invariants are
+genuinely *tensioned*. New mechanics: interest accrual (`accrue()`, borrow
+index), liquidation of under-water positions (`liquidate()`, 5% bonus),
+dual-tracked accounting (`totalSupplyAssets`/`totalSupplyShares` on the lender
+side, `borrowIndex`/`totalBorrowShares` on the borrow side). The `attack()`
+backdoor was removed from `Vault.sol` and isolated in a new demo-only subclass
+`src/AttackableVault.sol`. The invariant set went from 8 to **6 genuinely
+independent** invariants (the old INV-01 and INV-07 were a literal duplicate;
+INV-03/04/06 were tautological while `sharePrice` never moved). The off-chain
+evaluator now discovers the user set from `Deposited`/`Borrowed`/`Liquidated`
+events and reads exact per-user state — INV-02/03/06 are no longer aggregate
+proxies. All 38 Foundry tests pass; guardian + dashboard typecheck; assurance
+gate passes (92/100, A-).
+Why: A critical review found the old contract's `sharePrice` was set once and
+never changed, which made several "invariants" dead checks and let the fuzz
+harness pass trivially — the framing ("8 mathematical invariants", research-gap
+claims) outran the substance. The redesign makes the contract earn the framing.
+Rejected: Keeping the old contract and merely shrinking the claims (the weaker
+of the two honest options the review offered); a stored-`totalBorrowAssets`
+borrow side (the borrow `borrowIndex` keeps INV-05 a clean, real invariant).
+Note: SUPERSEDES three earlier entries — (1) "InsufficientLiquidity guards
+provably unreachable": `withdraw`'s guard is now *reachable* once interest lifts
+a lender's claim above idle cash (covered by a unit test); `borrow`'s remains
+unreachable. (2) The deployed Base Sepolia vault `0x60a1bf…06f45` is the OLD
+contract — it must be redeployed (`DeployVault.s.sol` now deploys
+`AttackableVault`) and `VAULT_ADDRESS`/`VAULT_DEPLOY_BLOCK` updated in the
+`.env` files. (3) The fuzz harness caught a real 1-wei solvency leak in the
+full-repay path during this redesign — see `ERRORS.md` and audit finding
+GUA-03. The root spec files `01_*`–`07_*.md` still describe the old model and
+were left as historical build specs; `docs/` + `README` are the canonical docs.

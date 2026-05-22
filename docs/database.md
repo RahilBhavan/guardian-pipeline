@@ -40,7 +40,7 @@ invariant) whenever a block fails.
 | `block_number` | `bigint` | Block at which the violation was observed. |
 | `block_ts` | `timestamptz` | Wall-clock time of the state read (nullable). |
 | `invariant_id` | `text` | e.g. `INV-01`. |
-| `invariant_name` | `text` | e.g. `Solvency`. |
+| `invariant_name` | `text` | e.g. `Protocol solvency`. |
 | `passed` | `boolean` | Always `false` for an alert row (default `false`). |
 | `actual_value` | `text` | The observed value. **Stored as text** — `uint256` exceeds Postgres `bigint`. |
 | `bound_value` | `text` | The bound it violated, also text. |
@@ -66,7 +66,7 @@ liveness and latency log.
 | `checked_at` | `timestamptz` | Insert time, `now()`. |
 | `block_number` | `bigint` | The inspected block. |
 | `vault` | `text` | The monitored vault address. |
-| `all_passed` | `boolean` | `true` if all eight invariants held. |
+| `all_passed` | `boolean` | `true` if all six invariants held. |
 | `latency_ms` | `integer` | Fetch-to-evaluation latency (nullable). |
 | `violations_count` | `integer` | Number of failed invariants this block (default `0`). |
 

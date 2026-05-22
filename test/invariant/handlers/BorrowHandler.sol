@@ -41,7 +41,8 @@ contract BorrowHandler is Test {
     /// @notice Fuzz entrypoint: repay a bounded amount as a pseudo-random actor.
     function repay(uint256 actorSeed, uint256 amount) external {
         address actor = actors[bound(actorSeed, 0, actors.length - 1)];
-        amount = bound(amount, 0, vault.userBorrowed(actor));
+        uint256 debt = vault.userDebt(actor);
+        amount = bound(amount, 0, debt);
         if (amount == 0) return;
 
         vm.prank(actor);

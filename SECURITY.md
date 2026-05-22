@@ -29,11 +29,11 @@ The system has four components and three trust boundaries.
 
 ### Boundary 1 — the vault's public surface
 
-Every state-changing path (`deposit`, `withdraw`, `borrow`, `repay`) is
-callable by anyone. Their safety rests entirely on the in-function guards
-documented in [docs/contracts.md](docs/contracts.md) and on the eight
-[invariants](docs/invariants.md). The fuzz harness exists precisely to attack
-this boundary with 300,000+ randomised calls per CI run.
+Every state-changing path (`deposit`, `withdraw`, `borrow`, `repay`,
+`liquidate`, `accrue`) is callable by anyone. Their safety rests entirely on the
+in-function guards documented in [docs/contracts.md](docs/contracts.md) and on
+the six [invariants](docs/invariants.md). The fuzz harness exists precisely to
+attack this boundary with 300,000+ randomised calls per CI run.
 
 ### Boundary 2 — the Guardian's RPC link
 
@@ -60,16 +60,18 @@ it to the browser.
 
 ---
 
-## The `attack()` backdoor — intentional, and contained
+## The `attack()` backdoor — isolated to a separate contract
 
-`Vault.attack()` is a **deliberate, demo-only backdoor**. It forces the vault
-insolvent so the Loom demo can show the Guardian bot detecting a live invariant
-breach. It is **not a vulnerability** — it is contained by two independent
-guards:
+The audited contract, `src/Vault.sol`, contains **no backdoor of any kind**.
+The demo breach lives only in `src/AttackableVault.sol` — a demo-only subclass
+that inflates `totalSupplyAssets` past the assets backing it, forcing an INV-01
+(solvency) violation so the Loom demo can show the Guardian bot detecting it
+live. `AttackableVault` is **never deployed to production**; the testnet demo
+deploys it deliberately. It is contained by two independent guards:
 
-1. **Access control** — `onlyAttacker`: only the `attacker` address fixed at
-   construction can call it. In the Foundry harness that address is
-   `0xDEAD`, so the fuzzer can never reach it.
+1. **Access control** — `attack()` reverts with `NotAttacker` unless called by
+   the `attacker` address fixed at construction. In the Foundry harness that
+   address is a dedicated actor the fuzzer never controls.
 2. **Chain gate** — `attack()` reverts with `MainnetDisabled` whenever
    `block.chainid == 8453` (Base mainnet). Even if this exact bytecode were
    deployed to production, the backdoor cannot fire.
@@ -107,14 +109,14 @@ alone is not enough — assume it is compromised the moment it is pushed).
 
 These are documented design boundaries, not undisclosed bugs:
 
-- **The vault is a teaching example.** No interest accrual, no liquidations, no
-  oracle, single asset (audit finding GUA-08). Do not custody real value.
+- **The vault is a teaching example.** Single asset, a fixed-rate interest
+  model, no price oracle, and no bad-debt reserve (audit finding GUA-08). Do not
+  custody real value.
 - **`MockERC20` has unrestricted `mint` and no transfer hooks** — test-only.
   Never deploy it to a real network.
-- **The Guardian's INV-04 and INV-05 are aggregate proxies.** Without a
-  per-user event index the off-chain check is weaker than the harness for those
-  two invariants. See [docs/invariants.md](docs/invariants.md#where-each-invariant-is-enforced).
-- **The bot monitors only blocks seen while running** — no historical backfill.
+- **The bot monitors only blocks seen while running** — no historical backfill
+  of alerts, though the user set is seeded from the full event history at
+  startup so the per-user invariants are exact from the first checked block.
 
 ---
 

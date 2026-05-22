@@ -1,7 +1,7 @@
 # Guardian Pipeline
 
 [![Invariant CI](https://github.com/rahilbhavan/guardian-pipeline/actions/workflows/invariant-ci.yml/badge.svg)](https://github.com/rahilbhavan/guardian-pipeline/actions/workflows/invariant-ci.yml)
-[![Vault coverage](https://img.shields.io/badge/Vault%20coverage-100%25-brightgreen)](./docs/assurance.md)
+[![Vault coverage](https://img.shields.io/badge/Vault%20coverage-97%25-brightgreen)](./docs/assurance.md)
 [![Assurance score](https://img.shields.io/badge/assurance%20score-gated%20%E2%89%A580-0052FF)](./docs/assurance.md)
 [![Built on Base](https://img.shields.io/badge/Base_L2-0052FF)](https://base.org)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.24-363636)](https://soliditylang.org)
@@ -42,13 +42,15 @@ checked before deployment is byte-for-byte the property monitored after it.
 Three runtime layers, plus an assurance layer that scores them:
 
 1. **Pre-deployment (CI/CD)** — Foundry invariant fuzzing runs on every push.
-   A green badge means all 8 invariants held across 2,000+ randomised call
-   sequences (~300,000 calls) with zero reverts.
-2. **Smart contract** — a minimal over-collateralised lending vault
-   (`deposit` · `withdraw` · `borrow` · `repay`) whose 8 invariants are
-   documented as NatSpec and exercised by Foundry handlers.
+   A green badge means all 6 invariants held across a 2,000-run campaign
+   (~300,000 calls per invariant) with zero reverts.
+2. **Smart contract** — an interest-bearing, over-collateralised lending vault
+   (`deposit` · `withdraw` · `borrow` · `repay` · `liquidate` · `accrue`).
+   Borrowers pay interest through a borrow index, lenders earn it as a rising
+   share price, and under-water positions are liquidated — so the 6 invariants
+   are genuinely *tensioned*, not true by construction.
 3. **Runtime guardian** — a TypeScript daemon on Base L2. On every block it
-   fetches vault state, evaluates the same 8 invariants, and persists any
+   fetches vault state, evaluates the same 6 invariants, and persists any
    violation to Supabase — surfaced on the live dashboard within one block
    (~2 s) of the breach.
 4. **Assurance layer** — backtests 7 historical exploit classes, traces audit
@@ -57,29 +59,33 @@ Three runtime layers, plus an assurance layer that scores them:
 
 The off-chain evaluator (`guardian/src/evaluator.ts`) is a deliberate 1:1
 mirror of the Solidity `invariant_*` functions in
-`test/invariant/InvariantVault.t.sol`. The same maths, on both sides of
-deployment. See **[docs/architecture.md](docs/architecture.md)**.
+`test/invariant/InvariantVault.t.sol` — it discovers every account from vault
+events and reads exact per-user state, so the off-chain check is the same
+maths, not a sampled proxy. The same property, on both sides of deployment.
+See **[docs/architecture.md](docs/architecture.md)**.
 
 ---
 
-## The 8 invariants
+## The 6 invariants
 
 | ID | Name | Property | Severity |
 |----|------|----------|----------|
-| INV-01 | Solvency | `totalBorrowed ≤ totalDeposited` | Critical |
-| INV-02 | Liquidity buffer | `tokenBalance(vault) ≥ totalDeposited − totalBorrowed` | Critical |
-| INV-03 | Share price floor | `sharePrice ≥ 1e18` | High |
-| INV-04 | Share accounting | `totalShares = Σ userShares[i]` | High |
-| INV-05 | Collateral cap | `∀u: userBorrowed[u] ≤ userShares[u] × sharePrice / 1e18 × collateralRatio` | High |
-| INV-06 | No share inflation | `sharePrice × totalShares / 1e18 ≤ totalDeposited` | Medium |
-| INV-07 | Non-negative net | `totalDeposited ≥ totalBorrowed` | Medium |
-| INV-08 | Zero-state consistency | `totalShares == 0 ⇔ totalDeposited == 0` | Low |
+| INV-01 | Protocol solvency | `cash + totalBorrowed ≥ totalSupplyAssets` | Critical |
+| INV-02 | Supply-share integrity | `totalSupplyShares = Σ userSupplyShares[i]` | Critical |
+| INV-03 | Debt-share integrity | `totalBorrowShares = Σ userBorrowShares[i]` | High |
+| INV-04 | Lender-value floor | `totalSupplyAssets ≥ totalSupplyShares` (share price ≥ 1:1) | High |
+| INV-05 | Interest-index floor | `borrowIndex ≥ 1e18` | Medium |
+| INV-06 | No uncollateralised debt | `∀u: userSupplyShares[u] == 0 ⇒ userDebt(u) == 0` | High |
 
-Each invariant is asserted by a `public view` function in the Foundry harness
-and mirrored in `evaluator.ts`. INV-04 and INV-05 use aggregate proxies
-off-chain (the bot has no per-user event index in the MVP). Full reference,
-including what breaks each one and which layer catches it:
-**[docs/invariants.md](docs/invariants.md)**.
+Each invariant is asserted by an `invariant_*` function in the Foundry harness
+and mirrored in `evaluator.ts`. Interest accrual and liquidation move the borrow
+index, the share price and every position, so the fuzzer can genuinely break a
+property if the accounting rounds the wrong way — it found and pinned exactly
+such a one-wei solvency leak during development (audit finding GUA-03). The bot
+discovers every account from `Deposited` / `Borrowed` / `Liquidated` events and
+reads exact per-user state, so INV-02/03/06 are checked against the real user
+set, not a proxy. Full reference, including what breaks each one and which layer
+catches it: **[docs/invariants.md](docs/invariants.md)**.
 
 ---
 
@@ -133,9 +139,11 @@ cast send $VAULT_ADDRESS "attack()" \
   --rpc-url $BASE_SEPOLIA_RPC
 ```
 
-`attack()` is a demo-only backdoor that forces the vault insolvent (it reverts
-on Base mainnet). The Guardian detects the INV-01 violation on the next block,
-writes it to Supabase, and the dashboard turns red — all within ~2 seconds.
+`attack()` lives only on `AttackableVault` — a demo-only subclass deployed for
+the testnet demo. It inflates lender claims past the assets backing them and
+reverts on Base mainnet; the production `Vault` has no such function. The
+Guardian detects the resulting INV-01 violation on the next block, writes it to
+Supabase, and the dashboard turns red — all within ~2 seconds.
 
 ---
 
@@ -158,7 +166,7 @@ writes it to Supabase, and the dashboard turns red — all within ~2 seconds.
 
 ```
 guardian-pipeline/
-├── src/                  # Solidity contracts (Vault, MockERC20)
+├── src/                  # Solidity contracts (Vault, AttackableVault, MockERC20)
 ├── test/
 │   ├── invariant/        # Foundry fuzz harness + handlers
 │   ├── unit/             # Deterministic unit coverage
@@ -197,8 +205,8 @@ documentation map.
 | Doc | Contents |
 |-----|----------|
 | [docs/architecture.md](docs/architecture.md) | The four layers and how state flows between them |
-| [docs/invariants.md](docs/invariants.md) | All 8 invariants — formulas, failure modes, coverage |
-| [docs/contracts.md](docs/contracts.md) | `Vault` + `MockERC20` API — functions, events, errors, storage |
+| [docs/invariants.md](docs/invariants.md) | All 6 invariants — formulas, failure modes, coverage |
+| [docs/contracts.md](docs/contracts.md) | `Vault`, `AttackableVault` + `MockERC20` API — functions, events, errors, storage |
 | [docs/guardian-bot.md](docs/guardian-bot.md) | The off-chain bot, module by module |
 | [docs/database.md](docs/database.md) | The Supabase schema, RLS model, and migrations |
 | [docs/testing.md](docs/testing.md) | The three test tiers — unit, invariant fuzz, exploit replays |

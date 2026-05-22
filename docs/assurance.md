@@ -26,7 +26,10 @@ A composite 0–100 metric, the weighted average of four independent layers:
 history. In CI there is none, so that component is marked unavailable and the
 score is re-normalised over the three available layers (`--no-supabase`).
 
-**Grade:** A+ (95–100), A (90–94), A− (85–89), B+ (80–84), B (75–79), …
+**Grade:** A+ (97–100), A (93–96), A− (90–92), B+ (87–89), B (83–86),
+B− (80–82), C+ (77–79), … — see `gradeFor` in `assurance/src/score.ts`.
+
+**Current score: 92/100 → grade A−.**
 
 **CI gate:** the `assurance` job runs `npm run check -- --min-score 80` and
 **fails the build** if the composite score drops below 80.
@@ -49,13 +52,13 @@ vault. Each is classified by outcome:
 
 | ID | Exploit class | Target invariants | Expected | Why |
 |----|---------------|-------------------|----------|-----|
-| EXP-01 | Privileged solvency break | INV-01, INV-07 | DETECTED | `attack()` forces insolvency; invariants catch it same-block |
-| EXP-02 | ERC-4626 first-depositor inflation | INV-04, INV-06 | PREVENTED | Fixed `sharePrice` prevents share dilution |
-| EXP-03 | Bad-debt collateral strip | INV-05, INV-01 | PREVENTED | `withdraw` re-checks the collateral cap |
-| EXP-04 | Reserve liquidity drain | INV-02 | PREVENTED | At 80% ratio, free liquidity always covers any single LP |
-| EXP-05 | Over-borrow beyond cap | INV-05 | PREVENTED | `borrow` reverts with `CollateralCapExceeded` |
-| EXP-06 | Repay-exceeds-debt underflow | INV-01 | PREVENTED | `repay` reverts with `RepayExceedsDebt` |
-| EXP-07 | Rounding-dust extraction | INV-06 | PREVENTED | Fixed `sharePrice` makes mint/redeem symmetric |
+| EXP-01 | Privileged solvency break | INV-01 | DETECTED | `AttackableVault.attack()` inflates `totalSupplyAssets`; INV-01 catches it same-block |
+| EXP-02 | First-depositor inflation | INV-01, INV-04 | PREVENTED | `totalSupplyAssets` is stored, not derived from balance — donations cannot inflate the share price |
+| EXP-03 | Bad-debt collateral strip | INV-01, INV-06 | PREVENTED | `withdraw` re-checks the collateral cap on the post-withdrawal balance and reverts |
+| EXP-04 | Reserve liquidity drain | INV-01 | PREVENTED | free liquidity provably covers any single LP balance; `withdraw` reverts gracefully otherwise |
+| EXP-05 | Over-borrow beyond cap | INV-01 | PREVENTED | `borrow` reverts with `CollateralCapExceeded` past 80% LTV |
+| EXP-06 | Interest-driven liquidation | INV-01, INV-06 | PREVENTED | interest pushes a position under water; `liquidate` clears it and all six invariants hold throughout |
+| EXP-07 | Rounding-dust extraction | INV-01 | PREVENTED | Ceil-divided borrows and realised-drop repayments leave no recoverable dust |
 
 **Current result: 6 PREVENTED · 1 DETECTED · 0 MISSED** → exploit-resistance
 score 100/100. CI fails if any scenario regresses (an outcome worse than
@@ -82,18 +85,20 @@ against the continuous-assurance layers and assigns a coverage tier:
 
 | ID | Finding | Severity | Tier |
 |----|---------|----------|------|
-| GUA-01 | Privileged `attack()` can force insolvency | Critical | fully-assured |
-| GUA-02 | Reentrancy exposure | Medium | monitored-only |
-| GUA-03 | `sharePrice`/`collateralRatio` mutability | Low | fully-assured |
-| GUA-04 | Zero-share deposit if `sharePrice > amount` | Low | fully-assured |
-| GUA-05 | `InsufficientLiquidity` guards unreachable | Informational | fully-assured |
-| GUA-06 | Token donations desync `tokenBalance` | Informational | fully-assured |
-| GUA-07 | `collateralRatio` could be immutable (gas) | Gas | not-applicable |
-| GUA-08 | No interest accrual / bad-debt reserve | Medium | fully-assured |
+| GUA-01 | Demo insolvency backdoor isolated to `AttackableVault` | Critical | fully-assured |
+| GUA-02 | Reentrancy exposure on state-mutating functions | Medium | monitored-only |
+| GUA-03 | Full-close repayment could erode the solvency margin by one wei | High | fully-assured |
+| GUA-04 | Liquidation seizing all collateral must clear the full debt | Medium | fully-assured |
+| GUA-05 | Sustained interest can make a redemption exceed idle cash | Low | fully-assured |
+| GUA-06 | Share price is immune to direct token donations | Informational | fully-assured |
+| GUA-07 | A full-close repayment may charge one wei above `userDebt()` | Informational | fully-assured |
+| GUA-08 | Deeply under-water positions can leave residual bad debt | Low | fully-assured |
 
-**Summary:** 8 findings, 7 security-relevant, 6 fully-assured, 1 monitored-only
-(GUA-02 — reentrancy is resolved in code but the hook-free `MockERC20` means
-the harness cannot exercise it), **0 gaps** → traceability coverage **92.9%**.
+**Summary:** 8 findings, all 8 security-relevant — 7 fully-assured and 1
+monitored-only (GUA-02: the `ReentrancyGuard` blocks the class structurally, but
+the non-callback `MockERC20` means the harness cannot reproduce a reentrant
+sequence, so it is monitored live rather than fuzz-proven). **0 gaps** →
+weighted traceability coverage **93.8%** (7 × 1.0 + 1 × 0.5 over 8).
 
 ---
 
@@ -119,7 +124,7 @@ Matrix**, and **Exploit Replay** panels.
 ## Related documents
 
 - [architecture.md](architecture.md) — the assurance layer among the four layers.
-- [invariants.md](invariants.md) — the eight invariants violations roll up from.
+- [invariants.md](invariants.md) — the six invariants violations roll up from.
 - [testing.md](testing.md) — the exploit-replay tier in detail.
 - [ci.md](ci.md) — the `assurance` CI job that gates on the score.
 - [../assurance/README.md](../assurance/README.md) — the assurance engine's CLI.

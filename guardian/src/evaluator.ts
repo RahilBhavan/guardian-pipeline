@@ -2,148 +2,101 @@
  * evaluator.ts — the off-chain mirror of the Solidity `invariant_*` functions.
  *
  * Every check here is the exact logical twin of its counterpart in
- * test/invariant/InvariantVault.t.sol. The property proven across thousands of
- * fuzz runs pre-deployment is the same property enforced live, block by block.
+ * test/invariant/InvariantVault.t.sol. The six properties proven across
+ * hundreds of thousands of fuzz runs pre-deployment are the same six enforced
+ * live, block by block. Unlike a sampled proxy, INV-02/03/06 are evaluated
+ * against the *actual* per-user positions the fetcher discovers from vault
+ * events — so the mirror is genuinely 1:1, not an approximation.
  */
 import type { InvariantResult, VaultState } from './types.js';
 
 const ONE_E18 = 1_000_000_000_000_000_000n;
-const BPS = 100_00n;
 
-/** INV-01 Solvency — totalBorrowed must not exceed totalDeposited. */
+/** INV-01 Protocol solvency — assets must always cover lender claims. */
 function inv01(state: VaultState): InvariantResult {
+  const assets = state.cash + state.totalBorrowed;
   return {
     id: 'INV-01',
-    name: 'Solvency',
-    passed: state.totalBorrowed <= state.totalDeposited,
-    actualValue: state.totalBorrowed,
-    boundValue: state.totalDeposited,
-    description: 'totalBorrowed must not exceed totalDeposited',
+    name: 'Protocol solvency',
+    passed: assets >= state.totalSupplyAssets,
+    actualValue: assets,
+    boundValue: state.totalSupplyAssets,
+    description: 'cash + totalBorrowed must cover totalSupplyAssets (lender claims)',
   };
 }
 
-/** INV-02 Liquidity buffer — the vault's token balance must cover free liquidity. */
+/** INV-02 Supply-share integrity — totalSupplyShares equals the sum of all lender shares. */
 function inv02(state: VaultState): InvariantResult {
-  const solvent = state.totalDeposited >= state.totalBorrowed;
-  const expectedLiquidity = solvent ? state.totalDeposited - state.totalBorrowed : 0n;
+  const sum = state.users.reduce((acc, u) => acc + u.supplyShares, 0n);
   return {
     id: 'INV-02',
-    name: 'Liquidity buffer',
-    // The Solidity check computes `totalDeposited - totalBorrowed` directly; on
-    // an insolvent vault that subtraction underflows and reverts, which Foundry
-    // counts as a failed invariant. Mirror that exactly — insolvency fails
-    // INV-02 as well, so the bot and the harness agree on the same state.
-    passed: solvent && state.tokenBalance >= expectedLiquidity,
-    actualValue: state.tokenBalance,
-    boundValue: expectedLiquidity,
-    description: 'vault token balance must cover free liquidity (totalDeposited − totalBorrowed)',
+    name: 'Supply-share integrity',
+    passed: state.totalSupplyShares === sum,
+    actualValue: state.totalSupplyShares,
+    boundValue: sum,
+    description: 'totalSupplyShares must equal the sum of every userSupplyShares',
   };
 }
 
-/** INV-03 Share price floor — sharePrice must stay at or above the 1:1 peg. */
+/** INV-03 Debt-share integrity — totalBorrowShares equals the sum of all borrow shares. */
 function inv03(state: VaultState): InvariantResult {
+  const sum = state.users.reduce((acc, u) => acc + u.borrowShares, 0n);
   return {
     id: 'INV-03',
-    name: 'Share price floor',
-    passed: state.sharePrice >= ONE_E18,
-    actualValue: state.sharePrice,
-    boundValue: ONE_E18,
-    description: 'sharePrice must be >= 1e18 (no share devaluation)',
+    name: 'Debt-share integrity',
+    passed: state.totalBorrowShares === sum,
+    actualValue: state.totalBorrowShares,
+    boundValue: sum,
+    description: 'totalBorrowShares must equal the sum of every userBorrowShares',
   };
 }
 
-/**
- * INV-04 Share accounting — totalShares must equal sum(userShares[i]).
- *
- * The bot cannot iterate every user without an event index, so it uses the
- * mint-formula proxy: with a fixed sharePrice, totalShares must equal
- * totalDeposited * 1e18 / sharePrice. TODO: replace with an event-log scan
- * over Deposited/Withdrawn for an exact per-user sum.
- */
+/** INV-04 Lender-value floor — the share price never falls below the 1:1 peg. */
 function inv04(state: VaultState): InvariantResult {
-  const impliedShares = state.sharePrice > 0n ? (state.totalDeposited * ONE_E18) / state.sharePrice : 0n;
   return {
     id: 'INV-04',
-    name: 'Share accounting',
-    passed: state.totalShares === impliedShares,
-    actualValue: state.totalShares,
-    boundValue: impliedShares,
-    description: 'totalShares must equal totalDeposited * 1e18 / sharePrice (mint-formula proxy)',
+    name: 'Lender-value floor',
+    passed: state.totalSupplyAssets >= state.totalSupplyShares,
+    actualValue: state.totalSupplyAssets,
+    boundValue: state.totalSupplyShares,
+    description: 'totalSupplyAssets must be >= totalSupplyShares (share price >= 1:1)',
   };
 }
 
-/**
- * INV-05 Collateral cap — no user may borrow beyond their cap.
- *
- * Per-user iteration is unavailable without an event index, so the bot checks
- * the aggregate equivalent: totalBorrowed must not exceed the protocol-wide
- * collateral cap. TODO: scan Borrowed events for a true per-user check.
- */
+/** INV-05 Interest-index floor — the borrow index only ever accrues forward. */
 function inv05(state: VaultState): InvariantResult {
-  const collateralValue = (state.totalShares * state.sharePrice) / ONE_E18;
-  const maxBorrow = (collateralValue * state.collateralRatio) / BPS;
   return {
     id: 'INV-05',
-    name: 'Collateral cap',
-    passed: state.totalBorrowed <= maxBorrow,
-    actualValue: state.totalBorrowed,
-    boundValue: maxBorrow,
-    description: 'aggregate borrows must not exceed the protocol collateral cap',
-  };
-}
-
-/** INV-06 No share inflation — implied share value must not exceed deposits. */
-function inv06(state: VaultState): InvariantResult {
-  const impliedValue = (state.sharePrice * state.totalShares) / ONE_E18;
-  return {
-    id: 'INV-06',
-    name: 'No share inflation',
-    passed: state.totalShares === 0n || impliedValue <= state.totalDeposited,
-    actualValue: impliedValue,
-    boundValue: state.totalDeposited,
-    description: 'sharePrice * totalShares / 1e18 must not exceed totalDeposited',
-  };
-}
-
-/** INV-07 Non-negative net position — deposits must always cover borrows. */
-function inv07(state: VaultState): InvariantResult {
-  return {
-    id: 'INV-07',
-    name: 'Non-negative net',
-    passed: state.totalDeposited >= state.totalBorrowed,
-    actualValue: state.totalDeposited,
-    boundValue: state.totalBorrowed,
-    description: 'totalDeposited must be >= totalBorrowed (net position non-negative)',
-  };
-}
-
-/** INV-08 Zero-state consistency — shares and deposits hit zero together. */
-function inv08(state: VaultState): InvariantResult {
-  const sharesZero = state.totalShares === 0n;
-  const depositedZero = state.totalDeposited === 0n;
-  return {
-    id: 'INV-08',
-    name: 'Zero-state consistency',
-    passed: sharesZero === depositedZero,
-    actualValue: sharesZero ? 1n : 0n,
-    boundValue: depositedZero ? 1n : 0n,
-    description: 'totalShares == 0 must hold if and only if totalDeposited == 0',
+    name: 'Interest-index floor',
+    passed: state.borrowIndex >= ONE_E18,
+    actualValue: state.borrowIndex,
+    boundValue: ONE_E18,
+    description: 'borrowIndex must be >= 1e18 (interest never accrues backwards)',
   };
 }
 
 /**
- * Evaluate all eight invariants against a single vault state snapshot.
- * @returns The eight results in INV-01..INV-08 order.
+ * INV-06 No uncollateralised debt — an account with zero collateral shares must
+ * carry no debt. `actualValue` reports the count of offending accounts.
+ */
+function inv06(state: VaultState): InvariantResult {
+  const offenders = state.users.filter(
+    (u) => u.supplyShares === 0n && u.borrowShares > 0n,
+  ).length;
+  return {
+    id: 'INV-06',
+    name: 'No uncollateralised debt',
+    passed: offenders === 0,
+    actualValue: BigInt(offenders),
+    boundValue: 0n,
+    description: 'no account may hold debt while holding zero collateral shares',
+  };
+}
+
+/**
+ * Evaluate all six invariants against a single vault state snapshot.
+ * @returns The six results in INV-01..INV-06 order.
  */
 export function evaluateInvariants(state: VaultState): InvariantResult[] {
-  return [
-    inv01(state),
-    inv02(state),
-    inv03(state),
-    inv04(state),
-    inv05(state),
-    inv06(state),
-    inv07(state),
-    inv08(state),
-  ];
+  return [inv01(state), inv02(state), inv03(state), inv04(state), inv05(state), inv06(state)];
 }

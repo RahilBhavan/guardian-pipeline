@@ -70,7 +70,10 @@ cast balance <ADDRESS> --rpc-url https://base-sepolia.g.alchemy.com/v2/$ALCHEMY_
 ## 4. Deploy to Base Sepolia
 
 `DeployVault.s.sol` reads `ATTACKER_ADDRESS` from the environment and deploys a
-`MockERC20` plus the `Vault`. Broadcast with the keystore account:
+`MockERC20` plus an `AttackableVault` — the demo-only `Vault` subclass that
+adds the `attack()` backdoor used in step 8. `src/Vault.sol` itself carries no
+backdoor; `AttackableVault.attack()` reverts on Base mainnet, so it is safe to
+deploy only on the testnet. Broadcast with the keystore account:
 
 ```bash
 ATTACKER_ADDRESS=<your-attacker-address> \
@@ -80,7 +83,8 @@ forge script script/DeployVault.s.sol \
   --broadcast --verify
 ```
 
-Copy the printed `Vault deployed at:` and token addresses — you need them next.
+Copy the printed vault and token addresses — and note the **deployment block
+number** from the broadcast output — you need all three next.
 
 ## 5. Provision Supabase
 
@@ -113,6 +117,7 @@ Fill in `guardian/.env`:
 | `TOKEN_ADDRESS` | the token address from step 4 |
 | `SUPABASE_URL` | your Supabase project URL |
 | `SUPABASE_SERVICE_KEY` | the **service-role** key (Settings → API) |
+| `VAULT_DEPLOY_BLOCK` | the deployment block from step 4 — the start of the event scan that seeds the user set (defaults to `0`) |
 | `BLOCK_POLL_INTERVAL_MS` | `2000` (default) |
 | `CHAIN` | `base-sepolia` |
 
@@ -151,12 +156,13 @@ cast send $VAULT_ADDRESS "attack()" \
   --rpc-url https://base-sepolia.g.alchemy.com/v2/$ALCHEMY_KEY
 ```
 
-`attack()` forces the vault insolvent (INV-01 / INV-07). On the next block
+`attack()` inflates `totalSupplyAssets` so lender claims exceed the assets
+backing them — a direct INV-01 (Protocol solvency) violation. On the next block
 (~2 s) the Guardian logs `INVARIANT VIOLATION DETECTED`, writes `alerts` rows
 to Supabase, and the dashboard cards turn red.
 
-> `attack()` permanently violates the vault. Redeploy (step 4) for a fresh,
-> healthy vault before another demo run.
+> `attack()` lives only on `AttackableVault` and permanently violates the
+> vault. Redeploy (step 4) for a fresh, healthy vault before another demo run.
 
 ---
 

@@ -2,7 +2,7 @@
 
 The Guardian bot (`guardian/`) is the runtime half of the pipeline: a
 TypeScript daemon that watches a deployed `Vault` on Base L2, re-checks all
-eight invariants on every block, and persists any violation to Supabase within
+six invariants on every block, and persists any violation to Supabase within
 one block (~2 s) of the breach.
 
 This document is the module-by-module reference. For the bigger picture see
@@ -27,8 +27,8 @@ see [setup.md](setup.md#6-configure-and-start-the-guardian-bot).
 
 ```
 bot.ts        orchestration — config, clients, block loop, lifecycle
-  ├─ fetcher.ts     one multicall → a VaultState snapshot
-  ├─ evaluator.ts   VaultState → 8 InvariantResults  (1:1 mirror of the harness)
+  ├─ fetcher.ts     event scan + one multicall → a VaultState snapshot
+  ├─ evaluator.ts   VaultState → 6 InvariantResults  (1:1 mirror of the harness)
   ├─ router.ts      InvariantResults → Supabase rows  (alerts + blocks_checked)
   └─ types.ts       shared interfaces — no logic
 ```
@@ -45,22 +45,25 @@ dashboard derives all history from Supabase.
 block runs `onBlock`:
 
 ```
-new block ─▶ re-entrancy guard ─▶ fetchVaultState ─▶ evaluateInvariants ─▶ split
-              (skip if busy)       (1 multicall)        (8 checks)          │
-                                                                            ├─▶ logBlockCheck   (always)
-                                                                            └─▶ logAlertToSupabase (if violations)
+new block ─▶ re-entrancy guard ─▶ incremental user scan ─▶ fetchVaultState ─▶ evaluateInvariants ─▶ split
+              (skip if busy)       (new event addresses)    (1 multicall)        (6 checks)          │
+                                                                                                     ├─▶ logBlockCheck   (always)
+                                                                                                     └─▶ logAlertToSupabase (if violations)
 ```
 
 1. **Re-entrancy guard.** A module-level `checking` boolean skips a block if
    the previous check is still running — Base produces blocks every ~2 s, and a
    slow RPC round-trip must never let two checks overlap.
-2. **Fetch.** `fetchVaultState` reads the snapshot (one multicall — see below).
-3. **Evaluate.** `evaluateInvariants` runs the eight checks. Detection latency
+2. **Incremental user scan.** Any addresses that appeared in `Deposited`,
+   `Borrowed` or `Liquidated` events since the last checked block are added to
+   the known-user set, so the per-user invariants see the exact current actors.
+3. **Fetch.** `fetchVaultState` reads the snapshot (one multicall — see below).
+4. **Evaluate.** `evaluateInvariants` runs the six checks. Detection latency
    is measured as `Date.now()` before the fetch versus after evaluation.
-4. **Route.** `logBlockCheck` writes one `blocks_checked` row for *every*
+5. **Route.** `logBlockCheck` writes one `blocks_checked` row for *every*
    block (liveness + latency history). If any invariant failed,
    `logAlertToSupabase` writes one `alerts` row per violation.
-5. **Always finish.** A `finally` block clears `checking`; a `try/catch` around
+6. **Always finish.** A `finally` block clears `checking`; a `try/catch` around
    the whole body logs and swallows any error so one bad block never kills the
    daemon.
 
@@ -83,6 +86,7 @@ partially configured.
 | `TOKEN_ADDRESS` | yes | The vault's ERC-20 asset. Same address validation. |
 | `SUPABASE_URL` | yes | Supabase project URL. |
 | `SUPABASE_SERVICE_KEY` | yes | **Service-role** key — bypasses RLS so the bot can insert. |
+| `VAULT_DEPLOY_BLOCK` | no | Block the vault was deployed at — the start of the event scan that seeds the user set. Defaults to `0`. |
 | `BLOCK_POLL_INTERVAL_MS` | no | Block poll interval; defaults to `2000`. |
 | `CHAIN` | no | `base-sepolia` (default) or `base`. Selects the Alchemy host and viem chain. |
 
@@ -109,6 +113,14 @@ each, so a misconfiguration is obvious immediately rather than per-block:
 A healthy start logs, in order: `RPC connection OK`, `Vault contract verified
 on-chain`, `Supabase connection OK`, `Guardian live — watching Base blocks`.
 
+### User-set seeding
+
+After the preflight, `main()` scans the vault's full event history — from
+`VAULT_DEPLOY_BLOCK` to the current head — with `discoverUsers`, seeding the
+known-user set with every address that has ever deposited, borrowed, or taken
+part in a liquidation. The per-user invariants (INV-02, INV-03, INV-06) are
+checked against this set; an incremental scan each block keeps it current.
+
 ### Lifecycle
 
 `watchBlockNumber` is started with `emitOnBegin: true` (so the first check
@@ -120,19 +132,29 @@ the top-level `main().catch(...)`, logged at `fatal`, and exits non-zero.
 
 ## `fetcher.ts`
 
-Turns a block number into a [`VaultState`](#typests) snapshot.
+Turns a block number into a [`VaultState`](#typests) snapshot, and discovers
+the users that snapshot must cover.
 
-- **One RPC round-trip per block.** All five vault reads plus the vault's
-  ERC-20 `balanceOf` are batched into a single `client.multicall({ allowFailure:
+- **Event-driven user discovery.** `discoverUsers` scans the vault's
+  `Deposited`, `Borrowed` and `Liquidated` logs between two blocks and returns
+  every address that has ever held a position — depositors, borrowers, and
+  liquidation beneficiaries. The bot seeds this set from full history at
+  startup and tops it up incrementally each block.
+- **One RPC round-trip per block.** The six aggregate vault reads
+  (`totalSupplyAssets`, `totalSupplyShares`, `totalBorrowShares`,
+  `totalBorrowed`, `borrowIndex`, `collateralRatio`) plus the vault's ERC-20
+  `balanceOf`, plus two reads (`userSupplyShares`, `userBorrowShares`) per
+  discovered user, are batched into a single `client.multicall({ allowFailure:
   false, blockNumber, contracts: [...] })`. `allowFailure: false` means any
   failed sub-call rejects the whole call — a partial snapshot is never
   evaluated.
 - **Pinned to `blockNumber`.** Every read is taken at the exact block the
   subscription delivered, so the snapshot is internally consistent.
-- **Minimal ABIs.** `VAULT_ABI` declares only the five view getters the bot
-  reads; `ERC20_ABI` declares only `balanceOf`. Smaller ABIs, smaller surface.
-- `timestamp` is the bot's wall clock (`Date.now()` in seconds) at read time —
-  used for the `alerts.block_ts` column.
+- **Minimal ABIs.** `VAULT_ABI` declares only the view getters and events the
+  bot reads; `ERC20_ABI` declares only `balanceOf`. Smaller ABIs, smaller
+  surface.
+- `blockTimestamp` is the block's own timestamp, fetched alongside the
+  multicall — used for the `alerts.block_ts` column.
 
 ---
 
@@ -140,39 +162,37 @@ Turns a block number into a [`VaultState`](#typests) snapshot.
 
 The heart of the project's thesis: a **1:1 mirror** of the Solidity
 `invariant_*` functions in `test/invariant/InvariantVault.t.sol`. The property
-fuzzed before deployment is byte-for-byte the property monitored after it.
+fuzzed before deployment is the same property monitored after it — and because
+the fetcher reads the *exact* per-user positions discovered from vault events,
+the share-sum and uncollateralised-debt checks are genuine 1:1 mirrors, not
+sampled approximations.
 
-`evaluateInvariants(state)` returns eight [`InvariantResult`](#typests) objects
-in `INV-01`…`INV-08` order. Each `inv0N` function is pure — same state in, same
+`evaluateInvariants(state)` returns six [`InvariantResult`](#typests) objects
+in `INV-01`…`INV-06` order. Each `inv0N` function is pure — same state in, same
 result out.
 
 | Fn | Invariant | Check |
 |----|-----------|-------|
-| `inv01` | Solvency | `totalBorrowed <= totalDeposited` |
-| `inv02` | Liquidity buffer | solvent **and** `tokenBalance >= totalDeposited − totalBorrowed` |
-| `inv03` | Share price floor | `sharePrice >= 1e18` |
-| `inv04` | Share accounting | `totalShares === totalDeposited * 1e18 / sharePrice` *(aggregate proxy)* |
-| `inv05` | Collateral cap | `totalBorrowed <= totalShares * sharePrice / 1e18 * collateralRatio / 1e4` *(aggregate proxy)* |
-| `inv06` | No share inflation | `totalShares === 0` **or** `sharePrice * totalShares / 1e18 <= totalDeposited` |
-| `inv07` | Non-negative net | `totalDeposited >= totalBorrowed` |
-| `inv08` | Zero-state | `(totalShares === 0) === (totalDeposited === 0)` |
+| `inv01` | Protocol solvency | `cash + totalBorrowed >= totalSupplyAssets` |
+| `inv02` | Supply-share integrity | `totalSupplyShares === Σ userSupplyShares` |
+| `inv03` | Debt-share integrity | `totalBorrowShares === Σ userBorrowShares` |
+| `inv04` | Lender-value floor | `totalSupplyAssets >= totalSupplyShares` |
+| `inv05` | Interest-index floor | `borrowIndex >= 1e18` |
+| `inv06` | No uncollateralised debt | no account with `supplyShares === 0` holds `borrowShares > 0` |
 
-Two subtleties worth knowing:
+How the per-user checks work:
 
-- **INV-02 mirrors a Solidity revert.** On an insolvent vault, the on-chain
-  expression `totalDeposited - totalBorrowed` underflows and reverts, which
-  Foundry counts as a failed invariant. `inv02` reproduces that: it computes
-  `solvent` first and **fails INV-02 whenever the vault is insolvent**, so the
-  bot and the harness agree on the same state instead of the bot's BigInt
-  silently going negative.
-- **INV-04 and INV-05 are aggregate proxies.** Without a per-user event index
-  the bot cannot sum `userShares` or iterate borrowers, so it checks the
-  protocol-wide equivalent. This is the *only* place the off-chain check is
-  weaker than the harness — a known MVP limitation flagged with `TODO`s in the
-  source. See [invariants.md](invariants.md#where-each-invariant-is-enforced).
+- **INV-02 / INV-03** sum `supplyShares` (resp. `borrowShares`) across every
+  user in the fetched `VaultState.users` array and compare to the on-chain
+  aggregate. The user array is the exact set the fetcher discovered from
+  `Deposited` / `Borrowed` / `Liquidated` events, so the sum identity is
+  evaluated against the real population, not a proxy.
+- **INV-06** filters the same user array for any account holding zero supply
+  shares yet non-zero borrow shares; `actualValue` reports the count of
+  offending accounts, which must be `0`.
 
-All arithmetic uses native `bigint` (`1_000_000_000_000_000_000n`,
-`100_00n`) — no floating point, so the maths matches the EVM's exactly.
+All arithmetic uses native `bigint` (`1_000_000_000_000_000_000n`) — no
+floating point, so the maths matches the EVM's exactly.
 
 ---
 
@@ -210,8 +230,9 @@ Shared interfaces only — no logic.
 
 | Type | Purpose |
 |------|---------|
-| `InvariantId` | String-literal union `'INV-01'`…`'INV-08'`. |
-| `VaultState` | One block's snapshot: the five vault reads, `tokenBalance`, `blockNumber`, `timestamp`. |
+| `InvariantId` | String-literal union `'INV-01'`…`'INV-06'`. |
+| `UserPosition` | One account's per-user position: `address`, `supplyShares`, `borrowShares`. |
+| `VaultState` | One block's snapshot: the six aggregate vault reads, `cash`, the `users` array, `blockNumber`, `blockTimestamp`. |
 | `InvariantResult` | One invariant's outcome: `id`, `name`, `passed`, `actualValue`, `boundValue`, `description`. |
 | `AlertPayload` | A bundle of violations plus `blockNumber`, `timestamp`, `detectedAt`, `detectionLatencyMs`, ready to persist. |
 | `BotConfig` | Fully-resolved, validated runtime config returned by `loadConfig()`. |
@@ -238,7 +259,7 @@ Shared interfaces only — no logic.
 
 - [architecture.md](architecture.md) — where the bot sits among the four layers.
 - [contracts.md](contracts.md) — the `Vault` state the bot reads.
-- [invariants.md](invariants.md) — the eight invariants, including the proxy caveats.
+- [invariants.md](invariants.md) — the six invariants and which layer enforces each.
 - [database.md](database.md) — the Supabase tables the bot writes.
 - [setup.md](setup.md) — configuring and running the bot.
 </content>

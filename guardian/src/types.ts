@@ -2,29 +2,39 @@
  * Shared type definitions for the Guardian bot. No logic lives here.
  */
 
-/** The eight invariant identifiers, mirroring the Solidity harness. */
-export type InvariantId =
-  | 'INV-01'
-  | 'INV-02'
-  | 'INV-03'
-  | 'INV-04'
-  | 'INV-05'
-  | 'INV-06'
-  | 'INV-07'
-  | 'INV-08';
+/** The six invariant identifiers, mirroring the Solidity harness. */
+export type InvariantId = 'INV-01' | 'INV-02' | 'INV-03' | 'INV-04' | 'INV-05' | 'INV-06';
+
+/** A single account's position in the vault at a given block. */
+export interface UserPosition {
+  address: `0x${string}`;
+  /** Lender shares held — collateral. */
+  supplyShares: bigint;
+  /** Borrow shares owed. */
+  borrowShares: bigint;
+}
 
 /** A snapshot of on-chain vault state at a single block. */
 export interface VaultState {
-  totalDeposited: bigint;
+  /** Total assets owed to lenders (stored on-chain, grown by interest). */
+  totalSupplyAssets: bigint;
+  /** Total lender shares outstanding. */
+  totalSupplyShares: bigint;
+  /** Total borrow shares outstanding. */
+  totalBorrowShares: bigint;
+  /** Total debt in asset units, from the vault's `totalBorrowed()` view. */
   totalBorrowed: bigint;
-  totalShares: bigint;
-  sharePrice: bigint;
+  /** Debt-scaling index, scaled by 1e18. */
+  borrowIndex: bigint;
+  /** Maximum borrow as a fraction of collateral, in basis points. */
   collateralRatio: bigint;
-  /** The vault's own ERC-20 balance. */
-  tokenBalance: bigint;
+  /** The vault's own ERC-20 balance — idle cash. */
+  cash: bigint;
+  /** Per-account positions for every address discovered from vault events. */
+  users: UserPosition[];
   blockNumber: bigint;
-  /** Unix seconds at which the state was read. */
-  timestamp: number;
+  /** Unix seconds of the block whose state was read. */
+  blockTimestamp: number;
 }
 
 /** The outcome of evaluating a single invariant against a {@link VaultState}. */
@@ -55,6 +65,8 @@ export interface BotConfig {
   rpcUrl: string;
   vaultAddress: `0x${string}`;
   tokenAddress: `0x${string}`;
+  /** Block the vault was deployed at — the start of the event scan. */
+  deployBlock: bigint;
   supabaseUrl: string;
   supabaseKey: string;
   blockPollIntervalMs: number;

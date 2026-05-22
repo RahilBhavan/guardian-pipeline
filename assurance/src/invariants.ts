@@ -1,14 +1,14 @@
 /**
- * invariants.ts — the canonical catalogue of the eight Vault invariants.
+ * invariants.ts — the canonical catalogue of the six Vault invariants.
  *
  * This is the single source of truth the assurance engine resolves audit
- * findings and exploit replays against. The same eight properties are asserted
+ * findings and exploit replays against. The same six properties are asserted
  * by test/invariant/InvariantVault.t.sol and mirrored live by
  * guardian/src/evaluator.ts; `harnessTest` records the Foundry function name so
  * the traceability resolver can verify a finding's reference is not dangling.
  */
 
-/** Static metadata for one of the eight monitored invariants. */
+/** Static metadata for one of the six monitored invariants. */
 export interface InvariantMeta {
   /** Canonical identifier, e.g. "INV-01". */
   id: string;
@@ -20,55 +20,43 @@ export interface InvariantMeta {
   harnessTest: string;
 }
 
-/** The eight invariants, in canonical INV-01..INV-08 order. */
+/** The six invariants, in canonical INV-01..INV-06 order. */
 export const INVARIANTS: readonly InvariantMeta[] = [
   {
     id: 'INV-01',
-    name: 'Solvency',
-    formula: 'totalBorrowed <= totalDeposited',
+    name: 'Protocol solvency',
+    formula: 'cash + totalBorrowed >= totalSupplyAssets',
     harnessTest: 'invariant_solvency',
   },
   {
     id: 'INV-02',
-    name: 'Liquidity buffer',
-    formula: 'token.balanceOf(vault) >= totalDeposited - totalBorrowed',
-    harnessTest: 'invariant_liquidityBuffer',
+    name: 'Supply-share integrity',
+    formula: 'totalSupplyShares == sum(userSupplyShares[i])',
+    harnessTest: 'invariant_supplyShareIntegrity',
   },
   {
     id: 'INV-03',
-    name: 'Share price floor',
-    formula: 'sharePrice >= 1e18',
-    harnessTest: 'invariant_sharePriceFloor',
+    name: 'Debt-share integrity',
+    formula: 'totalBorrowShares == sum(userBorrowShares[i])',
+    harnessTest: 'invariant_debtShareIntegrity',
   },
   {
     id: 'INV-04',
-    name: 'Share accounting',
-    formula: 'totalShares == sum(userShares[i])',
-    harnessTest: 'invariant_shareAccounting',
+    name: 'Lender-value floor',
+    formula: 'totalSupplyAssets >= totalSupplyShares',
+    harnessTest: 'invariant_lenderValueFloor',
   },
   {
     id: 'INV-05',
-    name: 'Collateral cap',
-    formula: 'userBorrowed[u] <= userShares[u] * sharePrice / 1e18 * collateralRatio',
-    harnessTest: 'invariant_collateralCap',
+    name: 'Interest-index floor',
+    formula: 'borrowIndex >= 1e18',
+    harnessTest: 'invariant_interestIndexFloor',
   },
   {
     id: 'INV-06',
-    name: 'No share inflation',
-    formula: 'sharePrice * totalShares / 1e18 <= totalDeposited',
-    harnessTest: 'invariant_noShareInflation',
-  },
-  {
-    id: 'INV-07',
-    name: 'Non-negative net',
-    formula: 'totalDeposited >= totalBorrowed',
-    harnessTest: 'invariant_nonNegativeNet',
-  },
-  {
-    id: 'INV-08',
-    name: 'Zero-state consistency',
-    formula: 'totalShares == 0  <->  totalDeposited == 0',
-    harnessTest: 'invariant_zeroStateConsistency',
+    name: 'No uncollateralised debt',
+    formula: 'userSupplyShares[u] == 0  =>  userDebt(u) == 0',
+    harnessTest: 'invariant_noUncollateralisedDebt',
   },
 ] as const;
 

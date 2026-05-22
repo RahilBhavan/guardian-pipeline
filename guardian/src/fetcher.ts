@@ -1,19 +1,74 @@
 /**
  * fetcher.ts — reads vault state from Base L2.
  *
- * All five vault reads plus the vault's ERC-20 balance are batched into a
- * single `multicall` so each block costs exactly one RPC round-trip.
+ * Aggregate state is batched into a single `multicall`. Per-user positions are
+ * read for every address discovered from the vault's `Deposited`, `Borrowed`
+ * and `Liquidated` events, so the off-chain evaluator can check the supply- and
+ * debt-share sum identities (INV-02/03) and the no-uncollateralised-debt rule
+ * (INV-06) against the *exact* user set — not a sampled proxy.
  */
 import type { PublicClient } from 'viem';
-import type { VaultState } from './types.js';
+import type { UserPosition, VaultState } from './types.js';
 
-/** Minimal vault ABI — only the state the Guardian reads. */
+/** `Deposited(address indexed user, uint256, uint256)`. */
+export const DEPOSITED_EVENT = {
+  type: 'event',
+  name: 'Deposited',
+  inputs: [
+    { name: 'user', type: 'address', indexed: true },
+    { name: 'amount', type: 'uint256', indexed: false },
+    { name: 'sharesMinted', type: 'uint256', indexed: false },
+  ],
+} as const;
+
+/** `Borrowed(address indexed user, uint256, uint256)`. */
+export const BORROWED_EVENT = {
+  type: 'event',
+  name: 'Borrowed',
+  inputs: [
+    { name: 'user', type: 'address', indexed: true },
+    { name: 'amount', type: 'uint256', indexed: false },
+    { name: 'borrowShares', type: 'uint256', indexed: false },
+  ],
+} as const;
+
+/** `Liquidated(address indexed liquidator, address indexed borrower, uint256, uint256)`. */
+export const LIQUIDATED_EVENT = {
+  type: 'event',
+  name: 'Liquidated',
+  inputs: [
+    { name: 'liquidator', type: 'address', indexed: true },
+    { name: 'borrower', type: 'address', indexed: true },
+    { name: 'debtRepaid', type: 'uint256', indexed: false },
+    { name: 'collateralSeized', type: 'uint256', indexed: false },
+  ],
+} as const;
+
+/** Vault ABI — the views and events the Guardian reads. */
 export const VAULT_ABI = [
-  { name: 'totalDeposited', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { name: 'totalSupplyAssets', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { name: 'totalSupplyShares', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { name: 'totalBorrowShares', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { name: 'totalBorrowed', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-  { name: 'totalShares', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-  { name: 'sharePrice', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { name: 'borrowIndex', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { name: 'collateralRatio', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  {
+    name: 'userSupplyShares',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'user', type: 'address' }],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    name: 'userBorrowShares',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'user', type: 'address' }],
+    outputs: [{ type: 'uint256' }],
+  },
+  DEPOSITED_EVENT,
+  BORROWED_EVENT,
+  LIQUIDATED_EVENT,
 ] as const;
 
 /** Minimal ERC-20 ABI — only `balanceOf`. */
@@ -28,41 +83,105 @@ export const ERC20_ABI = [
 ] as const;
 
 /**
+ * Scan vault events between two blocks and return every address that has ever
+ * held a position — depositors, borrowers and liquidation beneficiaries.
+ *
+ * @param client       A viem public client connected to Base.
+ * @param vaultAddress The deployed vault address.
+ * @param fromBlock    First block of the scan (inclusive).
+ * @param toBlock      Last block of the scan (inclusive).
+ */
+export async function discoverUsers(
+  client: PublicClient,
+  vaultAddress: `0x${string}`,
+  fromBlock: bigint,
+  toBlock: bigint,
+): Promise<`0x${string}`[]> {
+  const found = new Set<`0x${string}`>();
+
+  const [deposits, borrows, liquidations] = await Promise.all([
+    client.getLogs({ address: vaultAddress, event: DEPOSITED_EVENT, fromBlock, toBlock }),
+    client.getLogs({ address: vaultAddress, event: BORROWED_EVENT, fromBlock, toBlock }),
+    client.getLogs({ address: vaultAddress, event: LIQUIDATED_EVENT, fromBlock, toBlock }),
+  ]);
+
+  for (const log of deposits) if (log.args.user) found.add(log.args.user);
+  for (const log of borrows) if (log.args.user) found.add(log.args.user);
+  for (const log of liquidations) {
+    if (log.args.liquidator) found.add(log.args.liquidator);
+    if (log.args.borrower) found.add(log.args.borrower);
+  }
+
+  return [...found];
+}
+
+/**
  * Fetch a full {@link VaultState} snapshot at a given block.
  *
  * @param client       A viem public client connected to Base.
  * @param vaultAddress The deployed vault address.
  * @param tokenAddress The ERC-20 asset the vault handles.
  * @param blockNumber  Block at which to read state.
+ * @param users        Addresses whose per-user position should be read.
  */
 export async function fetchVaultState(
   client: PublicClient,
   vaultAddress: `0x${string}`,
   tokenAddress: `0x${string}`,
   blockNumber: bigint,
+  users: `0x${string}`[],
 ): Promise<VaultState> {
-  const [totalDeposited, totalBorrowed, totalShares, sharePrice, collateralRatio, tokenBalance] =
-    await client.multicall({
+  // One contract call per state field, plus two per discovered user. The
+  // heterogeneous shape (some calls take args, some do not) means the typed
+  // multicall tuple cannot be inferred, so the result is cast to bigint[] —
+  // every call here returns a single uint256.
+  const aggregateCalls = [
+    { address: vaultAddress, abi: VAULT_ABI, functionName: 'totalSupplyAssets', args: [] },
+    { address: vaultAddress, abi: VAULT_ABI, functionName: 'totalSupplyShares', args: [] },
+    { address: vaultAddress, abi: VAULT_ABI, functionName: 'totalBorrowShares', args: [] },
+    { address: vaultAddress, abi: VAULT_ABI, functionName: 'totalBorrowed', args: [] },
+    { address: vaultAddress, abi: VAULT_ABI, functionName: 'borrowIndex', args: [] },
+    { address: vaultAddress, abi: VAULT_ABI, functionName: 'collateralRatio', args: [] },
+    { address: tokenAddress, abi: ERC20_ABI, functionName: 'balanceOf', args: [vaultAddress] },
+  ];
+
+  const userCalls = users.flatMap((user) => [
+    { address: vaultAddress, abi: VAULT_ABI, functionName: 'userSupplyShares', args: [user] },
+    { address: vaultAddress, abi: VAULT_ABI, functionName: 'userBorrowShares', args: [user] },
+  ]);
+
+  const [rawResults, block] = await Promise.all([
+    client.multicall({
       allowFailure: false,
       blockNumber,
-      contracts: [
-        { address: vaultAddress, abi: VAULT_ABI, functionName: 'totalDeposited' },
-        { address: vaultAddress, abi: VAULT_ABI, functionName: 'totalBorrowed' },
-        { address: vaultAddress, abi: VAULT_ABI, functionName: 'totalShares' },
-        { address: vaultAddress, abi: VAULT_ABI, functionName: 'sharePrice' },
-        { address: vaultAddress, abi: VAULT_ABI, functionName: 'collateralRatio' },
-        { address: tokenAddress, abi: ERC20_ABI, functionName: 'balanceOf', args: [vaultAddress] },
-      ],
-    });
+      contracts: [...aggregateCalls, ...userCalls],
+    }),
+    client.getBlock({ blockNumber }),
+  ]);
+  const results = rawResults as bigint[];
+  const expected = aggregateCalls.length + userCalls.length;
+  if (results.length !== expected) {
+    throw new Error(`multicall returned ${results.length} results, expected ${expected}`);
+  }
+  /** Read a guaranteed-present uint256 cell — the length check above proves it. */
+  const cell = (i: number): bigint => results[i] as bigint;
+
+  const positions: UserPosition[] = users.map((address, i) => ({
+    address,
+    supplyShares: cell(aggregateCalls.length + i * 2),
+    borrowShares: cell(aggregateCalls.length + i * 2 + 1),
+  }));
 
   return {
-    totalDeposited,
-    totalBorrowed,
-    totalShares,
-    sharePrice,
-    collateralRatio,
-    tokenBalance,
+    totalSupplyAssets: cell(0),
+    totalSupplyShares: cell(1),
+    totalBorrowShares: cell(2),
+    totalBorrowed: cell(3),
+    borrowIndex: cell(4),
+    collateralRatio: cell(5),
+    cash: cell(6),
+    users: positions,
     blockNumber,
-    timestamp: Math.floor(Date.now() / 1000),
+    blockTimestamp: Number(block.timestamp),
   };
 }

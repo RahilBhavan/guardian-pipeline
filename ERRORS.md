@@ -38,3 +38,31 @@ Failed: A struct field named `reference` — `solc` errors with
 Worked: Renamed the field (e.g. to `priorIncident`); kept the JSON output key
 as the string literal `"reference"` since that is not a Solidity identifier.
 Note: `reference` is reserved in Solidity; avoid it for identifiers.
+
+## Solidity: floor-of-sum vs sum-of-floors eroded a solvency invariant
+Failed: With debt held as `totalBorrowShares` and a `borrowIndex`, the
+aggregate `totalBorrowed()` floors `totalBorrowShares * borrowIndex / 1e18`.
+On a *full* repayment that burns a borrower's whole share balance, the floored
+aggregate can drop by up to one wei *more* than the borrower's nominal
+`userDebt()`. Charging only the nominal debt meant the vault collected one wei
+less than debt actually fell — eroding the solvency margin. The invariant fuzz
+harness caught it (`INV-01: …844869 < …844870`) within ~70 runs.
+Worked: On a full close, charge the *realised* drop in `totalBorrowed()` —
+snapshot it before burning the shares, subtract after. Cash then rises by
+exactly what the floored aggregate falls by, so INV-01 holds with no drift.
+Note: When an aggregate is a floored function of summed per-user shares,
+`floor(A) - floor(A - b)` is not `floor(b)` — it can be `floor(b) + 1`. Never
+assume per-user and aggregate rounding agree; measure the aggregate delta and
+settle against that. This is exactly the class of bug an invariant harness
+exists to find — let it.
+
+## TypeScript: viem `multicall` loses its result tuple on a dynamic array
+Failed: Building a `multicall` `contracts` array by spreading a dynamically
+-sized array (`[...fixed, ...users.flatMap(...)]`) — viem can no longer infer a
+typed result tuple, and with `noUncheckedIndexedAccess` every destructured
+result is `bigint | undefined`.
+Worked: Cast the result once (`as bigint[]`), assert the expected length, then
+read cells through a small `(i) => results[i] as bigint` helper.
+Note: viem's typed multicall tuple only survives a const-literal `contracts`
+array. With a dynamic array, validate the length explicitly and cast — do not
+fight the generics.

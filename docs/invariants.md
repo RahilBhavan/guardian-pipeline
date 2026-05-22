@@ -1,116 +1,102 @@
 # Invariant reference
 
-The vault's safety is defined by 8 invariants. Each is asserted by a
-`public view` function in `test/invariant/InvariantVault.t.sol`, mirrored in
-`guardian/src/evaluator.ts` (`inv01`…`inv08`), and re-checked by the
+The vault's safety is defined by 6 invariants. Each is asserted by an
+`invariant_*` function in `test/invariant/InvariantVault.t.sol`, mirrored in
+`guardian/src/evaluator.ts` (`inv01`…`inv06`), and re-checked by the
 exploit-replay harness (`test/exploit/`).
 
 **Notation:** `WAD = 1e18` (fixed-point unit); `BPS = 100_00` (basis-point
-denominator); `collateralRatio = 80_00` (80%); `sharePrice` is pegged 1:1 at
-`1e18` and never changes.
+denominator); `collateralRatio = 80_00` (80%); `liquidationBonus = 5_00` (5%).
+`cash` is the vault's own ERC-20 balance; `totalBorrowed = totalBorrowShares ×
+borrowIndex / WAD`; `userDebt(u) = userBorrowShares[u] × borrowIndex / WAD`.
+Interest accrual raises `borrowIndex` (borrower debt) and `totalSupplyAssets`
+(lender claims) in lock-step, so every invariant below is genuinely *tensioned*
+— a wrong rounding direction can break it, which is exactly what the fuzz
+campaign exists to rule out.
 
 ---
 
-## INV-01 · Solvency · *Critical*
+## INV-01 · Protocol solvency · *Critical*
 
 ```
-totalBorrowed ≤ totalDeposited
+cash + totalBorrowed ≥ totalSupplyAssets
 ```
 
-Outstanding borrows must never exceed deposits — the vault can never be
-insolvent.
+The assets the vault holds — idle cash plus debt owed to it — must always cover
+the claims of its lenders. This is the master safety property.
 
-- **Breaks when:** a privileged or buggy path inflates debt past deposits. The
-  demo `attack()` sets `totalBorrowed = totalDeposited + 1` to trigger exactly
-  this.
+- **Breaks when:** accrual credits lenders more than borrowers are charged, a
+  repayment collects less than debt actually falls, or shares are minted with
+  no backing assets. The fuzz harness found exactly the first class during
+  development — a one-wei full-repay leak, now fixed (audit finding GUA-03).
 - **Caught by:** `invariant_solvency()` · `inv01()` · replay EXP-01.
 
-## INV-02 · Liquidity buffer · *Critical*
+## INV-02 · Supply-share integrity · *Critical*
 
 ```
-tokenBalance(vault) ≥ totalDeposited − totalBorrowed
+totalSupplyShares = Σ userSupplyShares[i]
 ```
 
-The vault's own ERC-20 balance must always cover its free (non-borrowed)
-liquidity.
+The stored total of lender shares must equal the sum of every account's
+balance — no share is minted or burned without updating both.
 
-- **Breaks when:** borrows or withdrawals drain reserves below the free amount.
-- **Note:** when the vault is insolvent, `totalDeposited − totalBorrowed`
-  underflows and reverts in Solidity; `evaluator.ts` replicates that revert
-  semantics so the off-chain check matches the on-chain one exactly.
-- **Caught by:** `invariant_liquidityBuffer()` · `inv02()` · replay EXP-04.
+- **Breaks when:** a deposit, withdrawal or liquidation updates one side of the
+  share accounting but not the other.
+- **Caught by:** `invariant_supplyShareIntegrity()` · `inv02()`.
 
-## INV-03 · Share price floor · *High*
+## INV-03 · Debt-share integrity · *High*
 
 ```
-sharePrice ≥ 1e18
+totalBorrowShares = Σ userBorrowShares[i]
 ```
 
-The share price must never fall below the 1:1 peg — no share devaluation.
+The stored total of borrow shares must equal the sum of every borrower's
+balance — the debt-side twin of INV-02.
 
-- **Breaks when:** a mutating path lowers `sharePrice` below `WAD`.
-- **Caught by:** `invariant_sharePriceFloor()` · `inv03()`.
+- **Breaks when:** a borrow, repayment or liquidation mis-accounts borrow
+  shares.
+- **Caught by:** `invariant_debtShareIntegrity()` · `inv03()`.
 
-## INV-04 · Share accounting · *High*
-
-```
-totalShares = Σ userShares[i]
-```
-
-Total share supply must equal the sum of every user's holdings.
-
-- **Bot proxy:** without a per-user event index, `evaluator.ts` checks the
-  aggregate mint identity `totalShares = totalDeposited × 1e18 / sharePrice`.
-  The Foundry harness does the true per-user sum via
-  `DepositHandler.sumUserShares()`.
-- **Caught by:** `invariant_shareAccounting()` · `inv04()` · replay EXP-02.
-
-## INV-05 · Collateral cap · *High*
+## INV-04 · Lender-value floor · *High*
 
 ```
-∀u: userBorrowed[u] ≤ userShares[u] × sharePrice / 1e18 × collateralRatio / 10000
+totalSupplyAssets ≥ totalSupplyShares
 ```
 
-No user may borrow beyond 80% of their collateral value.
+The lender share price (`totalSupplyAssets × WAD / totalSupplyShares`) must
+never fall below the 1:1 peg — lenders cannot lose nominal principal.
 
-- **Bot proxy:** the bot checks the aggregate equivalent
-  (`totalBorrowed ≤ totalShares × sharePrice / 1e18 × collateralRatio / 10000`);
-  the harness checks every actor.
-- **Caught by:** `invariant_collateralCap()` · `inv05()` · replays EXP-03,
-  EXP-05.
+- **Breaks when:** a withdrawal or liquidation removes assets faster than
+  shares, or a deposit mints shares above value.
+- **Caught by:** `invariant_lenderValueFloor()` · `inv04()` · replay EXP-02.
 
-## INV-06 · No share inflation · *Medium*
-
-```
-sharePrice × totalShares / 1e18 ≤ totalDeposited     (or totalShares == 0)
-```
-
-The asset value implied by all shares must not exceed actual deposits.
-
-- **Breaks when:** shares are minted without backing deposits.
-- **Caught by:** `invariant_noShareInflation()` · `inv06()` · replay EXP-07.
-
-## INV-07 · Non-negative net · *Medium*
+## INV-05 · Interest-index floor · *Medium*
 
 ```
-totalDeposited ≥ totalBorrowed
+borrowIndex ≥ 1e18
 ```
 
-The protocol's net position must never go negative. Equivalent to INV-01 in
-practice; tracked separately so a violation reports both IDs.
+The debt-scaling index only ever accrues forward; it can never drop below its
+`1e18` starting value. Interest is monotone.
 
-- **Caught by:** `invariant_nonNegativeNet()` · `inv07()` · replay EXP-01.
+- **Breaks when:** an accrual computes a negative or wrapped index delta.
+- **Caught by:** `invariant_interestIndexFloor()` · `inv05()`.
 
-## INV-08 · Zero-state consistency · *Low*
+## INV-06 · No uncollateralised debt · *High*
 
 ```
-totalShares == 0  ⇔  totalDeposited == 0
+∀u: userSupplyShares[u] == 0  ⇒  userDebt(u) == 0
 ```
 
-Shares and deposits must reach zero together — the vault must never hold one
-without the other.
+An account with zero collateral shares can never carry outstanding debt — the
+protocol never accumulates structurally unrecoverable bad debt.
 
-- **Caught by:** `invariant_zeroStateConsistency()` · `inv08()`.
+- **Breaks when:** a withdrawal removes all of a borrower's collateral while
+  debt is open, or a liquidation seizes every share without clearing the debt.
+  Both paths are guarded — `withdraw` re-checks the collateral cap and
+  `liquidate` requires a full close before seizing all collateral.
+- **Caught by:** `invariant_noUncollateralisedDebt()` · `inv06()` · replays
+  EXP-03, EXP-06.
 
 ---
 
@@ -119,17 +105,17 @@ without the other.
 | ID | Foundry harness | Guardian bot | Exploit replay |
 |----|-----------------|--------------|----------------|
 | INV-01 | `invariant_solvency` | `inv01` (exact) | EXP-01 |
-| INV-02 | `invariant_liquidityBuffer` | `inv02` (exact) | EXP-04 |
-| INV-03 | `invariant_sharePriceFloor` | `inv03` (exact) | — |
-| INV-04 | `invariant_shareAccounting` | `inv04` (aggregate proxy) | EXP-02 |
-| INV-05 | `invariant_collateralCap` | `inv05` (aggregate proxy) | EXP-03, EXP-05 |
-| INV-06 | `invariant_noShareInflation` | `inv06` (exact) | EXP-07 |
-| INV-07 | `invariant_nonNegativeNet` | `inv07` (exact) | EXP-01 |
-| INV-08 | `invariant_zeroStateConsistency` | `inv08` (exact) | — |
+| INV-02 | `invariant_supplyShareIntegrity` | `inv02` (exact) | — |
+| INV-03 | `invariant_debtShareIntegrity` | `inv03` (exact) | — |
+| INV-04 | `invariant_lenderValueFloor` | `inv04` (exact) | EXP-02 |
+| INV-05 | `invariant_interestIndexFloor` | `inv05` (exact) | — |
+| INV-06 | `invariant_noUncollateralisedDebt` | `inv06` (exact) | EXP-03, EXP-06 |
 
-The two aggregate proxies (INV-04, INV-05) are the only place the off-chain
-check is weaker than the harness — a known MVP limitation. A per-user event
-index would close it; see the `TODO` notes in `evaluator.ts`.
+Every off-chain check is **exact**, not a proxy. INV-02, INV-03 and INV-06 need
+per-account state: the bot discovers every account from the vault's `Deposited`,
+`Borrowed` and `Liquidated` events and reads each one's on-chain position, so
+the off-chain sum is over the same user set the harness iterates. The property
+proven pre-deployment is byte-for-byte the property monitored after it.
 
 For how violations roll up into the Assurance Score, see
 [assurance.md](assurance.md).

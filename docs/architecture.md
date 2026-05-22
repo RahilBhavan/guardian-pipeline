@@ -22,7 +22,7 @@ enforces the identical definition in two places:
 
 `guardian/src/evaluator.ts` is a deliberate 1:1 mirror of
 `test/invariant/InvariantVault.t.sol`. If the two ever diverge, the project has
-failed its own thesis — so the 8 invariant IDs (`INV-01`…`INV-08`) are shared
+failed its own thesis — so the 6 invariant IDs (`INV-01`…`INV-06`) are shared
 verbatim across both.
 
 ---
@@ -32,8 +32,9 @@ verbatim across both.
 **Trigger:** every `push` and `pull_request` to `main`.
 
 Foundry's invariant fuzzer drives the vault through random call sequences via
-three handler contracts (`DepositHandler`, `BorrowHandler`, `WarpHandler`) and
-asserts all 8 invariants after each step.
+four handler contracts (`DepositHandler`, `BorrowHandler`, `WarpHandler` —
+which advances time and accrues interest — and `LiquidateHandler`) and asserts
+all 6 invariants after each step.
 
 | Profile | Runs | Depth | Use |
 |---------|------|-------|-----|
@@ -41,25 +42,29 @@ asserts all 8 invariants after each step.
 | `ci` | 2,000 | 150 | Every push (~300,000 calls) |
 | `deep` | 10,000 | 200 | Pre-release |
 
-A green CI badge is a claim: *all 8 invariants survived the campaign with zero
+A green CI badge is a claim: *all 6 invariants survived the campaign with zero
 reverts.* The full job breakdown is in [setup.md](setup.md) and the
 [root README](../README.md#cicd-pipeline).
 
 ## Layer 2 — Smart contract
 
-`src/Vault.sol` — a minimal over-collateralised lending vault. Users deposit a
-single ERC-20, receive ERC-4626-style shares, and may borrow up to 80% of their
-collateral value.
+`src/Vault.sol` — an interest-bearing, over-collateralised lending vault.
+Lenders deposit a single ERC-20 and receive shares whose value rises as
+borrowers pay interest; borrowers post those shares as collateral and may borrow
+up to 80% of their value. The accounting is Morpho-style dual-tracked — the
+lender side stores assets directly, the borrow side scales an index.
 
-- **State:** `totalDeposited`, `totalBorrowed`, `totalShares`, `sharePrice`
-  (fixed 1:1 peg at `1e18`), `collateralRatio` (fixed `80_00` bps), and
-  per-user `userShares` / `userBorrowed` maps.
-- **Mutating functions:** `deposit`, `withdraw`, `borrow`, `repay` — all
-  `nonReentrant`, all reverting on a zero amount.
-- **`attack()`** — a demo-only backdoor callable only by the `attacker`
-  address. It forces `totalBorrowed = totalDeposited + 1`, breaking INV-01. It
-  reverts on Base mainnet (`block.chainid == 8453`) so the backdoor can never
-  be triggered in production.
+- **State:** `totalSupplyAssets` / `totalSupplyShares` / `userSupplyShares` on
+  the lender side; `totalBorrowShares` / `userBorrowShares` / `borrowIndex` on
+  the borrow side; plus `lastAccrualTime`. `collateralRatio` (`80_00` bps) and
+  `liquidationBonus` (`5_00` bps) are immutable.
+- **Mutating functions:** `deposit`, `withdraw`, `borrow`, `repay`,
+  `liquidate`, and `accrue` — all `nonReentrant`. Interest accrues at the start
+  of every call; under-water positions are cleared via `liquidate`.
+- **`attack()`** lives only on `src/AttackableVault.sol`, a demo-only subclass.
+  It inflates `totalSupplyAssets` past the assets backing it, breaking INV-01.
+  It is callable only by the `attacker` address and reverts on Base mainnet
+  (`block.chainid == 8453`). The audited `Vault` has no such function.
 
 `src/MockERC20.sol` is a plain 18-decimal test token (`mUSD`) with unrestricted
 `mint` — intentionally hook-free, so the harness need not model ERC-777-style
@@ -74,7 +79,7 @@ The full contract API — every function, event, error, and storage slot — is 
 
 ```
 watchBlockNumber ─▶ fetchVaultState ─▶ evaluateInvariants ─▶ router
-   (viem, ~2s)        (1 multicall)        (8 checks)         │
+   (viem, ~2s)        (1 multicall)        (6 checks)         │
                                                               ├─▶ blocks_checked  (every block)
                                                               └─▶ alerts          (on violation)
 ```
@@ -82,8 +87,11 @@ watchBlockNumber ─▶ fetchVaultState ─▶ evaluateInvariants ─▶ router
 1. **Poll** — a viem WebSocket client subscribes to new block numbers
    (`BLOCK_POLL_INTERVAL_MS`, default 2,000 ms). A re-entrancy flag skips a
    block if the previous check is still running.
-2. **Fetch** — `fetcher.ts` reads all 6 state values in a single `multicall`.
-3. **Evaluate** — `evaluator.ts` runs the 8 invariant checks against the
+2. **Fetch** — `fetcher.ts` reads the aggregate state and every discovered
+   account's per-user position in a single `multicall`. The account set is
+   seeded from `Deposited` / `Borrowed` / `Liquidated` events and kept current
+   by an incremental scan each block.
+3. **Evaluate** — `evaluator.ts` runs the 6 invariant checks against the
    snapshot. Detection latency is `Date.now()` before fetch vs. after evaluate.
 4. **Route** — `router.ts` writes one `blocks_checked` row per block (liveness
    + latency history) and one `alerts` row per violation. Database failures are
@@ -126,8 +134,8 @@ git push ──▶ GitHub Actions ──▶ Forge fuzz + Slither/Aderyn + Assura
 
 ## Related documents
 
-- [invariants.md](invariants.md) — the 8 invariants in full
-- [contracts.md](contracts.md) — the `Vault` / `MockERC20` API reference
+- [invariants.md](invariants.md) — the 6 invariants in full
+- [contracts.md](contracts.md) — the `Vault` / `AttackableVault` / `MockERC20` API reference
 - [guardian-bot.md](guardian-bot.md) — the off-chain bot, module by module
 - [database.md](database.md) — the Supabase schema and RLS model
 - [testing.md](testing.md) — the three test tiers

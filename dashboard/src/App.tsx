@@ -16,7 +16,7 @@ import { TraceabilityMatrix } from './components/TraceabilityMatrix';
 import { ExploitReplay } from './components/ExploitReplay';
 import { assuranceReport } from './assurance';
 
-/** All eight invariants set to a single status value. */
+/** All six invariants set to a single status value. */
 function allInvariants(value: boolean | null): Record<string, boolean | null> {
   return Object.fromEntries(INVARIANTS.map((i) => [i.id, value]));
 }

@@ -32,21 +32,19 @@ export interface LatencyPoint {
   checkedAt: Date;
 }
 
-/** Static metadata for one of the eight monitored invariants. */
+/** Static metadata for one of the six monitored invariants. */
 export interface InvariantMeta {
   id: string;
   name: string;
   description: string;
 }
 
-/** The eight invariants, in canonical order — matches the Solidity harness. */
+/** The six invariants, in canonical order — matches the Solidity harness. */
 export const INVARIANTS: readonly InvariantMeta[] = [
-  { id: 'INV-01', name: 'Solvency', description: 'totalBorrowed ≤ totalDeposited' },
-  { id: 'INV-02', name: 'Liquidity buffer', description: 'tokenBalance ≥ totalDeposited − totalBorrowed' },
-  { id: 'INV-03', name: 'Share price floor', description: 'sharePrice ≥ 1e18' },
-  { id: 'INV-04', name: 'Share accounting', description: 'totalShares = Σ userShares[i]' },
-  { id: 'INV-05', name: 'Collateral cap', description: 'borrows ≤ collateral × ratio' },
-  { id: 'INV-06', name: 'No share inflation', description: 'sharePrice × totalShares / 1e18 ≤ totalDeposited' },
-  { id: 'INV-07', name: 'Non-negative net', description: 'totalDeposited ≥ totalBorrowed' },
-  { id: 'INV-08', name: 'Zero-state consistency', description: 'totalShares = 0 ⇔ totalDeposited = 0' },
+  { id: 'INV-01', name: 'Protocol solvency', description: 'cash + totalBorrowed ≥ totalSupplyAssets' },
+  { id: 'INV-02', name: 'Supply-share integrity', description: 'totalSupplyShares = Σ userSupplyShares' },
+  { id: 'INV-03', name: 'Debt-share integrity', description: 'totalBorrowShares = Σ userBorrowShares' },
+  { id: 'INV-04', name: 'Lender-value floor', description: 'totalSupplyAssets ≥ totalSupplyShares' },
+  { id: 'INV-05', name: 'Interest-index floor', description: 'borrowIndex ≥ 1e18' },
+  { id: 'INV-06', name: 'No uncollateralised debt', description: 'zero collateral ⇒ zero debt' },
 ] as const;

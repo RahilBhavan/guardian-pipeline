@@ -9,6 +9,8 @@ import {MockERC20} from "../../../src/MockERC20.sol";
 /// @notice Foundry calls these functions with random inputs during invariant
 ///         runs. Inputs are bounded to realistic ranges so the fuzzer spends
 ///         its budget exploring meaningful state rather than trivial reverts.
+///         This handler also owns the canonical five-actor set; `makeAddr` is
+///         deterministic, so the other handlers reconstruct the same addresses.
 contract DepositHandler is Test {
     Vault public vault;
     MockERC20 public token;
@@ -41,17 +43,24 @@ contract DepositHandler is Test {
     /// @notice Fuzz entrypoint: withdraw a bounded share count as a pseudo-random actor.
     function withdraw(uint256 actorSeed, uint256 sharesSeed) external {
         address actor = actors[bound(actorSeed, 0, actors.length - 1)];
-        uint256 shares = bound(sharesSeed, 0, vault.userShares(actor));
+        uint256 shares = bound(sharesSeed, 0, vault.userSupplyShares(actor));
         if (shares == 0) return;
 
         vm.prank(actor);
         try vault.withdraw(shares) {} catch {}
     }
 
-    /// @notice Sum of `userShares` across every actor — used to assert INV-04.
-    function sumUserShares() external view returns (uint256 sum) {
+    /// @notice Sum of `userSupplyShares` across every actor — used to assert INV-02.
+    function sumSupplyShares() external view returns (uint256 sum) {
         for (uint256 i = 0; i < actors.length; i++) {
-            sum += vault.userShares(actors[i]);
+            sum += vault.userSupplyShares(actors[i]);
+        }
+    }
+
+    /// @notice Sum of `userBorrowShares` across every actor — used to assert INV-03.
+    function sumBorrowShares() external view returns (uint256 sum) {
+        for (uint256 i = 0; i < actors.length; i++) {
+            sum += vault.userBorrowShares(actors[i]);
         }
     }
 

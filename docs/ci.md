@@ -2,7 +2,7 @@
 
 `.github/workflows/invariant-ci.yml` is the pre-deployment half of the
 pipeline. It runs on **every `push` and `pull_request` to `main`** and turns
-the green badge into a precise, falsifiable claim: *all eight invariants
+the green badge into a precise, falsifiable claim: *all six invariants
 survived a 300,000-call fuzz campaign, the contract is covered, the exploit
 catalogue did not regress, and the composite Assurance Score cleared 80.*
 
