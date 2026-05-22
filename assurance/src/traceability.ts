@@ -1,22 +1,26 @@
 /**
- * traceability.ts — Feature 1: audit-finding -> invariant traceability resolver.
+ * traceability.ts — review-finding -> invariant traceability resolver.
  *
- * Resolves every audit finding against the four continuous-assurance layers and
- * classifies how thoroughly it is covered. This is the mechanism that turns a
- * static, point-in-time audit (Landsman et al. 2025) into the continuous,
- * multi-layered assurance Bourveau et al. (2024) argue for: a finding is no
- * longer just "fixed once" — it is bound to properties re-verified every push
- * and every block.
+ * Resolves every security-review finding against the assurance layers — the
+ * formalising invariant, the Foundry harness test, the runtime monitor check,
+ * and the exploit replay — and classifies how thoroughly it is covered. This
+ * is the mechanism that turns a static, point-in-time review into a finding
+ * bound to properties re-verified on every push: instead of "fixed once", each
+ * finding maps to a check that re-runs in CI for the life of the repo.
  */
 import type { Finding, FindingsDoc, Severity } from './findings.js';
 import { SEVERITY_RANK } from './findings.js';
 
-/** How thoroughly a finding is covered by continuous assurance. */
+/**
+ * How thoroughly a finding is covered. "Runtime monitor" means the property is
+ * implemented as a check in guardian/src/evaluator.ts — the deployable monitor
+ * — not that a monitor is currently running against a live deployment.
+ */
 export type CoverageTier =
-  | 'fully-assured' // proven by the harness AND watched by a live monitor
-  | 'monitored-only' // watched live, but not proven by the fuzz harness
-  | 'harness-only' // proven pre-deploy, but not monitored live
-  | 'gap' // security-relevant, but no continuous layer covers it
+  | 'fully-assured' // proven by the harness AND covered by the runtime monitor
+  | 'monitored-only' // covered by the runtime monitor, not proven by the harness
+  | 'harness-only' // proven by the harness, not covered by the runtime monitor
+  | 'gap' // security-relevant, but no assurance layer covers it
   | 'not-applicable'; // not a security property (e.g. a gas finding)
 
 /** Per-layer reference counts for one finding. */
@@ -79,10 +83,10 @@ function classify(securityRelevant: boolean, layers: LayerCounts): { tier: Cover
   if (!securityRelevant) return { tier: 'not-applicable', weight: 0 };
 
   const hasHarness = layers.harnessTests > 0;
-  const hasLive = layers.liveMonitors > 0;
+  const hasMonitor = layers.liveMonitors > 0;
 
-  if (hasHarness && hasLive) return { tier: 'fully-assured', weight: 1 };
-  if (hasLive) return { tier: 'monitored-only', weight: 0.5 };
+  if (hasHarness && hasMonitor) return { tier: 'fully-assured', weight: 1 };
+  if (hasMonitor) return { tier: 'monitored-only', weight: 0.5 };
   if (hasHarness) return { tier: 'harness-only', weight: 0.5 };
   return { tier: 'gap', weight: 0 };
 }
@@ -99,7 +103,7 @@ function resolveFinding(f: Finding, known: KnownArtifacts): ResolvedFinding {
     if (!known.harnessTests.has(t)) issues.push(`unknown harness test "${t}"`);
   }
   for (const id of ca.liveMonitors) {
-    if (!known.invariantIds.has(id)) issues.push(`unknown live monitor "${id}"`);
+    if (!known.invariantIds.has(id)) issues.push(`unknown runtime monitor "${id}"`);
   }
   for (const id of ca.exploitReplays) {
     if (!known.exploitIds.has(id)) issues.push(`unknown exploit replay "${id}"`);
@@ -135,7 +139,7 @@ function resolveFinding(f: Finding, known: KnownArtifacts): ResolvedFinding {
 /**
  * Resolve a full findings document into a traceability matrix.
  *
- * @param doc   The loaded audit registry.
+ * @param doc   The loaded security-review registry.
  * @param known The known invariant/harness/exploit identifiers references are
  *              validated against.
  */

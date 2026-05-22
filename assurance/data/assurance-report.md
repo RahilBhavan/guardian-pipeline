@@ -1,20 +1,19 @@
 # Guardian Pipeline — Assurance Report
 
-> **Assurance Score: 92/100 — grade A-**  
-> Generated 2026-05-22T20:16:56.347Z · commit `28c0105`
+> **Assurance Score: 91/100 — grade A-**  
+> Generated 2026-05-22T22:20:19.653Z · commit `8cea9c2`
 
-The Assurance Score quantifies what the cited papers argue for: continuous, multi-layered verification. Each component is one independent layer — static proof, exploit resistance, live monitoring, and audit traceability — and the composite is the empirical evidence a point-in-time audit cannot provide.
+The Assurance Score rolls the repository's pre-deployment evidence into one reproducible number — static verification, exploit-replay resistance, and the traceability of every security-review finding to a re-runnable check. It is a demonstration of the continuous, multi-layered assurance the cited research argues for: recomputed on every commit rather than fixed at a point in time.
 
 ## Score components
 
 | Component | Score | Weight | Detail |
 |---|---|---|---|
-| Static Verification | 83.2 | 30% | Vault.sol 97.2% line / 82.6% branch; fuzz campaign 2000x150 (intensity 64/100) |
-| Exploit Resistance | 100 | 25% | 7/7 exploit classes resisted (6 prevented, 1 detected, 0 missed) |
-| Continuous Monitoring | n/a | 25% | Supabase monitoring history unavailable — component excluded from the composite |
-| Audit Traceability | 93.8 | 20% | 93.8% weighted coverage of security-relevant findings |
+| Static Verification | 82 | 45% | Vault.sol 97.2% line / 78.3% branch; fuzz campaign 2000x150 (intensity 64/100) |
+| Exploit Resistance | 100 | 35% | 7/7 exploit classes resisted (6 prevented, 1 detected, 0 missed) |
+| Finding Traceability | 93.8 | 20% | 93.8% weighted coverage of security-relevant findings |
 
-## Audit traceability matrix
+## Finding traceability matrix
 
 7/8 security-relevant findings fully assured · 93.8% weighted coverage.
 

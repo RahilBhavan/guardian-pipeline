@@ -47,7 +47,7 @@ function doc(findings: Finding[]): FindingsDoc {
     report: {
       title: 't',
       subject: 's',
-      auditor: 'a',
+      reviewer: 'a',
       reportDate: 'd',
       reviewedCommit: 'c',
       methodology: 'm',

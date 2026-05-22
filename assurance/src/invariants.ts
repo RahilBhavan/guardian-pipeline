@@ -1,7 +1,7 @@
 /**
  * invariants.ts — the canonical catalogue of the six Vault invariants.
  *
- * This is the single source of truth the assurance engine resolves audit
+ * This is the single source of truth the assurance engine resolves security-review
  * findings and exploit replays against. The same six properties are asserted
  * by test/invariant/InvariantVault.t.sol and mirrored live by
  * guardian/src/evaluator.ts; `harnessTest` records the Foundry function name so

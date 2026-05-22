@@ -1,18 +1,28 @@
 /**
- * score.ts — Feature 2: the composite Assurance Score.
+ * score.ts — the composite Assurance Score.
  *
- * A single 0-100 number (plus letter grade) quantifying how thoroughly the
- * protocol is assured, across four independent layers:
+ * A single 0-100 number (plus letter grade) summarising the pre-deployment
+ * evidence the repository can produce on its own, across three components:
  *
- *   Static Verification   0.30   coverage + fuzz intensity        (pre-deploy)
- *   Exploit Resistance    0.25   exploit-replay catch rate        (pre-deploy)
- *   Continuous Monitoring 0.25   live uptime + detection latency  (post-deploy)
- *   Audit Traceability    0.20   findings bound to continuous checks
+ *   Static Verification   0.45   src/Vault.sol coverage + fuzz-campaign size
+ *   Exploit Resistance    0.35   exploit-replay catch rate
+ *   Finding Traceability  0.20   review findings bound to a re-runnable check
  *
- * This is the empirical, multi-layered assurance metric Bourveau et al. (2024)
- * argue for — and the runtime evidence Landsman et al. (2025) found missing
- * from static audits. Every function here is pure and unit-tested; the CLI in
- * sources.ts is responsible for gathering the real inputs.
+ * On the weights: they are a deliberate editorial choice, not an empirically
+ * derived constant. Static Verification is the broadest evidence — coverage
+ * and the fuzz campaign exercise the whole contract — so it carries the most
+ * weight; Exploit Resistance tests specific named attack classes; Finding
+ * Traceability measures process completeness. The weights are fixed here, in
+ * the open, so the score is reproducible and the bias is explicit rather than
+ * hidden.
+ *
+ * Scope note: an earlier design added a fourth "Continuous Monitoring"
+ * component scored from a live Guardian deployment. That component was removed
+ * — this project ships the runtime monitor as a runnable reference
+ * implementation, not a hosted service, so there is no live deployment to
+ * score and the Assurance Score is a pre-deployment metric only.
+ *
+ * Every function here is pure and unit-tested; sources.ts gathers the inputs.
  */
 
 /** One component of the composite score. */
@@ -63,20 +73,7 @@ export interface ExploitInput {
   missed: number;
 }
 
-/** Inputs for the Continuous Monitoring component. */
-export interface MonitoringInput {
-  available: boolean;
-  /** Distinct blocks the Guardian recorded in the sampled window. */
-  blocksChecked: number;
-  /** Blocks the Guardian was expected to cover in that window. */
-  expectedBlocks: number;
-  /** Mean detection latency over the window, in milliseconds. */
-  avgLatencyMs: number;
-  /** Seconds since the Guardian's most recent recorded check. */
-  lastCheckAgeSec: number;
-}
-
-/** Inputs for the Audit Traceability component. */
+/** Inputs for the Finding Traceability component. */
 export interface TraceInput {
   available: boolean;
   /** Weighted coverage over security-relevant findings, as a percentage. */
@@ -85,12 +82,11 @@ export interface TraceInput {
   gaps: number;
 }
 
-/** Component weights — must sum to 1. */
+/** Component weights — must sum to 1. See the file header for the rationale. */
 export const WEIGHTS = {
-  staticVerification: 0.3,
-  exploitResistance: 0.25,
-  continuousMonitoring: 0.25,
-  auditTraceability: 0.2,
+  staticVerification: 0.45,
+  exploitResistance: 0.35,
+  findingTraceability: 0.2,
 } as const;
 
 /** Clamp `n` into the [lo, hi] range. */
@@ -192,58 +188,23 @@ export function scoreExploit(input: ExploitInput): ScoreComponent {
 }
 
 /**
- * Continuous Monitoring — a blend of liveness (did the Guardian check every
- * block), detection latency, and recency of the last check.
- */
-export function scoreMonitoring(input: MonitoringInput): ScoreComponent {
-  const uptime =
-    input.expectedBlocks <= 0 ? 0 : clamp((input.blocksChecked / input.expectedBlocks) * 100);
-  // Latency: 500ms or faster -> 100, 4000ms or slower -> 0.
-  const latencyScore = clamp(100 - ((input.avgLatencyMs - 500) / (4000 - 500)) * 100);
-  // Liveness: a check within 30s -> 100, nothing for 600s -> 0.
-  const liveness = clamp(100 - ((input.lastCheckAgeSec - 30) / (600 - 30)) * 100);
-  const score = clamp(0.5 * uptime + 0.3 * latencyScore + 0.2 * liveness);
-
-  return {
-    key: 'continuousMonitoring',
-    label: 'Continuous Monitoring',
-    score: round1(score),
-    available: input.available,
-    weight: WEIGHTS.continuousMonitoring,
-    detail: input.available
-      ? `${input.blocksChecked}/${input.expectedBlocks} blocks covered, ` +
-        `${Math.round(input.avgLatencyMs)}ms avg latency, last check ${Math.round(input.lastCheckAgeSec)}s ago`
-      : 'Supabase monitoring history unavailable — component excluded from the composite',
-    metrics: {
-      uptime: round1(uptime),
-      latencyScore: round1(latencyScore),
-      liveness: round1(liveness),
-      blocksChecked: input.blocksChecked,
-      expectedBlocks: input.expectedBlocks,
-      avgLatencyMs: Math.round(input.avgLatencyMs),
-      lastCheckAgeSec: Math.round(input.lastCheckAgeSec),
-    },
-  };
-}
-
-/**
- * Audit Traceability — weighted coverage of security-relevant audit findings.
- * Any uncovered security-relevant finding caps the component at 60.
+ * Finding Traceability — weighted coverage of security-relevant review
+ * findings. Any uncovered security-relevant finding caps the component at 60.
  */
 export function scoreTraceability(input: TraceInput): ScoreComponent {
   let score = clamp(input.coveragePct);
   if (input.gaps > 0) score = Math.min(score, 60);
 
   return {
-    key: 'auditTraceability',
-    label: 'Audit Traceability',
+    key: 'findingTraceability',
+    label: 'Finding Traceability',
     score: round1(score),
     available: input.available,
-    weight: WEIGHTS.auditTraceability,
+    weight: WEIGHTS.findingTraceability,
     detail: input.available
       ? `${round1(input.coveragePct)}% weighted coverage of security-relevant findings` +
         (input.gaps > 0 ? `; ${input.gaps} uncovered finding(s)` : '')
-      : 'audit registry unavailable — component excluded from the composite',
+      : 'finding registry unavailable — component excluded from the composite',
     metrics: {
       coveragePct: round1(input.coveragePct),
       gaps: input.gaps,
@@ -252,9 +213,11 @@ export function scoreTraceability(input: TraceInput): ScoreComponent {
 }
 
 /**
- * Combine components into the composite score. Unavailable components are
- * dropped and the remaining weights are re-normalised, so the score always
- * reflects only the evidence actually gathered.
+ * Combine components into the composite score. All three components are
+ * normally available; if a data source genuinely cannot be reached (e.g. no
+ * coverage file) that component is dropped and the remaining weights are
+ * re-normalised, so the score reflects only the evidence actually gathered.
+ * `effectiveWeight` reports how much of the intended 1.0 was in play.
  */
 export function computeScore(components: ScoreComponent[]): AssuranceScore {
   const available = components.filter((c) => c.available);

@@ -70,10 +70,11 @@ const RESEARCH: ResearchCitation[] = [
 ];
 
 const THESIS =
-  'The Assurance Score quantifies what the cited papers argue for: continuous, ' +
-  'multi-layered verification. Each component is one independent layer — static ' +
-  'proof, exploit resistance, live monitoring, and audit traceability — and the ' +
-  'composite is the empirical evidence a point-in-time audit cannot provide.';
+  "The Assurance Score rolls the repository's pre-deployment evidence into one " +
+  'reproducible number — static verification, exploit-replay resistance, and the ' +
+  'traceability of every security-review finding to a re-runnable check. It is a ' +
+  'demonstration of the continuous, multi-layered assurance the cited research ' +
+  'argues for: recomputed on every commit rather than fixed at a point in time.';
 
 /** Inputs to assemble a report from. */
 export interface BuildReportInput {
@@ -100,12 +101,12 @@ function evaluateGate(input: BuildReportInput): GateVerdict {
   }
   if (input.traceability.summary.gaps > 0) {
     reasons.push(
-      `${input.traceability.summary.gaps} security-relevant audit finding(s) have no continuous coverage`,
+      `${input.traceability.summary.gaps} security-relevant review finding(s) have no continuous coverage`,
     );
   }
   if (input.traceability.danglingReferences.length > 0) {
     reasons.push(
-      `${input.traceability.danglingReferences.length} audit finding reference(s) do not resolve to a known artifact`,
+      `${input.traceability.danglingReferences.length} finding reference(s) do not resolve to a known artifact`,
     );
   }
 
@@ -189,7 +190,7 @@ export function renderConsole(report: AssuranceReport): string {
   }
   L.push('');
   L.push(
-    `  Audit traceability   ${traceability.summary.fullyAssured}/${traceability.summary.securityRelevant} fully assured` +
+    `  Finding traceability ${traceability.summary.fullyAssured}/${traceability.summary.securityRelevant} fully assured` +
       `   ${traceability.summary.coveragePct.toFixed(1)}% coverage`,
   );
   for (const f of traceability.findings) {
@@ -245,7 +246,7 @@ export function renderMarkdown(report: AssuranceReport): string {
   }
   M.push('');
 
-  M.push('## Audit traceability matrix');
+  M.push('## Finding traceability matrix');
   M.push('');
   M.push(
     `${traceability.summary.fullyAssured}/${traceability.summary.securityRelevant} security-relevant findings fully assured · ` +

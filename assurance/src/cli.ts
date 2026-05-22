@@ -3,14 +3,13 @@
  * cli.ts — the `assurance` command.
  *
  *   assurance report   gather all evidence, compute the score, write artifacts
- *   assurance trace    print the audit-finding traceability matrix only
+ *   assurance trace    print the finding traceability matrix only
  *   assurance check    same as report, but exit non-zero if the CI gate fails
  *
  * Flags:
  *   --min-score <n>    CI gate threshold (default 80)
  *   --coverage <path>  pre-generated `forge coverage --report summary` file
  *   --run-forge        run `forge coverage` if no coverage file is present
- *   --no-supabase      skip the live-monitoring query
  *   --md               also print the Markdown report
  *
  * Outputs (under the repo root):
@@ -26,14 +25,8 @@ import { INVARIANT_IDS, HARNESS_TESTS } from './invariants.js';
 import { loadFindings } from './findings.js';
 import { loadExploits, summariseExploits } from './exploits.js';
 import { resolveTraceability } from './traceability.js';
-import {
-  computeScore,
-  scoreExploit,
-  scoreMonitoring,
-  scoreStatic,
-  scoreTraceability,
-} from './score.js';
-import { gatherMonitoring, gatherStatic, gitSha } from './sources.js';
+import { computeScore, scoreExploit, scoreStatic, scoreTraceability } from './score.js';
+import { gatherStatic, gitSha } from './sources.js';
 import {
   appendHistory,
   buildReport,
@@ -50,7 +43,6 @@ interface CliOptions {
   minScore: number;
   coverageFile: string;
   runForge: boolean;
-  useSupabase: boolean;
   markdown: boolean;
 }
 
@@ -61,7 +53,6 @@ function parseArgs(argv: string[]): CliOptions {
     minScore: 80,
     coverageFile: join(REPO_ROOT, 'assurance', 'data', 'coverage-summary.txt'),
     runForge: false,
-    useSupabase: true,
     markdown: false,
   };
 
@@ -75,16 +66,15 @@ function parseArgs(argv: string[]): CliOptions {
     if (arg === '--min-score') opts.minScore = Number(argv[++i]);
     else if (arg === '--coverage') opts.coverageFile = argv[++i];
     else if (arg === '--run-forge') opts.runForge = true;
-    else if (arg === '--no-supabase') opts.useSupabase = false;
     else if (arg === '--md') opts.markdown = true;
   }
 
   return opts;
 }
 
-/** Resolve the audit registry and exploit catalogue into a traceability matrix. */
+/** Resolve the review registry and exploit catalogue into a traceability matrix. */
 function resolveAll(opts: CliOptions) {
-  const findingsDoc = loadFindings(join(REPO_ROOT, 'audit', 'findings.json'));
+  const findingsDoc = loadFindings(join(REPO_ROOT, 'security-review', 'findings.json'));
   const exploitDoc = loadExploits(join(REPO_ROOT, 'assurance', 'data', 'exploit-replays.json'));
   const exploitSummary = summariseExploits(exploitDoc.scenarios);
 
@@ -129,10 +119,6 @@ async function main(): Promise<void> {
     coverageFile: opts.coverageFile,
     runForge: opts.runForge,
   });
-  const monitoringInput = opts.useSupabase
-    ? await gatherMonitoring(REPO_ROOT)
-    : { available: false, blocksChecked: 0, expectedBlocks: 0, avgLatencyMs: 0, lastCheckAgeSec: 0 };
-
   const components = [
     scoreStatic(staticInput),
     scoreExploit({
@@ -142,7 +128,6 @@ async function main(): Promise<void> {
       detected: exploitSummary.detected,
       missed: exploitSummary.missed,
     }),
-    scoreMonitoring(monitoringInput),
     scoreTraceability({
       available: true,
       coveragePct: traceability.summary.coveragePct,
