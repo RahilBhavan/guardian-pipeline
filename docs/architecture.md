@@ -32,18 +32,21 @@ verbatim across both.
 **Trigger:** every `push` and `pull_request` to `main`.
 
 Foundry's invariant fuzzer drives the vault through random call sequences via
-four handler contracts (`DepositHandler`, `BorrowHandler`, `WarpHandler` —
-which advances time and accrues interest — and `LiquidateHandler`) and asserts
+five handler contracts (`DepositHandler`, `BorrowHandler`, `WarpHandler` —
+which advances time and accrues interest — `LiquidateHandler`, and
+`DonationHandler` — which transfers tokens straight to the vault) and asserts
 all 6 invariants after each step.
 
 | Profile | Runs | Depth | Use |
 |---------|------|-------|-----|
 | `default` | 500 | 100 | Local iteration |
-| `ci` | 2,000 | 150 | Every push (~300,000 calls) |
+| `ci` | 2,000 | 150 | Every push (up to ~300,000 handler calls) |
 | `deep` | 10,000 | 200 | Pre-release |
 
-A green CI badge is a claim: *all 6 invariants survived the campaign with zero
-reverts.* The full job breakdown is in [setup.md](setup.md) and the
+A green CI badge is a claim: *all 6 invariants held across the campaign — no
+`invariant_*` assertion failed.* (Handlers wrap legitimately-reverting calls in
+`try/catch`, so a revert is a valid no-op, not a campaign failure — see
+[testing.md](testing.md).) The full job breakdown is in [ci.md](ci.md) and the
 [root README](../README.md#cicd-pipeline).
 
 ## Layer 2 — Smart contract
@@ -62,9 +65,11 @@ lender side stores assets directly, the borrow side scales an index.
   `liquidate`, and `accrue` — all `nonReentrant`. Interest accrues at the start
   of every call; under-water positions are cleared via `liquidate`.
 - **`attack()`** lives only on `src/AttackableVault.sol`, a demo-only subclass.
-  It inflates `totalSupplyAssets` past the assets backing it, breaking INV-01.
-  It is callable only by the `attacker` address and reverts on Base mainnet
-  (`block.chainid == 8453`). The audited `Vault` has no such function.
+  It is a deliberate one-line flag — not an exploit — that inflates
+  `totalSupplyAssets` past the assets backing it, breaking INV-01 so the runtime
+  monitor can be filmed catching it. It is callable only by the `attacker`
+  address and reverts on Base mainnet (`block.chainid == 8453`). The reviewed
+  `Vault` has no such function.
 
 `src/MockERC20.sol` is a plain 18-decimal test token (`mUSD`) with unrestricted
 `mint` — intentionally hook-free, so the harness need not model ERC-777-style
@@ -73,9 +78,11 @@ reentrancy.
 The full contract API — every function, event, error, and storage slot — is in
 [contracts.md](contracts.md).
 
-## Layer 3 — Runtime guardian
+## Layer 3 — Runtime monitor
 
-`guardian/` — a TypeScript daemon that monitors the deployed vault on Base L2.
+`guardian/` — a TypeScript daemon that monitors a deployed vault on Base L2.
+It is a **runnable reference implementation**: the code below is complete and
+documented, but this repository does not point it at a hosted deployment.
 
 ```
 watchBlockNumber ─▶ fetchVaultState ─▶ evaluateInvariants ─▶ router
@@ -105,11 +112,11 @@ writes to is in [database.md](database.md).
 
 ## Layer 4 — Assurance
 
-The assurance layer turns the other three into a single auditable number — the
+The assurance layer rolls the pre-deployment evidence into a single number — the
 **Assurance Score** (0–100) — recomputed on every commit by the `assurance` CI
-job. It backtests 7 historical exploit classes, traces 8 audit findings to the
-layers that cover them, and gates CI at a minimum score of 80. Full detail in
-[assurance.md](assurance.md).
+job. It backtests 7 historical exploit classes, traces 8 security-review
+findings to the layers that cover them, and gates CI at a minimum score of 80.
+Full detail in [assurance.md](assurance.md).
 
 ---
 
@@ -118,17 +125,17 @@ layers that cover them, and gates CI at a minimum score of 80. Full detail in
 ```
 git push ──▶ GitHub Actions ──▶ Forge fuzz + Slither/Aderyn + Assurance Score
                                           │ validates
-                            Vault.sol (deployed to Base Sepolia)
-                                          │ monitors
-        Alchemy RPC ──▶ Guardian bot ──▶ Supabase ──▶ React dashboard
-                                                      (real-time, <1 block)
+                            Vault.sol (build target: Base Sepolia)
+                                          │ monitored, when run, by
+        Alchemy RPC ──▶ Runtime monitor ──▶ Supabase ──▶ React dashboard
+                                                         (real-time)
 ```
 
 | Component | Reads from | Writes to |
 |-----------|-----------|-----------|
-| Guardian bot | Base L2 (via Alchemy) | Supabase `alerts`, `blocks_checked` |
+| Runtime monitor | Base L2 (via Alchemy) | Supabase `alerts`, `blocks_checked` |
 | Dashboard | Supabase (anon key, real-time) | — |
-| CI assurance job | Forge output, `audit/findings.json` | `assurance/data/*` |
+| CI assurance job | Forge output, `security-review/findings.json` | `assurance/data/*` |
 
 ---
 

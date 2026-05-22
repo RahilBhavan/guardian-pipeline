@@ -1,9 +1,10 @@
 /**
- * TraceabilityMatrix — Feature 1: the audit-finding -> continuous-assurance map.
+ * TraceabilityMatrix — the review-finding -> continuous-assurance map.
  *
- * Shows every finding from the static audit (audit/findings.json) bound to the
- * invariants, harness tests, live monitors and exploit replays that keep it
- * verified — turning a point-in-time audit into continuous assurance.
+ * Shows every finding from the security review (security-review/findings.json)
+ * bound to the invariants, harness tests, runtime-monitor checks and exploit
+ * replays that keep it verified — turning a point-in-time review into a finding
+ * re-checked on every commit.
  */
 import type { CoverageTier, ResolvedFinding } from '../assurance';
 
@@ -66,7 +67,7 @@ export function TraceabilityMatrix({
 
   return (
     <section className="panel">
-      <div className="panel-title">Audit Traceability · static findings → continuous checks</div>
+      <div className="panel-title">Finding Traceability · review findings → continuous checks</div>
 
       <div className="trace-summary">
         <div className="trace-stat">

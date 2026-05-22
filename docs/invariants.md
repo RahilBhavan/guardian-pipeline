@@ -9,10 +9,20 @@ exploit-replay harness (`test/exploit/`).
 denominator); `collateralRatio = 80_00` (80%); `liquidationBonus = 5_00` (5%).
 `cash` is the vault's own ERC-20 balance; `totalBorrowed = totalBorrowShares ×
 borrowIndex / WAD`; `userDebt(u) = userBorrowShares[u] × borrowIndex / WAD`.
-Interest accrual raises `borrowIndex` (borrower debt) and `totalSupplyAssets`
-(lender claims) in lock-step, so every invariant below is genuinely *tensioned*
-— a wrong rounding direction can break it, which is exactly what the fuzz
-campaign exists to rule out.
+
+**Not every invariant is equally hard to satisfy** — and this document does not
+pretend they are. Each invariant below carries a **class**:
+
+- **Fuzz-tensioned** (INV-01, INV-06) — a wrong rounding direction or call
+  ordering genuinely breaks it. These are the properties the fuzz campaign
+  exists to attack, and INV-01 already caught a real bug (GUA-03).
+- **Accounting identity** (INV-02, INV-03) — a share-sum equality that holds
+  unless a code path desyncs the two sides of the ledger. The fuzzer's role is
+  regression detection.
+- **Structural** (INV-04, INV-05) — true by the construction of the contract.
+  INV-04 has a non-trivial proof the campaign confirms empirically; INV-05 is a
+  one-line tautology kept as a cheap regression check. The fuzzer cannot break
+  a structural invariant without a source change.
 
 ---
 
@@ -28,7 +38,7 @@ the claims of its lenders. This is the master safety property.
 - **Breaks when:** accrual credits lenders more than borrowers are charged, a
   repayment collects less than debt actually falls, or shares are minted with
   no backing assets. The fuzz harness found exactly the first class during
-  development — a one-wei full-repay leak, now fixed (audit finding GUA-03).
+  development — a one-wei full-repay leak, now fixed (review finding GUA-03).
 - **Caught by:** `invariant_solvency()` · `inv01()` · replay EXP-01.
 
 ## INV-02 · Supply-share integrity · *Critical*
@@ -57,7 +67,7 @@ balance — the debt-side twin of INV-02.
   shares.
 - **Caught by:** `invariant_debtShareIntegrity()` · `inv03()`.
 
-## INV-04 · Lender-value floor · *High*
+## INV-04 · Lender-value floor · *High* · *Structural*
 
 ```
 totalSupplyAssets ≥ totalSupplyShares
@@ -66,11 +76,16 @@ totalSupplyAssets ≥ totalSupplyShares
 The lender share price (`totalSupplyAssets × WAD / totalSupplyShares`) must
 never fall below the 1:1 peg — lenders cannot lose nominal principal.
 
-- **Breaks when:** a withdrawal or liquidation removes assets faster than
-  shares, or a deposit mints shares above value.
+- **Class — structural.** It holds because every share/asset conversion floors
+  in the protocol's favour: the first deposit mints shares 1:1, later deposits
+  mint `≤ amount`, interest only raises assets, and withdrawal/liquidation
+  remove assets and shares in a ratio that preserves the floor. It cannot be
+  broken without changing a rounding direction in `deposit`, `withdraw` or
+  `liquidate`. The campaign confirms the proof empirically — including with
+  `DonationHandler` transferring tokens straight to the vault.
 - **Caught by:** `invariant_lenderValueFloor()` · `inv04()` · replay EXP-02.
 
-## INV-05 · Interest-index floor · *Medium*
+## INV-05 · Interest-index floor · *Medium* · *Structural*
 
 ```
 borrowIndex ≥ 1e18
@@ -79,7 +94,9 @@ borrowIndex ≥ 1e18
 The debt-scaling index only ever accrues forward; it can never drop below its
 `1e18` starting value. Interest is monotone.
 
-- **Breaks when:** an accrual computes a negative or wrapped index delta.
+- **Class — structural (true by construction).** `borrowIndex` is initialised
+  to `1e18` and `accrue` only ever adds to it. It cannot fall without a source
+  change to the accrual maths; the harness keeps it as a cheap regression check.
 - **Caught by:** `invariant_interestIndexFloor()` · `inv05()`.
 
 ## INV-06 · No uncollateralised debt · *High*

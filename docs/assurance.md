@@ -1,41 +1,51 @@
 # The assurance layer
 
-A point-in-time audit produces a PDF that is stale the moment it is signed.
-Guardian Pipeline produces a **living Assurance Score** — recomputed by the
-`assurance` CI job on every commit — that quantifies how well the protocol is
-actually covered, right now.
+A point-in-time audit produces a static document that is stale the moment it is
+signed. Guardian Pipeline produces an **Assurance Score** — recomputed by the
+`assurance` CI job on every commit — that summarises how well the contract is
+covered by the repository's own pre-deployment evidence.
 
-This is the project's direct answer to **Landsman et al. (2025)**: static
-audits show little evidence of preventing runtime exploits, so assurance must
-be continuous, multi-layered, and measurable.
+The framing is informed by **Landsman et al. (2025)** (static audits show little
+evidence of preventing runtime exploits) and **Bourveau et al. (2024)** (value
+comes from continuous, multi-layered verification). The score is a worked
+demonstration of that argument, not a claim to have settled it.
 
 ---
 
 ## The Assurance Score
 
-A composite 0–100 metric, the weighted average of four independent layers:
+A composite 0–100 metric, the weighted average of three **pre-deployment**
+components — every input is evidence the repository produces on its own in CI:
 
 | Component | Weight | Measures | Source |
 |-----------|--------|----------|--------|
-| Static verification | 30% | Line/branch coverage + fuzz intensity on `Vault.sol` | `forge coverage` |
-| Exploit resistance | 25% | 7 historical exploit classes replayed | `test/exploit/` |
-| Continuous monitoring | 25% | Live uptime, liveness, detection latency | Supabase history |
-| Audit traceability | 20% | % of findings provably covered | `audit/findings.json` |
+| Static verification | 45% | Line/branch coverage + fuzz-campaign size on `Vault.sol` | `forge coverage`, `foundry.toml` |
+| Exploit resistance | 35% | 7 historical exploit classes replayed | `test/exploit/` |
+| Finding traceability | 20% | % of review findings bound to a re-runnable check | `security-review/findings.json` |
 
-**Degradation:** the continuous-monitoring component needs live Supabase
-history. In CI there is none, so that component is marked unavailable and the
-score is re-normalised over the three available layers (`--no-supabase`).
+**On the weights.** They are a deliberate editorial choice, documented in the
+`assurance/src/score.ts` header — *not* an empirically derived constant. Static
+verification is the broadest evidence, so it carries the most weight. They are
+fixed in the open so the score is reproducible and the bias is explicit.
+
+**Scope.** An earlier design added a fourth "Continuous Monitoring" component
+scored from a live Guardian deployment. It was removed: this project ships the
+runtime monitor as a runnable reference implementation, not a hosted service, so
+there is no live deployment to score. The Assurance Score is a pre-deployment
+metric only.
 
 **Grade:** A+ (97–100), A (93–96), A− (90–92), B+ (87–89), B (83–86),
 B− (80–82), C+ (77–79), … — see `gradeFor` in `assurance/src/score.ts`.
 
-**Current score: 92/100 → grade A−.**
+**Current score: 91/100 → grade A−** (Static 82 · Exploit 100 · Traceability
+93.8). Regenerate it with the commands [below](#running-it-locally); the live
+figures are in `assurance/data/assurance-report.json`.
 
 **CI gate:** the `assurance` job runs `npm run check -- --min-score 80` and
 **fails the build** if the composite score drops below 80.
 
 The full report is emitted as `assurance/data/assurance-report.json` and
-`assurance-report.md`, and rendered live on the dashboard.
+`assurance-report.md`, and bundled into the dashboard build.
 
 ---
 
@@ -64,23 +74,29 @@ vault. Each is classified by outcome:
 score 100/100. CI fails if any scenario regresses (an outcome worse than
 expected) or is MISSED.
 
-EXP-01 is intentionally the reference DETECTED scenario: it proves the runtime
-layer catches what the code itself permits — exactly the
-audit-misses-runtime-exploit gap the research describes.
+EXP-01 is intentionally the reference DETECTED scenario: it is a staged,
+deliberately-planted breach (`AttackableVault.attack()`) used to show the
+runtime monitor catching an insolvency the contract code itself permitted. It
+demonstrates the *detection plumbing*; it is not a novel exploit.
 
 ---
 
-## Audit traceability
+## Finding traceability
 
-`audit/` holds an illustrative point-in-time audit report and a
-machine-readable `findings.json`. The assurance tooling resolves each finding
-against the continuous-assurance layers and assigns a coverage tier:
+`security-review/` holds a self-conducted, point-in-time security review and a
+machine-readable `findings.json`. ("Self-conducted" means written by the
+repository author — it is not an independent third-party audit.) The assurance
+tooling resolves each finding against the assurance layers and assigns a
+coverage tier. "Runtime monitor" below means the property is implemented as a
+check in `guardian/src/evaluator.ts` — the deployable monitor — not that a
+monitor is currently running:
 
 - **fully-assured** — covered by ≥ 1 invariant **and** ≥ 1 harness test **and**
-  ≥ 1 live monitor.
-- **monitored-only** — covered live but not provable by the harness.
-- **harness-only** — fuzzed but not monitored live.
-- **gap** — a security-relevant finding with no continuous coverage.
+  a runtime-monitor check.
+- **monitored-only** — covered by the runtime monitor but not provable by the
+  harness.
+- **harness-only** — fuzz-proven but not covered by the runtime monitor.
+- **gap** — a security-relevant finding with no layer covering it.
 - **not-applicable** — non-security finding (e.g. gas).
 
 | ID | Finding | Severity | Tier |
@@ -97,8 +113,8 @@ against the continuous-assurance layers and assigns a coverage tier:
 **Summary:** 8 findings, all 8 security-relevant — 7 fully-assured and 1
 monitored-only (GUA-02: the `ReentrancyGuard` blocks the class structurally, but
 the non-callback `MockERC20` means the harness cannot reproduce a reentrant
-sequence, so it is monitored live rather than fuzz-proven). **0 gaps** →
-weighted traceability coverage **93.8%** (7 × 1.0 + 1 × 0.5 over 8).
+sequence, so it is covered by the runtime monitor rather than fuzz-proven).
+**0 gaps** → weighted traceability coverage **93.8%** (7 × 1.0 + 1 × 0.5 over 8).
 
 ---
 
@@ -113,7 +129,7 @@ forge script script/ExploitReplay.s.sol
 forge coverage --report summary --no-match-coverage "(script|test)"
 
 # Compute the Assurance Score
-cd assurance && npm ci && npm run check -- --min-score 80 --no-supabase
+cd assurance && npm ci && npm run check -- --min-score 80
 ```
 
 The output report feeds the dashboard's **Assurance Score**, **Traceability

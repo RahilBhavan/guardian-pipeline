@@ -2,18 +2,18 @@
 
 ## What this project is
 
-An automated DeFi security pipeline with two integrated layers:
+A DeFi security pipeline with two integrated layers:
 
-1. **CI/CD invariant fuzz harness** — Foundry runs 10,000+ randomised call sequences against an interest-bearing lending vault on every git push, asserting mathematical invariants hold before deployment.
-2. **Off-chain Guardian bot** — A TypeScript daemon that monitors the same invariants live on Base L2 after deployment, persisting any violation to Supabase and updating a dashboard within one block.
+1. **CI/CD invariant fuzz harness** — Foundry runs randomised call sequences against an interest-bearing lending vault on every git push, asserting mathematical invariants hold before deployment.
+2. **Off-chain Guardian bot** — A TypeScript daemon, shipped as a runnable reference implementation, that — when run against a deployed vault on Base L2 — monitors the same invariants and persists any violation to Supabase.
 
-A third **assurance layer** ties the two together: it maps each point-in-time audit finding to the invariant and exploit-replay test that now covers it, and emits a continuous assurance score consumed by the dashboard and CI.
+A third **assurance layer** ties the two together: it maps each security-review finding to the invariant and exploit-replay test that covers it, and emits an assurance score consumed by the dashboard and CI.
 
-**Research grounding** (cite both in the README):
+**Research grounding** (cite both in the README; flag that the citations should be verified against the source papers before relying on them):
 - Bourveau et al. (2024) *Decentralized Finance (DeFi) assurance: early evidence* — continuous multi-layered assurance across 8,500+ audit reports.
 - Landsman et al. (2025) *Auditing Smart Contracts* — static point-in-time audits show little empirical evidence of preventing runtime exploits.
 
-This project is the open-source tool that closes the gap both papers identify.
+This project is a **reference implementation** demonstrating the continuous, multi-layered assurance approach those papers motivate — a portfolio / research-demonstration build, not production infrastructure and not a hosted service.
 
 ---
 
@@ -30,13 +30,13 @@ Guard/
 ├── .github/workflows/invariant-ci.yml
 ├── src/
 │   ├── Vault.sol                 ← interest-bearing lending vault
-│   ├── AttackableVault.sol       ← demo subclass exposing the attack() exploit hook
+│   ├── AttackableVault.sol       ← demo-only subclass with the attack() demo flag
 │   └── MockERC20.sol
 ├── test/
 │   ├── unit/VaultUnit.t.sol
 │   ├── invariant/
 │   │   ├── InvariantVault.t.sol
-│   │   └── handlers/{Deposit,Borrow,Liquidate,Warp}Handler.sol
+│   │   └── handlers/{Deposit,Borrow,Liquidate,Warp,Donation}Handler.sol
 │   └── exploit/
 │       ├── ExploitReplay.t.sol
 │       ├── ExploitScenarios.sol
@@ -57,7 +57,7 @@ Guard/
 │   ├── src/{cli,score,traceability,findings,invariants,exploits,sources,report}.ts
 │   ├── test/{score,traceability}.test.ts
 │   └── data/{assurance-report.json,assurance-report.md,exploit-replays.json,history.jsonl}
-├── audit/                        ← point-in-time security review
+├── security-review/              ← self-conducted point-in-time security review
 │   ├── findings.json
 │   └── Vault-Security-Review.md
 ├── supabase/migrations/{0001_init,0002_lockdown_insert_rls}.sql

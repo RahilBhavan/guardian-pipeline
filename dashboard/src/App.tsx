@@ -185,7 +185,7 @@ export function App() {
           </section>
         </div>
 
-        {/* Column 2 — audit traceability over exploit replay, split evenly. */}
+        {/* Column 2 — finding traceability over exploit replay, split evenly. */}
         <div className="col">
           <TraceabilityMatrix traceability={assuranceReport.traceability} />
           <ExploitReplay exploits={assuranceReport.exploits} />

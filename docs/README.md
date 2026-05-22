@@ -24,7 +24,7 @@ Reference-grade detail on each component, accurate to the source.
 | [database.md](database.md) | The Supabase schema — both tables, indexes, the RLS model, real-time, migrations. |
 | [testing.md](testing.md) | The three test tiers — unit, invariant fuzzing, exploit replays — and how to read a counterexample. |
 | [ci.md](ci.md) | The six-job CI/CD pipeline — the job graph, what each job gates, secrets, artifacts. |
-| [assurance.md](assurance.md) | The Assurance Score, the exploit-replay catalogue, and audit traceability. |
+| [assurance.md](assurance.md) | The Assurance Score, the exploit-replay catalogue, and finding traceability. |
 
 ## Operations
 
@@ -36,7 +36,7 @@ Reference-grade detail on each component, accurate to the source.
 
 | Document | What it covers |
 |----------|----------------|
-| [../SECURITY.md](../SECURITY.md) | Threat model, trust boundaries, the `attack()` backdoor, responsible disclosure. |
+| [../SECURITY.md](../SECURITY.md) | Threat model, trust boundaries, the `attack()` demo flag, responsible disclosure. |
 | [../CONTRIBUTING.md](../CONTRIBUTING.md) | Development workflow, conventions, CI gates, the PR checklist. |
 | [glossary.md](glossary.md) | Every project identifier and term, defined in one place. |
 
@@ -50,7 +50,7 @@ Pick the trail that matches what you are doing:
   [invariants.md](invariants.md) → [assurance.md](assurance.md)
 - **Run it locally** → [setup.md](setup.md) →
   [guardian-bot.md](guardian-bot.md) → [database.md](database.md)
-- **Audit the contract** → [contracts.md](contracts.md) →
+- **Review the contract** → [contracts.md](contracts.md) →
   [invariants.md](invariants.md) → [testing.md](testing.md) →
   [../SECURITY.md](../SECURITY.md)
 - **Contribute a change** → [../CONTRIBUTING.md](../CONTRIBUTING.md) →
