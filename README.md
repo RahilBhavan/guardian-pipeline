@@ -11,7 +11,7 @@
 > pre-deployment invariant fuzz testing and live on-chain monitoring — proving
 > the *same* mathematical property before deployment and enforcing it after.
 
-**Live dashboard:** [guardian.rahilbhavan.com ↗](YOUR_VERCEL_URL)
+**Live dashboard:** [https://guardian.rahilbhavan.com ↗](YOUR_VERCEL_URL)
 
 ---
 
