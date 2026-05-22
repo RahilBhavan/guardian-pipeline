@@ -258,3 +258,43 @@ Note: The deployed vault is fresh — 0 users until someone deposits. The demo
 (deposit collateral → `attack()`) is still to be filmed. `YOUR_VERCEL_URL` in
 the README is still a placeholder pending the dashboard deploy. `Guard/CLAUDE.md`
 lines ~102–106 still list the now-deleted spec files.
+
+## 2026-05-22 — Credibility pass: made the framing match the substance
+What: A portfolio-review of the project found it oversold itself — the framing
+outran what the code does. Fixed it on branch `credibility-pass` (3 commits):
+- **Invariants framing.** Replaced "all 6 invariants genuinely tensioned" with
+  an honest per-invariant class — INV-01/06 fuzz-tensioned, INV-02/03 accounting
+  identities, INV-04/05 structural (INV-05 is a tautology). Added a Class column
+  to README/invariants.md and honest `@dev` notes in `InvariantVault.t.sol`.
+- **DonationHandler.** New 5th invariant handler doing direct `token.transfer`
+  to the vault — the ERC-4626 inflation vector. The harness never exercised a
+  donation, so GUA-06's "harness proves donation-immunity" claim was untested;
+  it now genuinely is (7k+ donations interleaved, all 6 invariants hold).
+- **Dropped the live pitch.** The runtime monitor is reframed everywhere as a
+  runnable *reference implementation*, not a hosted service; removed the dead
+  "Live dashboard" link and "within one block of the breach" live framing.
+- **Assurance score.** Removed the 4th "Continuous Monitoring" component (it was
+  scored from a non-existent live deployment and silently re-normalised away in
+  CI via `--no-supabase`). Now 3 components — Static 0.45 / Exploit 0.35 /
+  Traceability 0.20, weights documented as a deliberate choice. Score recomputed
+  91/100 (A-). Removed `gatherMonitoring`/`scoreMonitoring` + the supabase/dotenv
+  deps from the assurance package.
+- **audit/ → security-review/.** Renamed the directory; dropped the fabricated
+  "Meridian Audit Collective" firm name — findings are a self-conducted review
+  by the repo author and now say so. `attack()` reframed as a planted demo flag.
+- Added a "Scope & honesty" section to the README stating the limits plainly.
+Why: User explicitly asked to make the project genuinely credible. The gap was
+honesty-of-framing, not broken code — the contract and CI are solid; the README,
+docs, and assurance score claimed more novelty/rigour/"live"-ness than the
+artifacts supported.
+Rejected: Manufacturing extra "breakable" invariants on a correct contract (that
+is the same overclaiming sin in reverse — chose to tier the existing 6 honestly
+and strengthen the harness with the donation handler instead); deleting the
+guardian bot / dashboard (real, working code — reframed, not removed); deploying
+to back the live claims (a hard stop — needs the user's credentials).
+Note: All 38 Foundry tests pass, assurance 20/20, dashboard typechecks + builds.
+The two research citations (Bourveau 2024, Landsman 2025) are now flagged in the
+README/CLAUDE.md as needing verification against the source papers — they were
+load-bearing for the old framing and I cannot confirm they exist as cited.
+Git history can't be un-one-shotted, but this pass is itself a real, incremental
+development increment with honest commits.
