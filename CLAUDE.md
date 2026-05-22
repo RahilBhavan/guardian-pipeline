@@ -93,17 +93,11 @@ guardian-pipeline/
 
 ---
 
-## Spec files
+## Documentation
 
-Build each phase in order. Each spec is self-contained — paste it into a Claude session and say "build this exactly".
-
-| File | Phase | What it produces |
-|---|---|---|
-| `specs/01_vault_contracts.md` | 1 | `src/Vault.sol` + all handler contracts |
-| `specs/02_foundry_harness.md` | 2 | `foundry.toml` + `InvariantVault.t.sol` |
-| `specs/03_ci_pipeline.md` | 3 | `.github/workflows/invariant-ci.yml` |
-| `specs/04_guardian_bot.md` | 4 | All `guardian/src/` TypeScript files |
-| `specs/05_dashboard.md` | 5 | `dashboard/src/` React app + Supabase schema |
+The original phase spec files (`specs/01_*`–`07_*.md`) were build scaffolding and
+were removed in commit `0ed2d5b` once the system was built. The canonical, current
+documentation now lives in `docs/` — start at `docs/architecture.md`.
 
 ---
 
