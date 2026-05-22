@@ -87,7 +87,7 @@ export function TraceabilityMatrix({
         </div>
       </div>
 
-      <div className="trace-list">
+      <div className="trace-list scrollbar">
         {findings.map((f) => (
           <FindingRow key={f.id} finding={f} />
         ))}

@@ -157,48 +157,54 @@ export function App() {
 
   return (
     <div className="app">
-      <header className="header">
-        <h1>
+      <header className="topbar">
+        <div className="brand">
           <span className="shield">◈</span>Guardian Pipeline
-        </h1>
+        </div>
+        <LatencyBadge latencyMs={avgLatency} blockNumber={latestBlock} lastChecked={lastChecked} />
         <span className="vault">{VAULT_ADDRESS}</span>
       </header>
 
-      <LatencyBadge latencyMs={avgLatency} blockNumber={latestBlock} lastChecked={lastChecked} />
+      <main className="board">
+        {/* Column 1 — assurance score (fixed) over invariant health (fills). */}
+        <div className="col">
+          <AssuranceScore report={assuranceReport} />
+          <section className="panel">
+            <div className="panel-title">Invariant Health</div>
+            <div className="invariant-grid scrollbar">
+              {INVARIANTS.map((inv) => (
+                <InvariantHealth
+                  key={inv.id}
+                  invariantId={inv.id}
+                  name={inv.name}
+                  description={inv.description}
+                  passed={invariantStatus[inv.id] ?? null}
+                />
+              ))}
+            </div>
+          </section>
+        </div>
 
-      <AssuranceScore report={assuranceReport} />
+        {/* Column 2 — audit traceability over exploit replay, split evenly. */}
+        <div className="col">
+          <TraceabilityMatrix traceability={assuranceReport.traceability} />
+          <ExploitReplay exploits={assuranceReport.exploits} />
+        </div>
 
-      <div className="grid">
-        <section className="panel">
-          <div className="panel-title">Invariant Health</div>
-          <div className="invariant-grid">
-            {INVARIANTS.map((inv) => (
-              <InvariantHealth
-                key={inv.id}
-                invariantId={inv.id}
-                name={inv.name}
-                description={inv.description}
-                passed={invariantStatus[inv.id] ?? null}
-              />
-            ))}
-          </div>
-        </section>
-
-        <section className="panel">
-          <div className="panel-title">Alert Feed · latest {alerts.length}</div>
-          <AlertFeed alerts={alerts} />
-        </section>
-      </div>
-
-      <div className="grid grid-assurance">
-        <TraceabilityMatrix traceability={assuranceReport.traceability} />
-        <ExploitReplay exploits={assuranceReport.exploits} />
-      </div>
-
-      <section className="panel chart-wrap">
-        <div className="panel-title">Detection Latency · last {latencyHistory.length} blocks</div>
-        <LatencyChart points={latencyHistory} />
-      </section>
+        {/* Column 3 — alert feed (fills) over the latency chart (fixed). */}
+        <div className="col">
+          <section className="panel">
+            <div className="panel-title">Alert Feed · latest {alerts.length}</div>
+            <AlertFeed alerts={alerts} />
+          </section>
+          <section className="panel chart-wrap">
+            <div className="panel-title">
+              Detection Latency · last {latencyHistory.length} blocks
+            </div>
+            <LatencyChart points={latencyHistory} />
+          </section>
+        </div>
+      </main>
     </div>
   );
 }
