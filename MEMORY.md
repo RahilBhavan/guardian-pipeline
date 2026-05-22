@@ -230,3 +230,31 @@ contract — it must be redeployed (`DeployVault.s.sol` now deploys
 full-repay path during this redesign — see `ERRORS.md` and audit finding
 GUA-03. The root spec files `01_*`–`07_*.md` still describe the old model and
 were left as historical build specs; `docs/` + `README` are the canonical docs.
+
+## 2026-05-22 — Redeployed the lending vault + fixed a free-tier getLogs crash
+What: Closed out the redeploy + bot re-run from the redesign handoff.
+- Renamed branch `redesign/dashboard-single-viewport` → `redesign/lending-vault`
+  (the diff was the whole vault redesign, not just the dashboard).
+- Committed the redesign as `0ed2d5b`; deleted the 7 stale root spec files
+  `01_*`–`07_*.md` in the same commit (docs/ is now the sole source of truth).
+- Redeployed `AttackableVault` to Base Sepolia, reusing the existing MockERC20:
+  - Vault:        `0x718C5A3cf2E75A0011118949C9401511ebF3cf1F`
+  - MockERC20:    `0xd56e5BfFea640868cd421Ac43dec37c5c8c062f2` (reused)
+  - Deploy block: `41858023`
+  - deployer/attacker: `guardian-demo` keystore `0x2497c84b…94D16`
+- Updated `VAULT_ADDRESS` in `guardian/.env` (+ new `VAULT_DEPLOY_BLOCK=41858023`),
+  `dashboard/.env` (`VITE_VAULT_ADDRESS`), and root `.env`. Also fixed root
+  `.env`'s stale `ATTACKER_ADDRESS` — it still held the original `0xd48f0Dd1…`
+  demo wallet, predating the `guardian-demo` keystore.
+Bug found + fixed: the redesigned bot's `discoverUsers` issued one `eth_getLogs`
+over the entire deploy-block→head range; Alchemy's free tier caps that at 10
+blocks, so the bot crashed on startup. Fixed by paginating into 10-block windows
+(`MAX_LOG_RANGE` in `fetcher.ts`) — see ERRORS.md. The redesigned event-discovery
+bot had only ever been typechecked, never run live; this was the first real run.
+Verified end-to-end: bot starts clean, writes consecutive `blocks_checked` rows
+to Supabase, all 6 invariants healthy, ~150–380ms latency.
+Why: User asked to action the redesign handoff's open items.
+Note: The deployed vault is fresh — 0 users until someone deposits. The demo
+(deposit collateral → `attack()`) is still to be filmed. `YOUR_VERCEL_URL` in
+the README is still a placeholder pending the dashboard deploy. `Guard/CLAUDE.md`
+lines ~102–106 still list the now-deleted spec files.

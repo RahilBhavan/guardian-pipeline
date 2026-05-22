@@ -83,8 +83,20 @@ export const ERC20_ABI = [
 ] as const;
 
 /**
+ * Maximum `eth_getLogs` block span per request. Alchemy's free tier rejects any
+ * wider range, so the scan is paginated into windows of this size. A window of
+ * N blocks is the inclusive range `[from, from + N - 1]`.
+ */
+const MAX_LOG_RANGE = 10n;
+
+/**
  * Scan vault events between two blocks and return every address that has ever
  * held a position — depositors, borrowers and liquidation beneficiaries.
+ *
+ * The range is paginated into {@link MAX_LOG_RANGE}-block windows so the seed
+ * scan (deploy block → head, unbounded as the vault ages) stays within the
+ * free-tier `eth_getLogs` limit. Windows run sequentially to avoid bursting
+ * the RPC; the three event queries within a window run in parallel.
  *
  * @param client       A viem public client connected to Base.
  * @param vaultAddress The deployed vault address.
@@ -99,17 +111,21 @@ export async function discoverUsers(
 ): Promise<`0x${string}`[]> {
   const found = new Set<`0x${string}`>();
 
-  const [deposits, borrows, liquidations] = await Promise.all([
-    client.getLogs({ address: vaultAddress, event: DEPOSITED_EVENT, fromBlock, toBlock }),
-    client.getLogs({ address: vaultAddress, event: BORROWED_EVENT, fromBlock, toBlock }),
-    client.getLogs({ address: vaultAddress, event: LIQUIDATED_EVENT, fromBlock, toBlock }),
-  ]);
+  for (let from = fromBlock; from <= toBlock; from += MAX_LOG_RANGE) {
+    const to = from + MAX_LOG_RANGE - 1n < toBlock ? from + MAX_LOG_RANGE - 1n : toBlock;
 
-  for (const log of deposits) if (log.args.user) found.add(log.args.user);
-  for (const log of borrows) if (log.args.user) found.add(log.args.user);
-  for (const log of liquidations) {
-    if (log.args.liquidator) found.add(log.args.liquidator);
-    if (log.args.borrower) found.add(log.args.borrower);
+    const [deposits, borrows, liquidations] = await Promise.all([
+      client.getLogs({ address: vaultAddress, event: DEPOSITED_EVENT, fromBlock: from, toBlock: to }),
+      client.getLogs({ address: vaultAddress, event: BORROWED_EVENT, fromBlock: from, toBlock: to }),
+      client.getLogs({ address: vaultAddress, event: LIQUIDATED_EVENT, fromBlock: from, toBlock: to }),
+    ]);
+
+    for (const log of deposits) if (log.args.user) found.add(log.args.user);
+    for (const log of borrows) if (log.args.user) found.add(log.args.user);
+    for (const log of liquidations) {
+      if (log.args.liquidator) found.add(log.args.liquidator);
+      if (log.args.borrower) found.add(log.args.borrower);
+    }
   }
 
   return [...found];

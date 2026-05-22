@@ -66,3 +66,16 @@ read cells through a small `(i) => results[i] as bigint` helper.
 Note: viem's typed multicall tuple only survives a const-literal `contracts`
 array. With a dynamic array, validate the length explicitly and cast — do not
 fight the generics.
+
+## RPC: eth_getLogs range exceeds the free-tier provider cap
+Failed: The Guardian's `discoverUsers` seed scan issued a single `eth_getLogs`
+over `[deployBlock, headBlock]`. Alchemy's free tier rejects any range wider
+than 10 blocks (`InvalidRequestRpcError`, code -32600), so the bot crashed on
+startup the moment the vault was more than 10 blocks old.
+Worked: Paginate the scan into <=10-block windows inside `discoverUsers`
+(`MAX_LOG_RANGE = 10n`) — windows sequential, the three event queries within a
+window in parallel.
+Note: A getLogs scan from a fixed deploy block to chain head grows without
+bound — never assume a provider will serve an arbitrary range; chunk it. The
+redesigned event-discovery bot was typecheck-clean but had never been run
+against a live RPC, so this only surfaced on the first real end-to-end run.
