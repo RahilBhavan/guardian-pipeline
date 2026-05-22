@@ -11,7 +11,7 @@
 > pre-deployment invariant fuzz testing and live on-chain monitoring — proving
 > the *same* mathematical property before deployment and enforcing it after.
 
-**Demo video:** [Watch 3-min Loom ↗](YOUR_LOOM_URL) · **Live dashboard:** [guardian-pipeline.vercel.app ↗](YOUR_VERCEL_URL)
+**Live dashboard:** [guardian-pipeline.vercel.app ↗](YOUR_VERCEL_URL)
 
 ---
 
