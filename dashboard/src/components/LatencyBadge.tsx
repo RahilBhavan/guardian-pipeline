@@ -1,4 +1,4 @@
-/** Header strip: latest block, last-checked time, average latency, liveness dot. */
+/** Top-bar status: latest block, last-checked time, average latency, liveness dot. */
 import { useEffect, useState } from 'react';
 
 interface Props {
@@ -28,7 +28,7 @@ export function LatencyBadge({ latencyMs, blockNumber, lastChecked }: Props) {
       : `${Math.floor(ageMs / 1000)}s ago`;
 
   return (
-    <div className="latency-strip">
+    <div className="topbar-status">
       <div className="item">
         <span className="label">Latest block</span>
         <span className="value">
