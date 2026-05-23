@@ -50,6 +50,19 @@ function LatencyChart({ points }: { points: LatencyPoint[] }) {
   );
 }
 
+/**
+ * Realtime subscription states. `CONNECTING` is the local pre-callback state;
+ * the rest mirror Supabase's REALTIME_SUBSCRIBE_STATES enum verbatim.
+ */
+type RealtimeStatus = 'CONNECTING' | 'SUBSCRIBED' | 'CLOSED' | 'CHANNEL_ERROR' | 'TIMED_OUT';
+
+/** Human-readable banner copy per failure mode. */
+const REALTIME_BANNER_COPY: Record<Exclude<RealtimeStatus, 'CONNECTING' | 'SUBSCRIBED'>, string> = {
+  CLOSED: 'Realtime channel closed — attempting to reconnect.',
+  CHANNEL_ERROR: 'Realtime channel error — reconnecting. Data shown may be stale.',
+  TIMED_OUT: 'Realtime channel timed out — reconnecting. Data shown may be stale.',
+};
+
 export function App() {
   const [latestBlock, setLatestBlock] = useState<number | null>(null);
   const [invariantStatus, setInvariantStatus] = useState<Record<string, boolean | null>>(
@@ -58,24 +71,32 @@ export function App() {
   const [alerts, setAlerts] = useState<AlertRow[]>([]);
   const [latencyHistory, setLatencyHistory] = useState<LatencyPoint[]>([]);
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
+  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>('CONNECTING');
+  const [initialLoadError, setInitialLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
     async function load(): Promise<void> {
-      const { data: recentAlerts } = await supabase
+      const { data: recentAlerts, error: alertsError } = await supabase
         .from('alerts')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(50);
 
-      const { data: recentBlocks } = await supabase
+      const { data: recentBlocks, error: blocksError } = await supabase
         .from('blocks_checked')
         .select('*')
         .order('checked_at', { ascending: false })
         .limit(100);
 
       if (cancelled) return;
+
+      if (alertsError || blocksError) {
+        setInitialLoadError((alertsError ?? blocksError)?.message ?? 'unknown error');
+        return;
+      }
+      setInitialLoadError(null);
 
       const alertRows = (recentAlerts ?? []) as AlertRow[];
       setAlerts(alertRows);
@@ -141,7 +162,14 @@ export function App() {
           if (row.all_passed) setInvariantStatus(allInvariants(true));
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        // Supabase's underlying socket auto-reconnects, so transitioning
+        // CLOSED → SUBSCRIBED happens without manual re-subscribe. Surfacing
+        // the state to the user is the missing piece; the banner below
+        // renders when status is anything other than SUBSCRIBED so a real
+        // outage is honest about itself instead of showing as silence.
+        setRealtimeStatus(status as RealtimeStatus);
+      });
 
     return () => {
       cancelled = true;
@@ -155,6 +183,11 @@ export function App() {
     return last.reduce((sum, p) => sum + p.latencyMs, 0) / last.length;
   }, [latencyHistory]);
 
+  const bannerCopy =
+    realtimeStatus === 'CLOSED' || realtimeStatus === 'CHANNEL_ERROR' || realtimeStatus === 'TIMED_OUT'
+      ? REALTIME_BANNER_COPY[realtimeStatus]
+      : null;
+
   return (
     <div className="app">
       <header className="topbar">
@@ -164,6 +197,19 @@ export function App() {
         <LatencyBadge latencyMs={avgLatency} blockNumber={latestBlock} lastChecked={lastChecked} />
         <span className="vault">{VAULT_ADDRESS}</span>
       </header>
+
+      {initialLoadError && (
+        <div className="realtime-banner" role="alert">
+          <span className="dot" aria-hidden />
+          Could not load history from Supabase ({initialLoadError}). Live updates may still arrive.
+        </div>
+      )}
+      {!initialLoadError && bannerCopy && (
+        <div className="realtime-banner" role="status">
+          <span className="dot" aria-hidden />
+          {bannerCopy}
+        </div>
+      )}
 
       <main className="board">
         {/* Column 1 — assurance score (fixed) over invariant health (fills). */}

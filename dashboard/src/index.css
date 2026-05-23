@@ -292,6 +292,38 @@ button:focus-visible {
   }
 }
 
+/* Realtime-feed status banner — renders between the top bar and the main
+   board only when the Supabase channel is in CLOSED/CHANNEL_ERROR/TIMED_OUT
+   (or the initial history load errored). Silence is the right signal when
+   things are healthy, so this rule does nothing in the SUBSCRIBED state. */
+.realtime-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--s-xs);
+  padding: var(--s-xs) var(--s-md);
+  background: var(--red-dim);
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 500;
+  border-bottom: 1px solid rgba(229, 72, 77, 0.25);
+}
+.realtime-banner .dot {
+  background: var(--red);
+  animation: pulse-red 1.6s infinite;
+}
+
+@keyframes pulse-red {
+  0% {
+    box-shadow: 0 0 0 0 rgba(229, 72, 77, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(229, 72, 77, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(229, 72, 77, 0);
+  }
+}
+
 /* ---------- Invariant health cards ---------- */
 .invariant-grid {
   flex: 1;
