@@ -10,6 +10,8 @@
  *   - RPC circuit breaker: opens after BREAKER_OPEN_AT consecutive block-check
  *     failures, suppresses fetches while open, probes the RPC every
  *     BREAKER_PROBE_INTERVAL_MS, closes after two consecutive probe successes.
+ *   - DB-insert escalation lives in router.ts and reports through the same
+ *     shared GuardianState.
  */
 import 'dotenv/config';
 import { createPublicClient, webSocket, type Chain, type PublicClient } from 'viem';
@@ -113,8 +115,8 @@ async function main(): Promise<void> {
   const supabase = createClient(config.supabaseUrl, config.supabaseKey);
 
   // Shared mutable state — every counter and gauge the health server exposes
-  // lives here; bot.ts mutates it in place. Created before the preflight so
-  // its observability is live even during slow startups.
+  // lives here; bot.ts + router.ts mutate it in place. Created before the
+  // preflight so its observability is live even during slow startups.
   const state: GuardianState = createGuardianState({
     blockPollIntervalMs: config.blockPollIntervalMs,
     maxHealthyBlocks: ops.maxHealthyBlocks,
@@ -282,6 +284,7 @@ async function main(): Promise<void> {
           violationsCount: violations.length,
         },
         logger,
+        state,
       );
 
       if (violations.length > 0) {
@@ -305,7 +308,7 @@ async function main(): Promise<void> {
           detectionLatencyMs,
         };
 
-        await logAlertToSupabase(supabase, payload, logger);
+        await logAlertToSupabase(supabase, payload, logger, state);
       } else {
         logger.debug(
           { block: blockNumber.toString(), allPassed: true, detectionLatencyMs },
