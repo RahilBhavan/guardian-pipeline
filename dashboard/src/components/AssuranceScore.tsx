@@ -49,7 +49,7 @@ export function AssuranceScore({ report }: { report: AssuranceReport }) {
 
   return (
     <section className="panel assurance-panel">
-      <div className="panel-title">Assurance Score · continuous multi-layered verification</div>
+      <div className="panel-title">Assurance Methodology Coverage (AMC) · self-graded methodology rigor</div>
 
       <div className="assurance-hero">
         <div className="score-readout">

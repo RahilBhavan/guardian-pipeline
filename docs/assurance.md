@@ -1,9 +1,16 @@
 # The assurance layer
 
 A point-in-time audit produces a static document that is stale the moment it is
-signed. Guardian Pipeline produces a **self-computed Assurance Score** —
-recomputed by the `assurance` CI job on every commit — that summarises how
-well the contract is covered by the repository's own pre-deployment evidence.
+signed. Guardian Pipeline produces an **Assurance Methodology Coverage (AMC)
+score** — recomputed by the `assurance` CI job on every commit — that
+quantifies *how rigorously the project's verification methodology has been
+applied to this contract*. It is **not** a measure of how secure the code is.
+A high AMC says "the methodology has been executed end-to-end"; it does not
+say "the code is safe." Earlier revisions called this the "Assurance Score";
+AMC is the more honest name, and the existing JSON / CLI fields keep their
+current keys for backwards compatibility (an AMC of 91 is exactly the same
+number a prior reader would have called an Assurance Score of 91).
+
 "Self-computed" is load-bearing: see [What this score is **not**](#what-this-score-is-not)
 before reading the headline number.
 
@@ -20,10 +27,11 @@ README](../README.md#references).
 
 ---
 
-## The Assurance Score
+## The AMC score
 
 A composite 0–100 metric, the weighted average of three **pre-deployment**
-components — every input is evidence the repository produces on its own in CI:
+components — every input is evidence the repository produces on its own in CI.
+The number summarises methodology coverage; it does not summarise security:
 
 | Component | Weight | Measures | Source |
 |-----------|--------|----------|--------|
