@@ -316,10 +316,12 @@ contract Vault is ReentrancyGuard {
     ///         cap at the current oracle price. If the seizure would consume
     ///         all of the borrower's collateral, the liquidator must repay the
     ///         *entire* debt — this is what keeps INV-06 (no uncollateralised
-    ///         debt) true.
+    ///         debt) true. Marked `virtual` so the INV-08 mutant subclass
+    ///         can overpay the seizeCollateral computation and prove the
+    ///         no-free-lunch invariant catches it.
     /// @param borrower The under-water position to liquidate.
     /// @param amount   Debt the liquidator offers to repay; clamped to the debt.
-    function liquidate(address borrower, uint256 amount) external nonReentrant {
+    function liquidate(address borrower, uint256 amount) external virtual nonReentrant {
         accrue();
 
         uint256 debt = userDebt(borrower);

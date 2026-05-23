@@ -266,6 +266,24 @@ contract InvariantVault is Test {
         );
     }
 
+    /// @notice INV-08 No-free-lunch on liquidation — every liquidation
+    ///         seizes collateral whose oracle-priced value is at most
+    ///         `paid * (BPS + bonus) / BPS` debt-asset units.
+    /// @dev    {LiquidateHandler} cross-checks the bound at call time and
+    ///         increments {LiquidateHandler.liquidationsViolatedINV08} on
+    ///         any breach. The invariant just asserts that counter is zero.
+    ///         A mutation that doubled the seize amount — or dropped the
+    ///         `/ BPS` denominator — would push every partial-close call
+    ///         into the counter and fail the invariant on the next tick.
+    ///         Proven load-bearing by `test/mutant/MutantINV08.t.sol`.
+    function invariant_liquidationNoFreeLunch() public view {
+        assertEq(
+            liquidateHandler.liquidationsViolatedINV08(),
+            0,
+            "INV-08: a liquidation extracted more collateral value than the bonus permits"
+        );
+    }
+
     /// @notice INV-12 Accrue idempotence — calling accrue() twice within the
     ///         same block produces byte-identical state.
     /// @dev    Tensioned by the `if (dt == 0) return;` guard in

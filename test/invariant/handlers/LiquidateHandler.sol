@@ -18,10 +18,21 @@ import {MockERC20} from "../../../src/MockERC20.sol";
 contract LiquidateHandler is HandlerBase {
     uint256 public liquidateCalls;
 
+    /// @notice Count of liquidations that violated INV-08's per-call bound
+    ///         `seized * price * BPS <= paid * (BPS + bonus) * WAD`. Read
+    ///         by {InvariantVault.invariant_liquidationNoFreeLunch}.
+    uint256 public liquidationsViolatedINV08;
+
     constructor(Vault v, MockERC20 d, MockERC20 c) HandlerBase(v, d, c) {}
 
     /// @notice Fuzz entrypoint: a pseudo-random liquidator clears a bounded
     ///         slice of a pseudo-random borrower's debt.
+    /// @dev    Snapshots the liquidator's debt-asset and collateral-asset
+    ///         balances around the call so the realised `paid` and `seized`
+    ///         deltas can be cross-checked against the bonus formula. A
+    ///         seize that exceeds `paid * (BPS + bonus) / BPS` in
+    ///         debt-asset terms is recorded in {liquidationsViolatedINV08}
+    ///         and surfaces on the next invariant tick.
     function liquidate(uint256 liqSeed, uint256 borrowerSeed, uint256 amountSeed) external {
         address liquidator = _pickActor(liqSeed);
         address borrower = _pickActor(borrowerSeed);
@@ -31,9 +42,26 @@ contract LiquidateHandler is HandlerBase {
 
         uint256 amount = bound(amountSeed, 1, maxPay);
 
+        uint256 debtBefore = DEBT.balanceOf(liquidator);
+        uint256 colBefore = COLLATERAL.balanceOf(liquidator);
+        uint256 price = VAULT.oracle().price();
+
         vm.prank(liquidator);
         VAULT.liquidate(borrower, amount);
         liquidateCalls++;
+
+        uint256 paid = debtBefore - DEBT.balanceOf(liquidator);
+        uint256 seized = COLLATERAL.balanceOf(liquidator) - colBefore;
+
+        // INV-08: seized * price / WAD <= paid * (BPS + bonus) / BPS.
+        // Multiply through to avoid the inner floor:
+        //   seized * price * BPS  <=  paid * (BPS + bonus) * WAD.
+        uint256 bps = VAULT.BPS();
+        uint256 bonus = VAULT.liquidationBonus();
+        uint256 wad = VAULT.WAD();
+        if (seized * price * bps > paid * (bps + bonus) * wad) {
+            liquidationsViolatedINV08++;
+        }
     }
 
     /// @notice The largest debt-asset amount the liquidator can repay against
