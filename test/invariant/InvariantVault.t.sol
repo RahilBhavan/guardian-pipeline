@@ -75,6 +75,13 @@ contract InvariantVault is Test {
     ///         assert {invariant_solvencyMonotone}.
     uint256 internal priorSolvencyMargin;
 
+    /// @notice Last-seen `userBorrowShares` per actor — paired with
+    ///         {priorUserDebt} to assert {invariant_debtMonotoneUnderAccrual}.
+    mapping(address => uint256) internal priorBorrowShares;
+    /// @notice Last-seen `userDebt` per actor — only enforced when the
+    ///         actor's borrow-share count did not change between snapshots.
+    mapping(address => uint256) internal priorUserDebt;
+
     /// @notice Demo seed price for the campaign: 1 collateral == 2,000 debt
     ///         units, matching the MockOracle deployed by the scripts.
     uint256 internal constant INITIAL_PRICE = 2_000e18;
@@ -201,6 +208,38 @@ contract InvariantVault is Test {
             "INV-07: solvency margin shrank between calls"
         );
         priorSolvencyMargin = current;
+    }
+
+    /// @notice INV-09 Per-position debt monotonicity under accrual — any
+    ///         borrower whose `userBorrowShares` did not change between
+    ///         consecutive invariant snapshots has a `userDebt` that did
+    ///         not decrease.
+    /// @dev    Debt is `userBorrowShares * borrowIndex / WAD`. The only
+    ///         legitimate way for debt to fall while shares stay flat is
+    ///         for `borrowIndex` to fall — which the real Vault never
+    ///         allows (accrue only adds). A mutation that flipped the sign
+    ///         of the index update — or applied a "negative rate" — would
+    ///         decrease `userDebt` without touching shares, and this
+    ///         invariant would fire. Proven load-bearing by
+    ///         `test/mutant/MutantINV09.t.sol`.
+    function invariant_debtMonotoneUnderAccrual() public {
+        address[] memory actors = depositHandler.getActors();
+        for (uint256 i = 0; i < actors.length; i++) {
+            address actor = actors[i];
+            uint256 sharesNow = vault.userBorrowShares(actor);
+            uint256 debtNow = vault.userDebt(actor);
+
+            if (sharesNow == priorBorrowShares[actor]) {
+                assertGe(
+                    debtNow,
+                    priorUserDebt[actor],
+                    "INV-09: userDebt decreased while userBorrowShares was flat"
+                );
+            }
+
+            priorBorrowShares[actor] = sharesNow;
+            priorUserDebt[actor] = debtNow;
+        }
     }
 
     /// @notice INV-12 Accrue idempotence — calling accrue() twice within the
