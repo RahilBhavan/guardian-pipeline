@@ -16,11 +16,13 @@ import {MockERC20} from "../src/MockERC20.sol";
 ///         - `ATTACKER_ADDRESS` (required) — address allowed to call attack().
 ///         - `TOKEN_ADDRESS`    (optional) — reuse an existing ERC-20.
 ///         - `APR_BPS`          (optional) — borrow APR in bps, default 1000.
+///         - `LIQ_BONUS_BPS`    (optional) — liquidation bonus in bps, default 500.
 contract DeployVault is Script {
     function run() external {
         address attacker = vm.envAddress("ATTACKER_ADDRESS");
         address token = vm.envOr("TOKEN_ADDRESS", address(0));
         uint256 aprBps = vm.envOr("APR_BPS", uint256(10_00));
+        uint256 liquidationBonus = vm.envOr("LIQ_BONUS_BPS", uint256(5_00));
 
         vm.startBroadcast();
 
@@ -30,11 +32,12 @@ contract DeployVault is Script {
             console.log("MockERC20 deployed at:", token);
         }
 
-        AttackableVault vault = new AttackableVault(token, aprBps, attacker);
+        AttackableVault vault = new AttackableVault(token, aprBps, liquidationBonus, attacker);
         console.log("AttackableVault deployed at:", address(vault));
-        console.log("  token:   ", token);
-        console.log("  aprBps:  ", aprBps);
-        console.log("  attacker:", attacker);
+        console.log("  token:           ", token);
+        console.log("  aprBps:          ", aprBps);
+        console.log("  liquidationBonus:", liquidationBonus);
+        console.log("  attacker:        ", attacker);
 
         vm.stopBroadcast();
     }

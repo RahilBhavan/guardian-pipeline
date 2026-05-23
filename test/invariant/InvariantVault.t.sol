@@ -57,7 +57,7 @@ contract InvariantVault is Test {
 
     function setUp() public {
         token = new MockERC20();
-        vault = new Vault(address(token), 10_00); // 10% APR
+        vault = new Vault(address(token), 10_00, 5_00); // 10% APR, 5% liquidation bonus
 
         depositHandler = new DepositHandler(vault, token);
         borrowHandler = new BorrowHandler(vault, token);

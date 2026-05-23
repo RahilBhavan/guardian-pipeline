@@ -100,14 +100,25 @@ contract Vault is ReentrancyGuard {
     error NoDebt();
     error PositionHealthy();
     error MustClearDebt();
+    error InvalidLiquidationBonus();
 
-    /// @param _token  Address of the ERC-20 asset handled by the vault.
-    /// @param _aprBps Annual borrow rate in basis points (e.g. 1000 == 10% APR).
-    constructor(address _token, uint256 _aprBps) {
+    /// @param _token            Address of the ERC-20 asset handled by the vault.
+    /// @param _aprBps           Annual borrow rate in basis points (e.g. 1000 == 10% APR).
+    /// @param _liquidationBonus Extra collateral seized by liquidators, in basis
+    ///                          points. Must be in `(0, 50_00]` — i.e. strictly
+    ///                          positive and no more than 50%. A zero bonus
+    ///                          removes the liquidator's incentive to clear
+    ///                          under-water positions; a bonus above 50% lets a
+    ///                          single liquidation seize disproportionate
+    ///                          collateral relative to the debt repaid.
+    constructor(address _token, uint256 _aprBps, uint256 _liquidationBonus) {
+        if (_liquidationBonus == 0 || _liquidationBonus > 50_00) {
+            revert InvalidLiquidationBonus();
+        }
         token = IERC20(_token);
         borrowRatePerSecond = (_aprBps * WAD) / BPS / SECONDS_PER_YEAR;
         collateralRatio = 80_00; // 80%
-        liquidationBonus = 5_00; // 5%
+        liquidationBonus = _liquidationBonus;
         borrowIndex = WAD;
         lastAccrualTime = block.timestamp;
     }
