@@ -4,6 +4,14 @@
  * Subscribes to new Base L2 blocks, fetches vault state, evaluates all six
  * invariants, and persists any violation to Supabase — typically within one
  * block (~2s) of the breach — where the dashboard surfaces it in real time.
+ *
+ * Operational surface:
+ *   - /healthz + /metrics on HEALTH_PORT (see health.ts).
+ *   - RPC circuit breaker: opens after BREAKER_OPEN_AT consecutive block-check
+ *     failures, suppresses fetches while open, probes the RPC every
+ *     BREAKER_PROBE_INTERVAL_MS, closes after two consecutive probe successes.
+ *   - DB-insert escalation lives in router.ts and reports through the same
+ *     shared GuardianState.
  */
 import 'dotenv/config';
 import { createPublicClient, webSocket, type Chain, type PublicClient } from 'viem';
@@ -13,6 +21,7 @@ import { createClient } from '@supabase/supabase-js';
 import { discoverUsers, fetchVaultState } from './fetcher.js';
 import { evaluateInvariants } from './evaluator.js';
 import { logAlertToSupabase, logBlockCheck } from './router.js';
+import { createGuardianState, startHealthServer, type GuardianState } from './health.js';
 import type { AlertPayload, BotConfig } from './types.js';
 
 const logger = pino({
@@ -69,8 +78,28 @@ function loadConfig(): BotConfig {
   };
 }
 
+/**
+ * Operational env knobs not exposed on BotConfig — they only matter to the
+ * runtime surface (health server + circuit breaker), not to the on-chain or
+ * persistence layer.
+ */
+function loadOpsConfig(): {
+  healthPort: number;
+  maxHealthyBlocks: number;
+  breakerOpenAt: number;
+  breakerProbeIntervalMs: number;
+} {
+  return {
+    healthPort: Number(process.env.HEALTH_PORT ?? 9090),
+    maxHealthyBlocks: Number(process.env.MAX_HEALTHY_BLOCKS ?? 30),
+    breakerOpenAt: Number(process.env.BREAKER_OPEN_AT ?? 10),
+    breakerProbeIntervalMs: Number(process.env.BREAKER_PROBE_INTERVAL_MS ?? 30_000),
+  };
+}
+
 async function main(): Promise<void> {
   const config = loadConfig();
+  const ops = loadOpsConfig();
   logger.info(
     { chain: config.chain, vault: config.vaultAddress, supabaseAuth: 'service-role' },
     'Guardian starting',
@@ -84,6 +113,16 @@ async function main(): Promise<void> {
   });
 
   const supabase = createClient(config.supabaseUrl, config.supabaseKey);
+
+  // Shared mutable state — every counter and gauge the health server exposes
+  // lives here; bot.ts + router.ts mutate it in place. Created before the
+  // preflight so its observability is live even during slow startups.
+  const state: GuardianState = createGuardianState({
+    blockPollIntervalMs: config.blockPollIntervalMs,
+    maxHealthyBlocks: ops.maxHealthyBlocks,
+  });
+
+  const healthServer = await startHealthServer(state, logger, ops.healthPort);
 
   // Preflight — fail fast (or warn loudly) instead of logging an obscure error
   // on every block when the RPC, vault address, or database is misconfigured.
@@ -125,15 +164,90 @@ async function main(): Promise<void> {
   // until a milestone is hit. On the first success after a failure run, log a
   // recovery line so the operator sees the gap closed.
   const FAILURE_ESCALATION_THRESHOLDS = new Set([1, 5, 25, 100, 500]);
-  let consecutiveFailures = 0;
+
+  // ---- Circuit breaker ----------------------------------------------------
+  //
+  // Once block-check failures cross `breakerOpenAt`, open the breaker: the
+  // block subscription stops calling fetch/evaluate and we instead poll a
+  // single cheap RPC call (`getBlockNumber`) every `probeIntervalMs`. Two
+  // consecutive successful probes close the breaker; one failure resets the
+  // success count. Only one probe is in flight at a time. While open, the
+  // bot does not spam a dead RPC every block — the SRE called that out as
+  // the headline missing behaviour and it is mirrored in `breakerState`.
+  let probing = false;
+  let probeTimer: NodeJS.Timeout | null = null;
+  let probeSuccesses = 0;
+
+  function openBreaker(reason: 'failure_threshold' | 'probe_failed'): void {
+    if (state.breakerState === 'open') return;
+    state.breakerState = 'open';
+    state.circuitBreakerOpen = 1;
+    probeSuccesses = 0;
+    logger.error(
+      {
+        reason,
+        consecutiveFailures: state.consecutiveBlockCheckFailures,
+        probeIntervalMs: ops.breakerProbeIntervalMs,
+      },
+      'RPC circuit breaker OPEN — block checks suppressed; probing for recovery',
+    );
+    scheduleProbe();
+  }
+
+  function closeBreaker(): void {
+    if (state.breakerState === 'closed') return;
+    state.breakerState = 'closed';
+    state.circuitBreakerOpen = 0;
+    probeSuccesses = 0;
+    if (probeTimer) {
+      clearTimeout(probeTimer);
+      probeTimer = null;
+    }
+    logger.info('RPC circuit breaker CLOSED — resuming normal block checks');
+  }
+
+  function scheduleProbe(): void {
+    if (probeTimer) return;
+    probeTimer = setTimeout(() => {
+      probeTimer = null;
+      void probeRpc();
+    }, ops.breakerProbeIntervalMs);
+  }
+
+  async function probeRpc(): Promise<void> {
+    if (probing || state.breakerState === 'closed') return;
+    probing = true;
+    try {
+      await client.getBlockNumber();
+      probeSuccesses += 1;
+      logger.info({ probeSuccesses }, 'Circuit-breaker probe succeeded');
+      if (probeSuccesses >= 2) {
+        closeBreaker();
+        return;
+      }
+    } catch (err) {
+      probeSuccesses = 0;
+      logger.warn({ err }, 'Circuit-breaker probe failed — staying open');
+    } finally {
+      probing = false;
+    }
+    if (state.breakerState === 'open') scheduleProbe();
+  }
 
   async function onBlock(blockNumber: bigint): Promise<void> {
+    // Breaker open — do not hammer the RPC. The probe loop is the only
+    // outbound RPC traffic until it closes.
+    if (state.breakerState === 'open') {
+      logger.debug({ block: blockNumber.toString() }, 'Skipping block — circuit breaker open');
+      return;
+    }
     if (checking) {
       logger.debug({ block: blockNumber.toString() }, 'Skipping block — previous check still running');
       return;
     }
     checking = true;
     const startedAt = Date.now();
+    state.blockChecksTotal += 1;
 
     try {
       // Pick up any accounts that appeared since the last checked block.
@@ -148,14 +262,14 @@ async function main(): Promise<void> {
         lastScannedBlock = blockNumber;
       }
 
-      const state = await fetchVaultState(
+      const vaultState = await fetchVaultState(
         client,
         config.vaultAddress,
         config.tokenAddress,
         blockNumber,
         [...knownUsers],
       );
-      const results = evaluateInvariants(state);
+      const results = evaluateInvariants(vaultState);
       const violations = results.filter((r) => !r.passed);
       const detectionLatencyMs = Date.now() - startedAt;
 
@@ -170,6 +284,7 @@ async function main(): Promise<void> {
           violationsCount: violations.length,
         },
         logger,
+        state,
       );
 
       if (violations.length > 0) {
@@ -182,16 +297,18 @@ async function main(): Promise<void> {
           'INVARIANT VIOLATION DETECTED',
         );
 
+        for (const v of violations) state.violationsDetectedTotal[v.id] += 1;
+
         const payload: AlertPayload = {
           vaultAddress: config.vaultAddress,
           blockNumber,
-          timestamp: state.blockTimestamp,
+          timestamp: vaultState.blockTimestamp,
           violations,
           detectedAt: Date.now(),
           detectionLatencyMs,
         };
 
-        await logAlertToSupabase(supabase, payload, logger);
+        await logAlertToSupabase(supabase, payload, logger, state);
       } else {
         logger.debug(
           { block: blockNumber.toString(), allPassed: true, detectionLatencyMs },
@@ -199,25 +316,37 @@ async function main(): Promise<void> {
         );
       }
 
-      // Successful check — if we were in a failure run, surface that we recovered.
-      if (consecutiveFailures > 0) {
+      // Success: update health gauges and reset failure counters.
+      state.blockCheckLatencyMs = detectionLatencyMs;
+      state.lastBlockChecked = Number(blockNumber);
+      state.lastBlockCheckedAt = new Date().toISOString();
+
+      if (state.consecutiveBlockCheckFailures > 0) {
         logger.info(
-          { recoveredAfter: consecutiveFailures, block: blockNumber.toString() },
+          {
+            recoveredAfter: state.consecutiveBlockCheckFailures,
+            block: blockNumber.toString(),
+          },
           'Block checks recovered after consecutive failures',
         );
-        consecutiveFailures = 0;
+        state.consecutiveBlockCheckFailures = 0;
       }
     } catch (err) {
-      consecutiveFailures += 1;
-      const escalate = FAILURE_ESCALATION_THRESHOLDS.has(consecutiveFailures);
-      const fields = { err, block: blockNumber.toString(), consecutiveFailures };
+      state.consecutiveBlockCheckFailures += 1;
+      state.blockChecksFailedTotal += 1;
+      const n = state.consecutiveBlockCheckFailures;
+      const escalate = FAILURE_ESCALATION_THRESHOLDS.has(n);
+      const fields = { err, block: blockNumber.toString(), consecutiveFailures: n };
       if (escalate) {
         logger.error(
           fields,
-          `Block check failed (${consecutiveFailures} consecutive — investigate RPC/network)`,
+          `Block check failed (${n} consecutive — investigate RPC/network)`,
         );
       } else {
         logger.debug(fields, 'Block check failed');
+      }
+      if (n >= ops.breakerOpenAt && state.breakerState === 'closed') {
+        openBreaker('failure_threshold');
       }
     } finally {
       checking = false;
@@ -235,10 +364,24 @@ async function main(): Promise<void> {
 
   logger.info('Guardian live — watching Base blocks');
 
+  let shuttingDown = false;
   const shutdown = (signal: string): void => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     logger.info({ signal }, 'Guardian shutting down');
+    if (probeTimer) {
+      clearTimeout(probeTimer);
+      probeTimer = null;
+    }
     unwatch();
-    process.exit(0);
+    // Close health server first so probes stop hitting a daemon that is
+    // tearing down its RPC client.
+    healthServer.close(() => {
+      process.exit(0);
+    });
+    // Belt-and-braces: if close() hangs (held-open keep-alive sockets), exit
+    // after a short grace period.
+    setTimeout(() => process.exit(0), 2_000).unref();
   };
   process.on('SIGINT', () => shutdown('SIGINT'));
   process.on('SIGTERM', () => shutdown('SIGTERM'));

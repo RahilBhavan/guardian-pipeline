@@ -2,13 +2,19 @@
  * router.ts — persists alerts and block-checks to Supabase.
  *
  * Every database call retries on transient failure (exponential backoff, four
- * attempts) before giving up, then logs at error level and returns — an outage
- * never crashes the Guardian. A monitor that dies on its own alert path is
- * worse than no monitor at all, but one that silently drops every alert
- * during a 30-second blip is almost as bad — the retries cover that gap.
+ * attempts) before giving up. After retry exhaustion the failure is
+ * **escalated** through the shared {@link GuardianState}: the
+ * `consecutiveInsertFailures` gauge is bumped, the `alertInsertFailedTotal`
+ * counter is incremented (only for alert inserts), and on threshold milestones
+ * (1, 5, 25, 100, 500) a loud error is emitted so operators see a persistent
+ * DB outage without log-tailing. On the first success after a failure run the
+ * counter resets and a recovery line is logged. The bot itself does not crash
+ * on a DB outage — a monitor that dies on its own alert path is worse than
+ * one that escalates loudly and keeps watching.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Logger } from 'pino';
+import type { GuardianState } from './health.js';
 import type { AlertPayload, InvariantResult } from './types.js';
 
 /**
@@ -18,6 +24,14 @@ import type { AlertPayload, InvariantResult } from './types.js';
  */
 const INSERT_ATTEMPTS = 4;
 const INSERT_BASE_BACKOFF_MS = 200;
+
+/**
+ * Re-log a persistent DB outage at error level on these consecutive-failure
+ * counts — first failure is loud, subsequent failures stay quieter at the
+ * `warn` level used inside the retry loop until a milestone is hit. Mirrors
+ * the cadence used for block-check failures in `bot.ts`.
+ */
+const INSERT_FAILURE_ESCALATION_THRESHOLDS = new Set([1, 5, 25, 100, 500]);
 
 /** Promise-based sleep. */
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -57,14 +71,59 @@ async function insertWithRetry(
 }
 
 /**
+ * Record an insert outcome on the shared state and emit the appropriate log
+ * line. Mutates `state.consecutiveInsertFailures`. The caller has already
+ * logged the per-attempt warnings; this is the cross-call summary that lets
+ * operators see whether the outage is transient or sustained.
+ */
+function recordInsertOutcome(
+  state: GuardianState,
+  logger: Logger,
+  outcome: { ok: boolean; error?: unknown },
+  context: { label: string; block?: bigint; count?: number },
+): void {
+  if (outcome.ok) {
+    if (state.consecutiveInsertFailures > 0) {
+      logger.info(
+        { label: context.label, recoveredAfter: state.consecutiveInsertFailures },
+        'Supabase inserts recovered after consecutive failures',
+      );
+      state.consecutiveInsertFailures = 0;
+    }
+    return;
+  }
+
+  state.consecutiveInsertFailures += 1;
+  const n = state.consecutiveInsertFailures;
+  const escalate = INSERT_FAILURE_ESCALATION_THRESHOLDS.has(n);
+  const fields = {
+    err: outcome.error,
+    label: context.label,
+    consecutiveInsertFailures: n,
+    block: context.block?.toString(),
+    count: context.count,
+  };
+  if (escalate) {
+    logger.error(
+      fields,
+      `Supabase ${context.label} insert giving up — ${n} consecutive failures (DB outage suspected)`,
+    );
+  } else {
+    logger.warn(fields, `Supabase ${context.label} insert giving up — retries exhausted`);
+  }
+}
+
+/**
  * Insert one row per violation into the `alerts` table, retrying on transient
- * failure. After all retries are exhausted the error is logged and swallowed
- * so the Guardian keeps watching subsequent blocks.
+ * failure. After all retries are exhausted the failure is escalated through
+ * the shared state (counter + gauge + threshold log line) but never thrown —
+ * the Guardian keeps watching subsequent blocks.
  */
 export async function logAlertToSupabase(
   supabase: SupabaseClient,
   payload: AlertPayload,
   logger: Logger,
+  state: GuardianState,
 ): Promise<void> {
   const rows = payload.violations.map((v: InvariantResult) => ({
     vault: payload.vaultAddress,
@@ -87,19 +146,24 @@ export async function logAlertToSupabase(
   if (result.ok) {
     logger.info({ count: rows.length }, 'Alert rows written to Supabase');
   } else {
-    logger.error(
-      { err: result.error, count: rows.length, block: payload.blockNumber.toString() },
-      'Gave up writing alert rows after all retries — alerts lost for this block',
-    );
+    // Alerts are the load-bearing write — separate counter so dashboards can
+    // alarm specifically on dropped alerts (vs. lost liveness rows).
+    state.alertInsertFailedTotal += 1;
   }
+  recordInsertOutcome(state, logger, result, {
+    label: 'alerts',
+    block: payload.blockNumber,
+    count: rows.length,
+  });
 }
 
 /**
- * Insert one row into `blocks_checked` for every block the Guardian inspects —
+ * Insert exactly one row into `blocks_checked` for every inspected block —
  * this feeds the dashboard's latency history and liveness indicator. Retries
- * on transient failure; logs at error level and returns if all retries are
- * exhausted. A gap in `blocks_checked` will surface to the dashboard as
- * stale-timestamp liveness loss, which is the correct user-visible signal.
+ * on transient failure; on exhaustion the failure is escalated through the
+ * shared state. A gap in `blocks_checked` will also surface to the dashboard
+ * as a stale-timestamp liveness loss, which is the correct user-visible
+ * signal even if our logs are not being read.
  */
 export async function logBlockCheck(
   supabase: SupabaseClient,
@@ -111,6 +175,7 @@ export async function logBlockCheck(
     violationsCount: number;
   },
   logger: Logger,
+  state: GuardianState,
 ): Promise<void> {
   const row = {
     vault: params.vaultAddress,
@@ -124,10 +189,8 @@ export async function logBlockCheck(
     'blocks_checked',
     logger,
   );
-  if (!result.ok) {
-    logger.error(
-      { err: result.error, block: params.blockNumber.toString() },
-      'Gave up writing blocks_checked row after all retries',
-    );
-  }
+  recordInsertOutcome(state, logger, result, {
+    label: 'blocks_checked',
+    block: params.blockNumber,
+  });
 }

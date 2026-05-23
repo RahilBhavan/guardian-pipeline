@@ -256,6 +256,85 @@ Shared interfaces only — no logic.
 
 ---
 
+## Operational surface — `/healthz`, `/metrics`, circuit breaker
+
+The bot exposes a small HTTP server on `HEALTH_PORT` (default `9090`,
+`0.0.0.0`) for ops integration. It uses the Node built-in `http` module — no
+new dependency.
+
+### `GET /healthz`
+
+Liveness/readiness probe. Returns **200 OK** with JSON when the bot is
+healthy, **503 Service Unavailable** otherwise.
+
+```json
+{
+  "status": "ok",
+  "lastBlockCheckedAt": "2026-05-23T12:34:56.000Z",
+  "lastBlockCheckedNumber": 12345678,
+  "consecutiveFailures": 0,
+  "breakerState": "closed"
+}
+```
+
+Unhealthy if either:
+- `breakerState === "open"` (RPC failures opened the circuit breaker), or
+- the last block check is older than `BLOCK_POLL_INTERVAL_MS * 2 *
+  MAX_HEALTHY_BLOCKS` (default 120s).
+
+### `GET /metrics`
+
+Prometheus exposition format (`text/plain; version=0.0.4`). Counters:
+`guardian_block_checks_total`, `guardian_block_checks_failed_total`,
+`guardian_violations_detected_total{invariant_id}`,
+`guardian_alert_insert_failed_total`. Gauges:
+`guardian_block_check_latency_ms`,
+`guardian_consecutive_block_check_failures`,
+`guardian_consecutive_insert_failures`, `guardian_circuit_breaker_open`,
+`guardian_last_block_checked`.
+
+### RPC circuit breaker
+
+After `BREAKER_OPEN_AT` (default 10) consecutive block-check failures the
+breaker opens: the block subscription stops calling `fetchVaultState` and
+the bot instead probes a single cheap RPC call (`getBlockNumber`) every
+`BREAKER_PROBE_INTERVAL_MS` (default 30 s). Two consecutive successful
+probes close the breaker and resume normal operation. Only one probe is in
+flight at a time. The breaker prevents the bot from hammering a dead RPC
+every block while still recovering automatically.
+
+### DB-insert escalation
+
+Persistent Supabase insert failures (after retries are exhausted) escalate
+through the same shared state at the cadence `{1, 5, 25, 100, 500}` — first
+failure is loud, subsequent failures stay quiet until a milestone is hit.
+Recovery is logged on the first success. `guardian_alert_insert_failed_total`
+is incremented separately so dashboards can alarm on dropped alerts vs. lost
+liveness rows.
+
+---
+
+## Production-readiness gaps
+
+The bot is a **reference implementation**, not a hosted production
+service. The following are intentionally **not** built — they are the
+natural next steps for anyone deploying it for real:
+
+- **No Sentry / OpenTelemetry integration.** The observability surface is
+  structured `pino` logs to stdout plus the `/metrics` scrape. Wiring up an
+  external error-tracker or trace exporter is straightforward but out of
+  scope for the demo build (no accounts to integrate against).
+- **No mainnet load benchmark.** The bot is tested against Base Sepolia,
+  not benchmarked against a busy mainnet vault with tens of thousands of
+  positions. The user-position multicall is paginated (`fetcher.ts`) so it
+  should survive — but the published latency numbers are testnet-only.
+- **No redundancy / HA.** Single-process daemon; one `VAULT_ADDRESS` per
+  process; no leader election, no checkpointing beyond the per-block
+  `blocks_checked` row. A production deployment would run two instances
+  behind a shared lock or sharded by vault.
+
+---
+
 ## Related documents
 
 - [architecture.md](architecture.md) — where the bot sits among the four layers.
