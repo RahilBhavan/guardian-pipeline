@@ -4,20 +4,22 @@ pragma solidity ^0.8.24;
 import {Test} from "forge-std/Test.sol";
 import {Vault} from "../../src/Vault.sol";
 import {MockERC20} from "../../src/MockERC20.sol";
+import {MockOracle} from "../../src/MockOracle.sol";
 
-/// @title VaultParameterized — APR and liquidation-bonus parameter coverage
+/// @title VaultParameterized — APR, liquidation-bonus and price parameter coverage
 /// @notice The invariant harness (`test/invariant/`) only ever fuzzes a single
-///         Vault deployment at 10% APR and a 5% liquidation bonus. This suite
-///         closes that gap: each fuzz run deploys a *fresh* Vault with random
-///         APR and/or random liquidation bonus, drives a deterministic
-///         adversarial sequence through it (deposit → borrow at the cap → warp
-///         → accrue → attempted withdraw → attempted liquidation), and
-///         re-asserts the four invariants that can be checked statelessly:
+///         Vault deployment at fixed parameters. This suite closes that gap:
+///         each fuzz run deploys a *fresh* Vault with random APR, random
+///         liquidation bonus and random oracle price, drives a deterministic
+///         adversarial sequence through it (lend → post collateral → borrow at
+///         the cap → warp → accrue → attempted withdraw → attempted
+///         liquidation), and re-asserts the four invariants that can be
+///         checked statelessly:
 ///
 ///         - **INV-01** Protocol solvency        — `totalAssets >= totalSupplyAssets`
 ///         - **INV-04** Lender-value floor       — `totalSupplyAssets >= totalSupplyShares`
 ///         - **INV-05** Interest-index floor     — `borrowIndex >= 1e18`
-///         - **INV-06** No uncollateralised debt — `userSupplyShares == 0` ⇒ `userDebt == 0`
+///         - **INV-06** No uncollateralised debt — `userCollateral == 0` ⇒ `userDebt == 0`
 ///
 ///         INV-02 and INV-03 (sum-of-shares identities) are deliberately
 ///         omitted — they need a per-actor walk that the dedicated invariant
@@ -43,8 +45,17 @@ contract VaultParameterized is Test {
     /// @dev Fixed liquidation bonus for the "vary the APR" test.
     uint256 internal constant BONUS_FIXED = 5_00;
 
-    /// @dev Each actor is funded with this many tokens.
+    /// @dev Each actor is funded with this many tokens of *each* asset.
     uint256 internal constant FUND = 1_000_000e18;
+
+    /// @dev Default collateral price for the deterministic-parameter tests.
+    uint256 internal constant PRICE_FIXED = 2_000e18;
+
+    /// @dev Inclusive fuzz bounds on the oracle price (1 ↔ 10,000 debt units
+    ///      per collateral unit) — wide enough to cross every interesting
+    ///      regime, bounded away from zero (which {MockOracle} rejects).
+    uint256 internal constant PRICE_MIN = 1e18;
+    uint256 internal constant PRICE_MAX = 10_000e18;
 
     // Deterministic actors — same labels mean the sequence is reproducible.
     address internal alice = makeAddr("alice");
@@ -55,42 +66,48 @@ contract VaultParameterized is Test {
     //                              Fuzz tests                               //
     // --------------------------------------------------------------------- //
 
-    /// @notice Fuzz the APR while holding the liquidation bonus at 5%.
-    /// @dev    Confirms the invariants survive at any rate the constructor
-    ///         accepts — including very low and very high APRs, where the
-    ///         per-second rate and the index growth per warp differ by orders
-    ///         of magnitude from the canonical 10%.
+    /// @notice Fuzz the APR while holding bonus and price fixed.
     function testFuzz_aprOnly(uint256 aprBps, uint256 warpSeconds) public {
         aprBps = bound(aprBps, APR_MIN, APR_MAX);
         warpSeconds = bound(warpSeconds, 1, 1_000 days);
 
-        _runAdversarialSequence(aprBps, BONUS_FIXED, warpSeconds);
+        _runAdversarialSequence(aprBps, BONUS_FIXED, PRICE_FIXED, warpSeconds);
     }
 
-    /// @notice Fuzz the liquidation bonus while holding the APR at 10%.
-    /// @dev    A small bonus may be too low to cross the borrower's collateral
-    ///         on a marginal liquidation; a large bonus may push `seizeShares`
-    ///         above the borrower's balance and trigger the `MustClearDebt`
-    ///         path. Either case should still hold the invariants.
+    /// @notice Fuzz the liquidation bonus while holding APR and price fixed.
     function testFuzz_bonusOnly(uint256 liquidationBonus, uint256 warpSeconds) public {
         liquidationBonus = bound(liquidationBonus, BONUS_MIN, BONUS_MAX);
         warpSeconds = bound(warpSeconds, 1, 1_000 days);
 
-        _runAdversarialSequence(APR_FIXED, liquidationBonus, warpSeconds);
+        _runAdversarialSequence(APR_FIXED, liquidationBonus, PRICE_FIXED, warpSeconds);
     }
 
-    /// @notice Fuzz APR *and* liquidation bonus together.
-    /// @dev    The combined sweep is the strongest property statement — for
-    ///         any parameter pair the constructor accepts, the four invariants
-    ///         hold across the adversarial sequence.
-    function testFuzz_aprAndBonus(uint256 aprBps, uint256 liquidationBonus, uint256 warpSeconds)
-        public
-    {
-        aprBps = bound(aprBps, APR_MIN, APR_MAX);
-        liquidationBonus = bound(liquidationBonus, BONUS_MIN, BONUS_MAX);
+    /// @notice Fuzz the oracle price while holding APR and bonus fixed.
+    /// @dev    Captures parameter sensitivity to oracle-driven liquidation
+    ///         — at a high price the borrow cap dwarfs the requested loan
+    ///         and the liquidation branch never fires; at a low price the
+    ///         position is born under-water and the liquidator clears it.
+    function testFuzz_priceOnly(uint256 priceWad, uint256 warpSeconds) public {
+        priceWad = bound(priceWad, PRICE_MIN, PRICE_MAX);
         warpSeconds = bound(warpSeconds, 1, 1_000 days);
 
-        _runAdversarialSequence(aprBps, liquidationBonus, warpSeconds);
+        _runAdversarialSequence(APR_FIXED, BONUS_FIXED, priceWad, warpSeconds);
+    }
+
+    /// @notice Fuzz APR, liquidation bonus and oracle price together — the
+    ///         strongest property statement.
+    function testFuzz_aprBonusPrice(
+        uint256 aprBps,
+        uint256 liquidationBonus,
+        uint256 priceWad,
+        uint256 warpSeconds
+    ) public {
+        aprBps = bound(aprBps, APR_MIN, APR_MAX);
+        liquidationBonus = bound(liquidationBonus, BONUS_MIN, BONUS_MAX);
+        priceWad = bound(priceWad, PRICE_MIN, PRICE_MAX);
+        warpSeconds = bound(warpSeconds, 1, 1_000 days);
+
+        _runAdversarialSequence(aprBps, liquidationBonus, priceWad, warpSeconds);
     }
 
     // --------------------------------------------------------------------- //
@@ -99,30 +116,29 @@ contract VaultParameterized is Test {
 
     /// @notice A zero liquidation bonus is rejected by the constructor.
     function test_constructor_rejectsZeroBonus() public {
-        MockERC20 t = new MockERC20();
+        (MockERC20 d, MockERC20 c, MockOracle o) = _freshAssets(PRICE_FIXED);
         vm.expectRevert(Vault.InvalidLiquidationBonus.selector);
-        new Vault(address(t), APR_FIXED, 0);
+        new Vault(address(d), address(c), address(o), APR_FIXED, 0);
     }
 
     /// @notice A liquidation bonus strictly above 50% is rejected.
     function test_constructor_rejectsBonusOver50Percent() public {
-        MockERC20 t = new MockERC20();
+        (MockERC20 d, MockERC20 c, MockOracle o) = _freshAssets(PRICE_FIXED);
         vm.expectRevert(Vault.InvalidLiquidationBonus.selector);
-        new Vault(address(t), APR_FIXED, BONUS_MAX + 1);
+        new Vault(address(d), address(c), address(o), APR_FIXED, BONUS_MAX + 1);
     }
 
     /// @notice The lower-bound liquidation bonus (1 bp == 0.01%) is accepted.
-    /// @dev    Asserts the inequality really is `> 0`, not `>= 1_00`.
     function test_constructor_acceptsMinimumNonZeroBonus() public {
-        MockERC20 t = new MockERC20();
-        Vault v = new Vault(address(t), APR_FIXED, 1);
+        (MockERC20 d, MockERC20 c, MockOracle o) = _freshAssets(PRICE_FIXED);
+        Vault v = new Vault(address(d), address(c), address(o), APR_FIXED, 1);
         assertEq(v.liquidationBonus(), 1);
     }
 
     /// @notice The upper-bound liquidation bonus (50_00 bps == 50%) is accepted.
     function test_constructor_acceptsMaximumBonus() public {
-        MockERC20 t = new MockERC20();
-        Vault v = new Vault(address(t), APR_FIXED, BONUS_MAX);
+        (MockERC20 d, MockERC20 c, MockOracle o) = _freshAssets(PRICE_FIXED);
+        Vault v = new Vault(address(d), address(c), address(o), APR_FIXED, BONUS_MAX);
         assertEq(v.liquidationBonus(), BONUS_MAX);
     }
 
@@ -133,72 +149,76 @@ contract VaultParameterized is Test {
     /// @notice Deploy a fresh Vault and drive a single adversarial sequence
     ///         through it, asserting the four parameter-sensitive invariants
     ///         after every step that touches state.
-    /// @dev    The sequence is deterministic given the parameters — only the
-    ///         constructor inputs and the warp duration are randomised. This
-    ///         keeps each run cheap and the failure mode reproducible.
     function _runAdversarialSequence(
         uint256 aprBps,
         uint256 liquidationBonus,
+        uint256 priceWad,
         uint256 warpSeconds
     ) internal {
         // 1. Fresh deployment with the fuzzed parameters.
-        MockERC20 token = new MockERC20();
-        Vault vault = new Vault(address(token), aprBps, liquidationBonus);
+        (MockERC20 debt, MockERC20 col, MockOracle oracle) = _freshAssets(priceWad);
+        Vault vault =
+            new Vault(address(debt), address(col), address(oracle), aprBps, liquidationBonus);
 
-        _fund(token, vault, alice);
-        _fund(token, vault, bob);
-        _fund(token, vault, carol);
+        _fund(debt, col, vault, alice);
+        _fund(debt, col, vault, bob);
+        _fund(debt, col, vault, carol);
 
         _assertParamInvariants(vault, "post-deploy");
 
-        // 2. Alice supplies the asset; Bob supplies collateral and borrows the
-        //    full 80% of his deposit. Both legs touch every storage slot
-        //    INV-01..INV-04 care about.
+        // 2. Alice lends the debt asset; Bob posts collateral and borrows
+        //    against it — possibly at 0 if the priced collateral cap rounds
+        //    below 1 wei. Both legs touch the storage INV-01..INV-04 care about.
         vm.prank(alice);
         vault.deposit(100_000e18);
         _assertParamInvariants(vault, "post-deposit-alice");
 
         vm.prank(bob);
-        vault.deposit(10_000e18);
-        _assertParamInvariants(vault, "post-deposit-bob");
+        vault.depositCollateral(10e18); // 10 collateral units posted
+        _assertParamInvariants(vault, "post-collateral-bob");
 
-        vm.prank(bob);
-        vault.borrow(8_000e18); // exactly 80% of bob's collateral
-        _assertParamInvariants(vault, "post-borrow-bob");
+        uint256 bobCap =
+            (vault.collateralValue(bob) * vault.collateralRatio()) / vault.BPS();
+        if (bobCap > 0) {
+            uint256 bobBorrow = bobCap < 100_000e18 ? bobCap : 100_000e18;
+            vm.prank(bob);
+            vault.borrow(bobBorrow);
+            _assertParamInvariants(vault, "post-borrow-bob");
+        }
 
-        // 3. Warp time and accrue interest. At 100% APR over 1,000 days the
-        //    borrow index moves by orders of magnitude; at 0.01% it barely
-        //    moves at all. Both must keep the invariants.
+        // 3. Warp and accrue. At 100% APR over 1,000 days the borrow index
+        //    moves by orders of magnitude; at 0.01% it barely moves at all.
+        //    Both must keep the invariants.
         vm.warp(block.timestamp + warpSeconds);
         vault.accrue();
         _assertParamInvariants(vault, "post-accrue");
 
-        // 4. Alice tries to withdraw 1 wei worth of shares. After a long warp
-        //    the vault may not hold enough idle cash, in which case the call
-        //    reverts cleanly — we don't care which branch wins, only that the
-        //    invariants hold either way.
+        // 4. Alice tries to withdraw 1 wei of shares. After a long warp the
+        //    vault may not hold enough idle cash — we don't care which branch
+        //    wins, only that the invariants hold either way.
         uint256 aliceShares = vault.userSupplyShares(alice);
         if (aliceShares > 0) {
             vm.prank(alice);
             try vault.withdraw(1) {
                 // success path
             } catch {
-                // revert path — InsufficientLiquidity / CollateralCapExceeded
+                // revert path — InsufficientLiquidity
             }
             _assertParamInvariants(vault, "post-withdraw-alice");
         }
 
-        // 5. Carol attempts to liquidate Bob — only succeeds if interest has
-        //    pushed him under-water. Either outcome must hold the invariants.
+        // 5. Carol attempts to liquidate Bob — only succeeds if interest (or
+        //    a low price) has pushed him under-water. Either outcome must
+        //    hold the invariants.
         uint256 bobDebt = vault.userDebt(bob);
-        uint256 bobMaxBorrow = (vault.collateralValue(bob) * vault.collateralRatio()) / vault.BPS();
+        uint256 bobMaxBorrow =
+            (vault.collateralValue(bob) * vault.collateralRatio()) / vault.BPS();
         if (bobDebt > 0 && bobDebt > bobMaxBorrow) {
             vm.prank(carol);
             try vault.liquidate(bob, bobDebt) {
                 // success path
             } catch {
-                // revert path — MustClearDebt when bonus is high enough to
-                // consume the borrower's entire collateral on a partial close.
+                // revert path — MustClearDebt when the bonus consumes all collateral
             }
             _assertParamInvariants(vault, "post-liquidate");
         }
@@ -209,7 +229,7 @@ contract VaultParameterized is Test {
     // --------------------------------------------------------------------- //
 
     /// @notice Re-assert the four parameter-sensitive invariants. INV-06 is
-    ///         spot-checked against any actor whose supply-share balance is
+    ///         spot-checked against any actor whose collateral balance is
     ///         currently zero — the only state in which it has bite.
     function _assertParamInvariants(Vault vault, string memory step) internal view {
         assertGe(
@@ -222,16 +242,12 @@ contract VaultParameterized is Test {
             vault.totalSupplyShares(),
             string.concat("INV-04 violated at ", step)
         );
-        assertGe(
-            vault.borrowIndex(),
-            1e18,
-            string.concat("INV-05 violated at ", step)
-        );
+        assertGe(vault.borrowIndex(), 1e18, string.concat("INV-05 violated at ", step));
 
-        // INV-06: an actor with no supply shares cannot carry debt.
+        // INV-06: an actor with no posted collateral cannot carry debt.
         address[3] memory actors = [alice, bob, carol];
         for (uint256 i = 0; i < actors.length; i++) {
-            if (vault.userSupplyShares(actors[i]) == 0) {
+            if (vault.userCollateral(actors[i]) == 0) {
                 assertEq(
                     vault.userDebt(actors[i]),
                     0,
@@ -241,11 +257,23 @@ contract VaultParameterized is Test {
         }
     }
 
-    /// @notice Mint `FUND` tokens to `who` and grant the vault an unlimited
-    ///         allowance, so the sequence below never has to think about it.
-    function _fund(MockERC20 token, Vault vault, address who) internal {
-        token.mint(who, FUND);
-        vm.prank(who);
-        token.approve(address(vault), type(uint256).max);
+    /// @notice Deploy a fresh debt token, collateral token and oracle.
+    function _freshAssets(uint256 priceWad)
+        internal
+        returns (MockERC20 d, MockERC20 c, MockOracle o)
+    {
+        d = new MockERC20();
+        c = new MockERC20();
+        o = new MockOracle(priceWad);
+    }
+
+    /// @notice Mint `FUND` of each asset to `who` and grant the vault unlimited allowances.
+    function _fund(MockERC20 d, MockERC20 c, Vault vault, address who) internal {
+        d.mint(who, FUND);
+        c.mint(who, FUND);
+        vm.startPrank(who);
+        d.approve(address(vault), type(uint256).max);
+        c.approve(address(vault), type(uint256).max);
+        vm.stopPrank();
     }
 }

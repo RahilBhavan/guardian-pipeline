@@ -8,27 +8,29 @@ export type InvariantId = 'INV-01' | 'INV-02' | 'INV-03' | 'INV-04' | 'INV-05' |
 /** A single account's position in the vault at a given block. */
 export interface UserPosition {
   address: `0x${string}`;
-  /** Lender shares held — collateral. */
+  /** Lender shares held. */
   supplyShares: bigint;
   /** Borrow shares owed. */
   borrowShares: bigint;
+  /** Collateral-asset units posted as backing for any borrow. */
+  collateral: bigint;
 }
 
 /** A snapshot of on-chain vault state at a single block. */
 export interface VaultState {
-  /** Total assets owed to lenders (stored on-chain, grown by interest). */
+  /** Total debt-asset units owed to lenders (stored on-chain, grown by interest). */
   totalSupplyAssets: bigint;
   /** Total lender shares outstanding. */
   totalSupplyShares: bigint;
   /** Total borrow shares outstanding. */
   totalBorrowShares: bigint;
-  /** Total debt in asset units, from the vault's `totalBorrowed()` view. */
+  /** Total debt in debt-asset units, from the vault's `totalBorrowed()` view. */
   totalBorrowed: bigint;
   /** Debt-scaling index, scaled by 1e18. */
   borrowIndex: bigint;
-  /** Maximum borrow as a fraction of collateral, in basis points. */
+  /** Maximum borrow as a fraction of collateral value, in basis points. */
   collateralRatio: bigint;
-  /** The vault's own ERC-20 balance — idle cash. */
+  /** The vault's own debt-asset balance — idle cash. */
   cash: bigint;
   /** Per-account positions for every address discovered from vault events. */
   users: UserPosition[];
@@ -64,7 +66,11 @@ export interface AlertPayload {
 export interface BotConfig {
   rpcUrl: string;
   vaultAddress: `0x${string}`;
-  tokenAddress: `0x${string}`;
+  /** ERC-20 the vault lends and borrowers receive/repay — the bot reads
+   *  this asset's `balanceOf(vault)` for INV-01's `cash` term. The
+   *  collateral asset is not read directly; `userCollateral` is exposed
+   *  by the vault itself. */
+  debtAsset: `0x${string}`;
   /** Block the vault was deployed at — the start of the event scan. */
   deployBlock: bigint;
   supabaseUrl: string;
