@@ -96,7 +96,7 @@ contract InvariantVault is Test {
         depositHandler = new DepositHandler(vault, debt, collateral);
         collateralHandler = new CollateralHandler(vault, debt, collateral);
         borrowHandler = new BorrowHandler(vault, debt, collateral);
-        warpHandler = new WarpHandler(vault);
+        warpHandler = new WarpHandler(vault, oracle);
         liquidateHandler = new LiquidateHandler(vault, debt, collateral);
         donationHandler = new DonationHandler(vault, debt, collateral);
         oracleHandler = new OracleHandler(oracle);
@@ -281,6 +281,26 @@ contract InvariantVault is Test {
             liquidateHandler.liquidationsViolatedINV08(),
             0,
             "INV-08: a liquidation extracted more collateral value than the bonus permits"
+        );
+    }
+
+    /// @notice INV-11 Oracle freshness gate — at every invariant tick the
+    ///         oracle's `lastUpdatedAt` is within {Vault.MAX_STALENESS} of
+    ///         `block.timestamp`.
+    /// @dev    The fuzz environment maintains this by construction:
+    ///         {OracleHandler.setPrice} refreshes the timestamp, and
+    ///         {WarpHandler} refreshes it after every `vm.warp`. The
+    ///         invariant guards the harness against a future change that
+    ///         silently drops the WarpHandler refresh — without it, the
+    ///         price-dependent handlers would short-circuit on stale and
+    ///         coverage of borrow/withdrawCollateral/liquidate would
+    ///         collapse. The load-bearing proof that the freshness gate
+    ///         itself fires lives in `test/mutant/MutantINV11.t.sol`.
+    function invariant_oracleFreshnessGate() public view {
+        assertLe(
+            block.timestamp - oracle.lastUpdatedAt(),
+            vault.MAX_STALENESS(),
+            "INV-11: oracle freshness gap exceeded MAX_STALENESS"
         );
     }
 

@@ -27,8 +27,8 @@ contract MutantINV07Test is Test {
     ///         unsigned underflow that fires when the mutant drives margin
     ///         below zero.
     function test_realVault_borrowDoesNotShrinkTotalAssets() public {
-        (Vault v, MockERC20 d, MockERC20 c,) = _deploy(false);
-        _seedAndWarp(v, d, c);
+        (Vault v, MockERC20 d, MockERC20 c, MockOracle o) = _deploy(false);
+        _seedAndWarp(v, d, c, o);
         (, address borrower) = _actors();
 
         uint256 totalAssetsBefore = v.totalAssets();
@@ -49,8 +49,8 @@ contract MutantINV07Test is Test {
     ///         broken). If this assertion ever stops firing, the rounding
     ///         direction of borrow shares is no longer caught by INV-07.
     function test_mutantVault_borrowShrinksTotalAssets() public {
-        (Vault v, MockERC20 d, MockERC20 c,) = _deploy(true);
-        _seedAndWarp(v, d, c);
+        (Vault v, MockERC20 d, MockERC20 c, MockOracle o) = _deploy(true);
+        _seedAndWarp(v, d, c, o);
         (, address borrower) = _actors();
 
         uint256 totalAssetsBefore = v.totalAssets();
@@ -91,7 +91,9 @@ contract MutantINV07Test is Test {
     /// @dev Seed liquidity, fund a borrower with collateral, and advance time
     ///      so borrowIndex grows above 1e18 — the rounding-direction split
     ///      between floor and ceil only opens up once `borrowIndex > WAD`.
-    function _seedAndWarp(Vault v, MockERC20 d, MockERC20 c) internal {
+    ///      Refreshes the oracle after the warp so INV-11's freshness gate
+    ///      does not pre-empt the borrow we want to test.
+    function _seedAndWarp(Vault v, MockERC20 d, MockERC20 c, MockOracle o) internal {
         (address lp, address borrower) = _actors();
 
         d.mint(lp, 200_000e18);
@@ -112,5 +114,6 @@ contract MutantINV07Test is Test {
         // +1-wei split between floor and ceil yields a non-zero gap.
         vm.warp(block.timestamp + 365 days);
         v.accrue();
+        o.setLastUpdatedAt(block.timestamp);
     }
 }

@@ -46,6 +46,13 @@ contract Vault is ReentrancyGuard {
     /// @notice Seconds in a 365-day year — the interest-rate time base.
     uint256 public constant SECONDS_PER_YEAR = 365 days;
 
+    /// @notice Maximum tolerated gap between the oracle's
+    ///         {IPriceOracle.lastUpdatedAt} and `block.timestamp`. Any
+    ///         price-dependent path that reads the oracle through
+    ///         {_freshPrice} reverts with {OraclePriceStale} when the gap
+    ///         exceeds this — the freshness gate INV-11 enforces.
+    uint256 public constant MAX_STALENESS = 1 days;
+
     /// @notice The ERC-20 lenders deposit and borrowers receive/repay.
     IERC20 public immutable debtAsset;
 
@@ -118,6 +125,7 @@ contract Vault is ReentrancyGuard {
     error PositionHealthy();
     error MustClearDebt();
     error InvalidLiquidationBonus();
+    error OraclePriceStale();
 
     /// @param _debtAsset        ERC-20 lenders deposit and borrowers receive.
     /// @param _collateralAsset  ERC-20 borrowers post as collateral.
@@ -380,9 +388,23 @@ contract Vault is ReentrancyGuard {
 
     /// @notice The debt-asset value of a borrower's posted collateral, at the
     ///         current oracle price.
+    /// @dev    Reads price through {_freshPrice}, so a stale oracle
+    ///         propagates the {OraclePriceStale} revert into every caller
+    ///         of {collateralValue} — borrow, withdrawCollateral, liquidate.
     /// @param user The account to value.
     function collateralValue(address user) public view returns (uint256) {
-        return (userCollateral[user] * oracle.price()) / WAD;
+        return (userCollateral[user] * _freshPrice()) / WAD;
+    }
+
+    /// @notice Read the oracle price after asserting it is fresh.
+    /// @dev    Marked `virtual` so the INV-11 mutant subclass can drop the
+    ///         freshness check and prove the invariant catches an ungated
+    ///         price read.
+    function _freshPrice() internal view virtual returns (uint256) {
+        if (block.timestamp - oracle.lastUpdatedAt() > MAX_STALENESS) {
+            revert OraclePriceStale();
+        }
+        return oracle.price();
     }
 
     /// @notice Lender share-to-asset price, scaled by {WAD}. 1e18 == 1:1.

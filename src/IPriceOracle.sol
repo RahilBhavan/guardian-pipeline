@@ -16,4 +16,12 @@ pragma solidity ^0.8.24;
 interface IPriceOracle {
     /// @notice Price of one collateral unit in debt-asset units, scaled by 1e18.
     function price() external view returns (uint256);
+
+    /// @notice Unix timestamp at which {price} was last refreshed.
+    /// @dev    Consumed by the Vault's freshness gate: if
+    ///         `block.timestamp - lastUpdatedAt() > Vault.MAX_STALENESS`,
+    ///         price-dependent paths (collateralValue, borrow,
+    ///         withdrawCollateral, liquidate) revert with
+    ///         `OraclePriceStale()` — see INV-11.
+    function lastUpdatedAt() external view returns (uint256);
 }

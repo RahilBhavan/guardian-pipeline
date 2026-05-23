@@ -19,6 +19,9 @@ contract MockOracle is IPriceOracle {
     /// @notice Current price of one collateral unit in debt-asset units, scaled by 1e18.
     uint256 public storedPrice;
 
+    /// @notice Unix timestamp of the last refresh of {storedPrice}.
+    uint256 public storedTimestamp;
+
     /// @notice Emitted whenever {setPrice} successfully writes a new value.
     /// @param oldPrice The price before the update, in WAD.
     /// @param newPrice The price after the update, in WAD.
@@ -33,19 +36,37 @@ contract MockOracle is IPriceOracle {
     constructor(uint256 initialPrice) {
         if (initialPrice == 0) revert ZeroPrice();
         storedPrice = initialPrice;
+        storedTimestamp = block.timestamp;
     }
 
     /// @notice Update the price. Permissionless by design — see contract notice.
+    /// @dev    Also refreshes {storedTimestamp} so the Vault's freshness
+    ///         gate (INV-11) treats the oracle as current.
     /// @param newPrice New price in WAD. Must be non-zero.
     function setPrice(uint256 newPrice) external {
         if (newPrice == 0) revert ZeroPrice();
         uint256 old = storedPrice;
         storedPrice = newPrice;
+        storedTimestamp = block.timestamp;
         emit PriceSet(old, newPrice);
+    }
+
+    /// @notice Refresh {storedTimestamp} without moving the price. Used by
+    ///         {WarpHandler} after each `vm.warp` so the fuzz keeps running
+    ///         despite the freshness gate, and by tests that need to put
+    ///         the oracle into a specific staleness state.
+    /// @param timestamp The Unix timestamp to record.
+    function setLastUpdatedAt(uint256 timestamp) external {
+        storedTimestamp = timestamp;
     }
 
     /// @inheritdoc IPriceOracle
     function price() external view returns (uint256) {
         return storedPrice;
+    }
+
+    /// @inheritdoc IPriceOracle
+    function lastUpdatedAt() external view returns (uint256) {
+        return storedTimestamp;
     }
 }

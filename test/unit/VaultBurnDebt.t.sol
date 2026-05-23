@@ -255,6 +255,7 @@ contract VaultBurnDebt is Test {
 
         // Push bob under water via interest accrual.
         vm.warp(block.timestamp + 730 days);
+        oracle.setLastUpdatedAt(block.timestamp);
         vault.accrue();
 
         uint256 debtAmt = vault.userDebt(bob);
@@ -284,6 +285,7 @@ contract VaultBurnDebt is Test {
         // Deep under-water — long warp so the requested partial close lands
         // in the seize-all-collateral branch.
         vm.warp(block.timestamp + 10_000 days);
+        oracle.setLastUpdatedAt(block.timestamp);
         vault.accrue();
 
         uint256 debtAmt = vault.userDebt(bob);

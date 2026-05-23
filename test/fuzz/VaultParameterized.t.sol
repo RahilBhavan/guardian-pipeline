@@ -190,6 +190,7 @@ contract VaultParameterized is Test {
         //    moves by orders of magnitude; at 0.01% it barely moves at all.
         //    Both must keep the invariants.
         vm.warp(block.timestamp + warpSeconds);
+        oracle.setLastUpdatedAt(block.timestamp);
         vault.accrue();
         _assertParamInvariants(vault, "post-accrue");
 
