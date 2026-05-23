@@ -174,4 +174,46 @@ contract InvariantVault is Test {
             }
         }
     }
+
+    /// @notice INV-12 Accrue idempotence — calling accrue() twice within the
+    ///         same block produces byte-identical state.
+    /// @dev    Tensioned by the `if (dt == 0) return;` guard in
+    ///         {Vault.accrue}. The check first calls accrue() to bring dt to
+    ///         zero (since WarpHandler may have advanced time since the last
+    ///         accrual-triggering call), snapshots every mutable output of
+    ///         accrue(), invokes it again, and asserts no field moved.
+    ///         A mutation that re-applied interest at dt==0 — or computed dt
+    ///         as `block.timestamp - lastAccrualTime + 1` — would fail this
+    ///         immediately. Proven load-bearing by
+    ///         `test/mutant/MutantINV12.t.sol`.
+    function invariant_accrueIdempotent() public {
+        vault.accrue();
+        uint256 indexBefore = vault.borrowIndex();
+        uint256 supplyBefore = vault.totalSupplyAssets();
+        uint256 borrowSharesBefore = vault.totalBorrowShares();
+        uint256 lastAccrualBefore = vault.lastAccrualTime();
+
+        vault.accrue();
+
+        assertEq(
+            vault.borrowIndex(),
+            indexBefore,
+            "INV-12: borrowIndex moved on no-op accrue"
+        );
+        assertEq(
+            vault.totalSupplyAssets(),
+            supplyBefore,
+            "INV-12: totalSupplyAssets moved on no-op accrue"
+        );
+        assertEq(
+            vault.totalBorrowShares(),
+            borrowSharesBefore,
+            "INV-12: totalBorrowShares moved on no-op accrue"
+        );
+        assertEq(
+            vault.lastAccrualTime(),
+            lastAccrualBefore,
+            "INV-12: lastAccrualTime moved on no-op accrue"
+        );
+    }
 }

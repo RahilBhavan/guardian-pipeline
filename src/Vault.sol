@@ -154,7 +154,10 @@ contract Vault is ReentrancyGuard {
     /// @dev    Borrowers are charged by raising {borrowIndex}; the *realised*
     ///         charge is then added to {totalSupplyAssets}. Both sides move by
     ///         the identical amount, so INV-01 (solvency) holds exactly.
-    function accrue() public {
+    ///         Marked `virtual` so the mutation-testing suite under
+    ///         `test/mutant/` can subclass with deliberately broken variants
+    ///         and prove INV-12 (accrue idempotence) is load-bearing.
+    function accrue() public virtual {
         uint256 dt = block.timestamp - lastAccrualTime;
         if (dt == 0) return;
         lastAccrualTime = block.timestamp;
