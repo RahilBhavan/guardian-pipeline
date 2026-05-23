@@ -364,7 +364,7 @@ export function App() {
         <div className="realtime-banner" role="alert">
           <span className="dot" aria-hidden />
           <span style={{ flex: 1 }}>{initialBanner}</span>
-          <button type="button" onClick={retryNow}>
+          <button type="button" className="btn" onClick={retryNow}>
             Retry now
           </button>
         </div>

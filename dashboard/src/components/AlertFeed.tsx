@@ -52,15 +52,13 @@ export function AlertFeed({ alerts, canLoadOlder, loadingOlder, onLoadOlder }: P
         </div>
       ))}
       {onLoadOlder && (
-        <div style={{ padding: '8px 12px', textAlign: 'center' }}>
+        <div className="alert-list-footer">
           {canLoadOlder ? (
-            <button type="button" onClick={onLoadOlder} disabled={loadingOlder}>
+            <button type="button" className="btn" onClick={onLoadOlder} disabled={loadingOlder}>
               {loadingOlder ? 'Loading…' : 'Load older'}
             </button>
           ) : (
-            <span className="empty" style={{ padding: 0 }}>
-              End of history.
-            </span>
+            <span className="end-label">End of history.</span>
           )}
         </div>
       )}
