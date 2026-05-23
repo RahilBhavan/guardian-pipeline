@@ -3,6 +3,12 @@ import type { AlertRow } from '../types';
 
 interface Props {
   alerts: AlertRow[];
+  /** Whether a "Load older" page is likely available (last page was full). */
+  canLoadOlder?: boolean;
+  /** True while a page fetch is in flight; disables the button. */
+  loadingOlder?: boolean;
+  /** Triggered by the "Load older" button; appends the next page. */
+  onLoadOlder?: () => void;
 }
 
 /** Render an ISO timestamp as a compact "Xs/m/h ago" string. */
@@ -17,7 +23,7 @@ function timeAgo(iso: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-export function AlertFeed({ alerts }: Props) {
+export function AlertFeed({ alerts, canLoadOlder, loadingOlder, onLoadOlder }: Props) {
   if (alerts.length === 0) {
     return <div className="empty">No violations detected — all invariants healthy.</div>;
   }
@@ -45,6 +51,19 @@ export function AlertFeed({ alerts }: Props) {
           </div>
         </div>
       ))}
+      {onLoadOlder && (
+        <div style={{ padding: '8px 12px', textAlign: 'center' }}>
+          {canLoadOlder ? (
+            <button type="button" onClick={onLoadOlder} disabled={loadingOlder}>
+              {loadingOlder ? 'Loading…' : 'Load older'}
+            </button>
+          ) : (
+            <span className="empty" style={{ padding: 0 }}>
+              End of history.
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

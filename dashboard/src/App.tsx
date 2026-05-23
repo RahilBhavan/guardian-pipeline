@@ -17,6 +17,10 @@ import { ExploitReplay } from './components/ExploitReplay';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { assuranceReport } from './assurance';
 
+/** Page size for the alert feed — also the chunk size for "load older". */
+const ALERT_PAGE_SIZE = 50;
+/** Fixed-size moving window for the latency sparkline. */
+const LATENCY_HISTORY_SIZE = 100;
 /** Cap on initial-load retries before we ask the user to refresh. */
 const MAX_INITIAL_LOAD_ATTEMPTS = 10;
 /** Backoff schedule (ms) for failed initial loads — capped at 30s. */
@@ -86,6 +90,10 @@ export function App() {
   const [initialLoadError, setInitialLoadError] = useState<string | null>(null);
   const [initialLoadAttempts, setInitialLoadAttempts] = useState<number>(0);
   const [nextRetryMs, setNextRetryMs] = useState<number | null>(null);
+  /** Pages of alerts beyond the first that have been fetched via "Load older". */
+  const [extraAlertPagesLoaded, setExtraAlertPagesLoaded] = useState<number>(0);
+  const [canLoadOlder, setCanLoadOlder] = useState<boolean>(true);
+  const [loadingOlder, setLoadingOlder] = useState<boolean>(false);
 
   /**
    * The mount effect owns lifecycle flags — components below trigger reloads
@@ -105,13 +113,13 @@ export function App() {
       .from('alerts')
       .select('*')
       .order('created_at', { ascending: false })
-      .limit(50);
+      .limit(ALERT_PAGE_SIZE);
 
     const { data: recentBlocks, error: blocksError } = await supabase
       .from('blocks_checked')
       .select('*')
       .order('checked_at', { ascending: false })
-      .limit(100);
+      .limit(LATENCY_HISTORY_SIZE);
 
     if (cancelledRef.current) return false;
 
@@ -124,6 +132,8 @@ export function App() {
 
     const alertRows = (recentAlerts ?? []) as AlertRow[];
     setAlerts(alertRows);
+    setExtraAlertPagesLoaded(0);
+    setCanLoadOlder(alertRows.length >= ALERT_PAGE_SIZE);
 
     const blockRows = (recentBlocks ?? []) as BlockCheckedRow[];
     const newest = blockRows[0];
@@ -225,7 +235,14 @@ export function App() {
         { event: 'INSERT', schema: 'public', table: 'alerts' },
         (payload) => {
           const row = payload.new as AlertRow;
-          setAlerts((prev) => [row, ...prev.slice(0, 49)]);
+          // Trim only if we're holding more than the user has explicitly
+          // requested — "Load older" extends the buffer; new arrivals
+          // shouldn't immediately undo that work.
+          setAlerts((prev) => {
+            const next = [row, ...prev];
+            const cap = ALERT_PAGE_SIZE * (extraAlertPagesLoadedRef.current + 1);
+            return next.length > cap ? next.slice(0, cap) : next;
+          });
           setInvariantStatus((prev) => ({ ...prev, [row.invariant_id]: false }));
         },
       )
@@ -244,7 +261,7 @@ export function App() {
                 latencyMs: row.latency_ms ?? 0,
                 checkedAt: new Date(row.checked_at),
               },
-            ].slice(-100),
+            ].slice(-LATENCY_HISTORY_SIZE),
           );
           if (row.all_passed) setInvariantStatus(allInvariants(true));
         },
@@ -268,6 +285,46 @@ export function App() {
     // effect runs once on mount and tears down on unmount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * Mirror `extraAlertPagesLoaded` into a ref so the realtime callback above
+   * — which closes over mount-time values — always reads the current page
+   * count when computing the buffer cap.
+   */
+  const extraAlertPagesLoadedRef = useRef<number>(0);
+  useEffect(() => {
+    extraAlertPagesLoadedRef.current = extraAlertPagesLoaded;
+  }, [extraAlertPagesLoaded]);
+
+  /**
+   * Fetch the next page of older alerts and append. Supabase's `.range()` is
+   * inclusive at both ends, hence the `- 1`. A short page means we've hit the
+   * tail; no more pages exist.
+   */
+  const loadOlderAlerts = useCallback(async (): Promise<void> => {
+    if (loadingOlder || !canLoadOlder) return;
+    setLoadingOlder(true);
+    const from = alerts.length;
+    const to = from + ALERT_PAGE_SIZE - 1;
+    const { data, error } = await supabase
+      .from('alerts')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(from, to);
+    if (cancelledRef.current) return;
+    setLoadingOlder(false);
+    if (error) {
+      // Non-fatal — leave canLoadOlder true so the user can retry. We don't
+      // raise the banner because partial-history pagination is a "nice to
+      // have" relative to the live feed, which still works.
+      console.error('[App] load older alerts failed:', error);
+      return;
+    }
+    const rows = (data ?? []) as AlertRow[];
+    setAlerts((prev) => [...prev, ...rows]);
+    setExtraAlertPagesLoaded((n) => n + 1);
+    setCanLoadOlder(rows.length >= ALERT_PAGE_SIZE);
+  }, [alerts.length, canLoadOlder, loadingOlder]);
 
   const avgLatency = useMemo<number | null>(() => {
     const last = latencyHistory.slice(-10);
@@ -358,7 +415,12 @@ export function App() {
           <ErrorBoundary name="Alert Feed">
             <section className="panel">
               <div className="panel-title">Alert Feed · latest {alerts.length}</div>
-              <AlertFeed alerts={alerts} />
+              <AlertFeed
+                alerts={alerts}
+                canLoadOlder={canLoadOlder}
+                loadingOlder={loadingOlder}
+                onLoadOlder={loadOlderAlerts}
+              />
             </section>
           </ErrorBoundary>
           <ErrorBoundary name="Detection Latency">
