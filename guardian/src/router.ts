@@ -138,8 +138,17 @@ export async function logAlertToSupabase(
     detection_latency_ms: Math.round(payload.detectionLatencyMs),
   }));
 
+  // Idempotent insert: (vault, block_number, invariant_id) is unique per
+  // migration 0003. A bot restart that re-checks an already-violated block
+  // will not duplicate alert rows — `ignoreDuplicates` makes the upsert
+  // a no-op on conflict instead of overwriting the original detection
+  // timestamp / latency, which would lose forensic information.
   const result = await insertWithRetry(
-    () => supabase.from('alerts').insert(rows),
+    () =>
+      supabase.from('alerts').upsert(rows, {
+        onConflict: 'vault,block_number,invariant_id',
+        ignoreDuplicates: true,
+      }),
     'alerts',
     logger,
   );
@@ -184,8 +193,15 @@ export async function logBlockCheck(
     latency_ms: Math.round(params.latencyMs),
     violations_count: params.violationsCount,
   };
+  // Idempotent insert: (vault, block_number) is unique per migration 0003.
+  // Unlike alerts, we *want* an in-place update on re-check — a future
+  // reorg-handling migration will flip a `reorged` flag on the surviving
+  // row, so the second write must overwrite the first.
   const result = await insertWithRetry(
-    () => supabase.from('blocks_checked').insert(row),
+    () =>
+      supabase.from('blocks_checked').upsert(row, {
+        onConflict: 'vault,block_number',
+      }),
     'blocks_checked',
     logger,
   );
