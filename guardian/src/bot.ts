@@ -5,9 +5,11 @@
  * invariants, and persists any violation to Supabase — typically within one
  * block (~2s) of the breach — where the dashboard surfaces it in real time.
  *
- * Exposes /healthz and /metrics on HEALTH_PORT for ops integration — every
- * counter and gauge surfaced there lives on a single GuardianState struct
- * that this module mutates as blocks are checked.
+ * Operational surface:
+ *   - /healthz + /metrics on HEALTH_PORT (see health.ts).
+ *   - RPC circuit breaker: opens after BREAKER_OPEN_AT consecutive block-check
+ *     failures, suppresses fetches while open, probes the RPC every
+ *     BREAKER_PROBE_INTERVAL_MS, closes after two consecutive probe successes.
  */
 import 'dotenv/config';
 import { createPublicClient, webSocket, type Chain, type PublicClient } from 'viem';
@@ -76,15 +78,20 @@ function loadConfig(): BotConfig {
 
 /**
  * Operational env knobs not exposed on BotConfig — they only matter to the
- * runtime surface (health server), not to the on-chain or persistence layer.
+ * runtime surface (health server + circuit breaker), not to the on-chain or
+ * persistence layer.
  */
 function loadOpsConfig(): {
   healthPort: number;
   maxHealthyBlocks: number;
+  breakerOpenAt: number;
+  breakerProbeIntervalMs: number;
 } {
   return {
     healthPort: Number(process.env.HEALTH_PORT ?? 9090),
     maxHealthyBlocks: Number(process.env.MAX_HEALTHY_BLOCKS ?? 30),
+    breakerOpenAt: Number(process.env.BREAKER_OPEN_AT ?? 10),
+    breakerProbeIntervalMs: Number(process.env.BREAKER_PROBE_INTERVAL_MS ?? 30_000),
   };
 }
 
@@ -156,7 +163,82 @@ async function main(): Promise<void> {
   // recovery line so the operator sees the gap closed.
   const FAILURE_ESCALATION_THRESHOLDS = new Set([1, 5, 25, 100, 500]);
 
+  // ---- Circuit breaker ----------------------------------------------------
+  //
+  // Once block-check failures cross `breakerOpenAt`, open the breaker: the
+  // block subscription stops calling fetch/evaluate and we instead poll a
+  // single cheap RPC call (`getBlockNumber`) every `probeIntervalMs`. Two
+  // consecutive successful probes close the breaker; one failure resets the
+  // success count. Only one probe is in flight at a time. While open, the
+  // bot does not spam a dead RPC every block — the SRE called that out as
+  // the headline missing behaviour and it is mirrored in `breakerState`.
+  let probing = false;
+  let probeTimer: NodeJS.Timeout | null = null;
+  let probeSuccesses = 0;
+
+  function openBreaker(reason: 'failure_threshold' | 'probe_failed'): void {
+    if (state.breakerState === 'open') return;
+    state.breakerState = 'open';
+    state.circuitBreakerOpen = 1;
+    probeSuccesses = 0;
+    logger.error(
+      {
+        reason,
+        consecutiveFailures: state.consecutiveBlockCheckFailures,
+        probeIntervalMs: ops.breakerProbeIntervalMs,
+      },
+      'RPC circuit breaker OPEN — block checks suppressed; probing for recovery',
+    );
+    scheduleProbe();
+  }
+
+  function closeBreaker(): void {
+    if (state.breakerState === 'closed') return;
+    state.breakerState = 'closed';
+    state.circuitBreakerOpen = 0;
+    probeSuccesses = 0;
+    if (probeTimer) {
+      clearTimeout(probeTimer);
+      probeTimer = null;
+    }
+    logger.info('RPC circuit breaker CLOSED — resuming normal block checks');
+  }
+
+  function scheduleProbe(): void {
+    if (probeTimer) return;
+    probeTimer = setTimeout(() => {
+      probeTimer = null;
+      void probeRpc();
+    }, ops.breakerProbeIntervalMs);
+  }
+
+  async function probeRpc(): Promise<void> {
+    if (probing || state.breakerState === 'closed') return;
+    probing = true;
+    try {
+      await client.getBlockNumber();
+      probeSuccesses += 1;
+      logger.info({ probeSuccesses }, 'Circuit-breaker probe succeeded');
+      if (probeSuccesses >= 2) {
+        closeBreaker();
+        return;
+      }
+    } catch (err) {
+      probeSuccesses = 0;
+      logger.warn({ err }, 'Circuit-breaker probe failed — staying open');
+    } finally {
+      probing = false;
+    }
+    if (state.breakerState === 'open') scheduleProbe();
+  }
+
   async function onBlock(blockNumber: bigint): Promise<void> {
+    // Breaker open — do not hammer the RPC. The probe loop is the only
+    // outbound RPC traffic until it closes.
+    if (state.breakerState === 'open') {
+      logger.debug({ block: blockNumber.toString() }, 'Skipping block — circuit breaker open');
+      return;
+    }
     if (checking) {
       logger.debug({ block: blockNumber.toString() }, 'Skipping block — previous check still running');
       return;
@@ -260,6 +342,9 @@ async function main(): Promise<void> {
       } else {
         logger.debug(fields, 'Block check failed');
       }
+      if (n >= ops.breakerOpenAt && state.breakerState === 'closed') {
+        openBreaker('failure_threshold');
+      }
     } finally {
       checking = false;
     }
@@ -281,6 +366,10 @@ async function main(): Promise<void> {
     if (shuttingDown) return;
     shuttingDown = true;
     logger.info({ signal }, 'Guardian shutting down');
+    if (probeTimer) {
+      clearTimeout(probeTimer);
+      probeTimer = null;
+    }
     unwatch();
     // Close health server first so probes stop hitting a daemon that is
     // tearing down its RPC client.
