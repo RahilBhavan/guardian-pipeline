@@ -15,6 +15,13 @@ This is a portfolio / research-demonstration project. It is **not** production
 infrastructure, it does **not** custody real value, and nothing here is
 currently running as a hosted service — see [Scope & honesty](#scope--honesty).
 
+> **The single most important read in this repo is
+> [`docs/assurance.md`](docs/assurance.md).** It explains the Assurance Score,
+> the exploit-replay catalogue, and the traceability matrix that ties every
+> security-review finding to the invariant and test that covers it — i.e. the
+> thing this project is actually about. Everything else is implementation
+> detail behind that one idea.
+
 ---
 
 ## Why this exists
