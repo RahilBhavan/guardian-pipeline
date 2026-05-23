@@ -12,9 +12,9 @@ tooling terms follow.
 |------|---------|
 | **`INV-01` … `INV-06`** | The six **invariants** — mathematical properties the vault must hold in every reachable state. Defined identically in the Foundry harness, the Guardian evaluator, and the exploit replays. Full reference: [invariants.md](invariants.md). |
 | **`EXP-01` … `EXP-07`** | The seven **exploit-replay scenarios** — classes of real-world DeFi attack replayed against the vault. Each is classified PREVENTED / DETECTED / MISSED. Catalogue: [assurance.md](assurance.md#exploit-replays). |
-| **`GUA-01` … `GUA-08`** | The eight **audit findings** in the illustrative audit report (`audit/`), each traced to the layers that cover it. See [assurance.md](assurance.md#audit-traceability). |
-| **Assurance Score** | A composite 0–100 metric, recomputed every commit, weighting four assurance layers (static verification 30%, exploit resistance 25%, continuous monitoring 25%, audit traceability 20%). CI gates at ≥ 80. |
-| **Guardian bot** | The off-chain TypeScript daemon (`guardian/`) that monitors the deployed vault block by block. |
+| **`GUA-01` … `GUA-08`** | The eight findings in the self-conducted security review (`security-review/`), each traced to the layers that cover it. See [assurance.md](assurance.md#finding-traceability). |
+| **Assurance Score** | A composite 0–100 metric, recomputed every commit, weighting three pre-deployment components (static verification 45%, exploit resistance 35%, finding traceability 20%). CI gates at ≥ 80. |
+| **Guardian bot** | The off-chain TypeScript daemon (`guardian/`) — a runnable reference runtime monitor that, when run against a deployed vault, checks the invariants block by block. |
 | **The four layers** | Pre-deployment CI, the smart contract, the runtime Guardian, and the assurance layer. See [architecture.md](architecture.md). |
 
 ---
@@ -78,9 +78,11 @@ tooling terms follow.
 
 | Term | Meaning |
 |------|---------|
-| **Bourveau et al. (2024)** | *Decentralized Finance (DeFi) assurance: early evidence.* Finds continuous, multi-layered assurance — not one-time audits — distinguishes protocols that survive. |
-| **Landsman et al. (2025)** | *Auditing Smart Contracts.* Finds static point-in-time audits show little empirical evidence of preventing runtime exploits. |
+| **Bourveau, Brendel & Schoenfeld (2024)** | *Decentralized Finance (DeFi) assurance: early evidence* (Review of Accounting Studies 29(3)). Hand-codes ~8,500 audit reports; documents the DeFi audit market as pervasive, value-relevant, and substantively different from conventional financial audits. |
+| **Landsman, Lyandres, Maydew, Rabetti & Zhang (2025)** | *Auditing Smart Contracts* (SSRN). Across ~8,195 reports and 1,575 protocols, finds post-deployment outcomes depend on auditor characteristics — market share, launch rate, hack rate — rather than on the mere presence of an audit. |
 
-Guardian Pipeline is the open-source tool that closes the gap both papers
-identify. See the [root README](../README.md#why-this-exists).
+These papers establish that the DeFi audit market is real and that audit
+*effectiveness* is an open empirical question. The continuous, multi-layered
+framing is this project's interpretation — not a claim of either paper. See
+the [References section of the root README](../README.md#references).
 </content>

@@ -1,23 +1,24 @@
 /**
- * findings.ts — load and type the static audit registry (audit/findings.json).
+ * findings.ts — load and type the security-review registry
+ * (security-review/findings.json).
  *
- * The registry is the machine-readable form of a point-in-time security audit.
- * Each finding carries a `continuousAssurance` block binding it to the
- * invariants, harness tests, live monitors and exploit replays that keep it
- * verified after the audit's snapshot date.
+ * The registry is the machine-readable form of the repository's self-conducted,
+ * point-in-time security review. Each finding carries a `continuousAssurance`
+ * block binding it to the invariants, harness tests, runtime-monitor checks and
+ * exploit replays that keep it verified after the review's snapshot date.
  */
 import { readFileSync } from 'node:fs';
 
-/** Audit severity levels, most to least severe. */
+/** Finding severity levels, most to least severe. */
 export type Severity = 'Critical' | 'High' | 'Medium' | 'Low' | 'Informational' | 'Gas';
 
-/** The four continuous-assurance layers a finding can be bound to. */
+/** The assurance layers a finding can be bound to. */
 export interface ContinuousAssurance {
-  /** Invariant IDs (INV-01..08) that formalise this finding's property. */
+  /** Invariant IDs (INV-01..06) that formalise this finding's property. */
   invariants: string[];
   /** Foundry `invariant_*` function names proving the property pre-deploy. */
   harnessTests: string[];
-  /** Invariant IDs the live Guardian bot monitors post-deploy. */
+  /** Invariant IDs the runtime monitor (guardian/src/evaluator.ts) checks. */
   liveMonitors: string[];
   /** Exploit-replay scenario IDs (EXP-*) exercising this finding's class. */
   exploitReplays: string[];
@@ -25,7 +26,7 @@ export interface ContinuousAssurance {
   rationale: string;
 }
 
-/** One audit finding. */
+/** One review finding. */
 export interface Finding {
   id: string;
   title: string;
@@ -41,19 +42,19 @@ export interface Finding {
 }
 
 /** Report-level metadata. */
-export interface AuditReportMeta {
+export interface ReviewReportMeta {
   title: string;
   subject: string;
-  auditor: string;
+  reviewer: string;
   reportDate: string;
   reviewedCommit: string;
   methodology: string;
   note: string;
 }
 
-/** The full audit registry document. */
+/** The full security-review registry document. */
 export interface FindingsDoc {
-  report: AuditReportMeta;
+  report: ReviewReportMeta;
   severityScale: Severity[];
   statusScale: string[];
   findings: Finding[];
@@ -70,7 +71,7 @@ export const SEVERITY_RANK: Record<Severity, number> = {
 };
 
 /**
- * Load and minimally validate the audit registry from disk.
+ * Load and minimally validate the security-review registry from disk.
  * @throws if the file is missing, malformed, or structurally invalid.
  */
 export function loadFindings(path: string): FindingsDoc {
@@ -78,24 +79,24 @@ export function loadFindings(path: string): FindingsDoc {
   try {
     raw = readFileSync(path, 'utf8');
   } catch {
-    throw new Error(`Audit registry not found: ${path}`);
+    throw new Error(`Review registry not found: ${path}`);
   }
 
   let doc: unknown;
   try {
     doc = JSON.parse(raw);
   } catch (err) {
-    throw new Error(`Audit registry is not valid JSON (${path}): ${(err as Error).message}`);
+    throw new Error(`Review registry is not valid JSON (${path}): ${(err as Error).message}`);
   }
 
   if (typeof doc !== 'object' || doc === null || !Array.isArray((doc as FindingsDoc).findings)) {
-    throw new Error(`Audit registry has no "findings" array: ${path}`);
+    throw new Error(`Review registry has no "findings" array: ${path}`);
   }
 
   const findings = (doc as FindingsDoc).findings;
   for (const f of findings) {
     if (!f.id || !f.severity || !f.continuousAssurance) {
-      throw new Error(`Audit finding is missing id/severity/continuousAssurance: ${JSON.stringify(f).slice(0, 80)}`);
+      throw new Error(`Review finding is missing id/severity/continuousAssurance: ${JSON.stringify(f).slice(0, 80)}`);
     }
   }
 

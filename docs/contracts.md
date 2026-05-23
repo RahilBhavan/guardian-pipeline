@@ -1,12 +1,12 @@
 # Contract reference
 
 Complete API reference for the Solidity layer: [`Vault.sol`](#vault), the
-contract under audit; [`AttackableVault.sol`](#attackablevault), its demo-only
+contract under review; [`AttackableVault.sol`](#attackablevault), its demo-only
 subclass; and [`MockERC20.sol`](#mockerc20), the test asset. Every function,
 event, error, and storage slot is documented against the source in
 [`src/`](../src).
 
-> **Audience.** Read this if you are auditing the contract, writing a new
+> **Audience.** Read this if you are reviewing the contract, writing a new
 > handler or exploit replay, or wiring the Guardian bot to a fresh deployment.
 > For *why* the invariants are shaped the way they are, see
 > [invariants.md](invariants.md).
@@ -40,7 +40,7 @@ Guardian bot.
 | Every operation rounds in the protocol's favour | Borrows round debt up, repayments round burns down, withdrawals pay the floor — the solvency margin can only grow. The fuzz harness exists to prove the directions are correct. |
 | `collateralRatio` fixed at `80_00` bps, `liquidationBonus` at `5_00` bps | An 80% cap leaves headroom for interest to accrue before a position is liquidatable; the 5% bonus incentivises third-party liquidators. |
 | All mutating functions `nonReentrant` | Defence-in-depth even though `MockERC20` has no transfer hooks. |
-| No `attack()` backdoor | The demo breach lives only in [`AttackableVault`](#attackablevault); the audited `Vault` has no privileged accounting path. |
+| No `attack()` backdoor | The demo breach lives only in [`AttackableVault`](#attackablevault); the reviewed `Vault` has no privileged accounting path. |
 
 ### Constants
 
@@ -190,7 +190,7 @@ Repays the caller's debt. Offering `amount >= debt` fully closes the position.
   and collects exactly `amount`.
 - A full close burns the caller's entire borrow-share balance and collects the
   *realised* drop in `totalBorrowed()` — the debt, or by at most one wei of
-  index rounding one wei more (audit finding GUA-07). Charging the realised
+  index rounding one wei more (review finding GUA-07). Charging the realised
   drop is what keeps INV-01 exact.
 - **State:** `userBorrowShares` and `totalBorrowShares` decrease by the burned
   shares.
@@ -269,10 +269,11 @@ cheaper and give each exploit replay a precise selector to assert against.
 `src/AttackableVault.sol` · inherits [`Vault`](#vault).
 
 > **Demo only.** `AttackableVault` is identical to `Vault` except for a single
-> `attack()` function. It exists so the Loom demo can show the Guardian bot
-> detecting a live invariant breach. It is **never deployed to production** —
-> isolating the breach here means the audited `Vault` carries no backdoor at
-> all. See [SECURITY.md](../SECURITY.md).
+> `attack()` function — a deliberate one-line flag, not an exploit. It exists
+> so the runtime monitor can be filmed detecting an invariant breach
+> end-to-end. It is **never deployed to production**; isolating the flag here
+> means the reviewed `Vault` carries no privileged path at all. See
+> [SECURITY.md](../SECURITY.md).
 
 | Member | Description |
 |--------|-------------|
@@ -282,8 +283,9 @@ cheaper and give each exploit replay a precise selector to assert against.
 | `attack()` | Inflates `totalSupplyAssets` past the assets backing it, breaking **INV-01** (solvency). Reverts `NotAttacker` unless called by `attacker`; reverts `MainnetDisabled` when `block.chainid == BASE_MAINNET`. |
 
 `attack()` is replayed as exploit scenario **EXP-01**, where the expected
-outcome is **DETECTED** — the reference example of a runtime breach a static
-audit cannot prevent but the live layer catches.
+outcome is **DETECTED** — a staged breach used to show the runtime monitor
+catching an insolvency the contract code itself permitted. It demonstrates the
+detection plumbing; it is not a novel exploit.
 
 ---
 
@@ -302,9 +304,9 @@ A plain 18-decimal test token, name `Mock USD`, symbol `mUSD`.
 `mint` is intentionally permissionless so handlers and tests can fund actors
 freely. `MockERC20` has **no transfer hooks** (no ERC-777-style callbacks),
 which is deliberate: it keeps the fuzzer from having to model reentrancy
-through the token. That is also why audit finding GUA-02 (reentrancy) is
+through the token. That is also why review finding GUA-02 (reentrancy) is
 classified *monitored-only* rather than *fully-assured* — the harness has no
-hook to exercise. See [assurance.md](assurance.md#audit-traceability).
+hook to exercise. See [assurance.md](assurance.md#finding-traceability).
 
 > **Never deploy `MockERC20` to mainnet.** Unrestricted `mint` makes it
 > worthless as a real asset. On Base Sepolia the deploy script
@@ -336,4 +338,4 @@ Full broadcast instructions — keystore setup, RPC, `--verify` — are in
 - [invariants.md](invariants.md) — the six invariants the contract must hold.
 - [guardian-bot.md](guardian-bot.md) — how the off-chain bot reads this contract.
 - [testing.md](testing.md) — how the harness and exploit replays exercise it.
-- [SECURITY.md](../SECURITY.md) — trust boundaries and the `attack()` backdoor.
+- [SECURITY.md](../SECURITY.md) — trust boundaries and the `attack()` demo flag.

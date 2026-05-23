@@ -1,9 +1,10 @@
 # Guardian bot reference
 
 The Guardian bot (`guardian/`) is the runtime half of the pipeline: a
-TypeScript daemon that watches a deployed `Vault` on Base L2, re-checks all
-six invariants on every block, and persists any violation to Supabase within
-one block (~2 s) of the breach.
+TypeScript daemon that, when run against a deployed `Vault` on Base L2,
+re-checks all six invariants on every block and persists any violation to
+Supabase — typically within one block (~2 s). It is a **runnable reference
+implementation**; this repository does not host it against a live vault.
 
 This document is the module-by-module reference. For the bigger picture see
 [architecture.md](architecture.md#layer-3--runtime-guardian); for running it

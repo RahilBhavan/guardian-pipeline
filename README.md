@@ -1,37 +1,39 @@
 # Guardian Pipeline
 
 [![Invariant CI](https://github.com/rahilbhavan/guardian-pipeline/actions/workflows/invariant-ci.yml/badge.svg)](https://github.com/rahilbhavan/guardian-pipeline/actions/workflows/invariant-ci.yml)
-[![Vault coverage](https://img.shields.io/badge/Vault%20coverage-97%25-brightgreen)](./docs/assurance.md)
-[![Assurance score](https://img.shields.io/badge/assurance%20score-gated%20%E2%89%A580-0052FF)](./docs/assurance.md)
-[![Built on Base](https://img.shields.io/badge/Base_L2-0052FF)](https://base.org)
+[![Vault coverage](https://img.shields.io/badge/Vault.sol%20line%20coverage-97%25-brightgreen)](./docs/testing.md)
+[![Assurance score](https://img.shields.io/badge/assurance%20score-CI--gated%20%E2%89%A580-0052FF)](./docs/assurance.md)
+[![Built for Base](https://img.shields.io/badge/Base_L2-0052FF)](https://base.org)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.24-363636)](https://soliditylang.org)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue)](./LICENSE)
 
-> An automated DeFi assurance pipeline that closes the gap between
-> pre-deployment invariant fuzz testing and live on-chain monitoring — proving
-> the *same* mathematical property before deployment and enforcing it after.
+> A reference implementation of **cross-deployment invariant enforcement**: the
+> same mathematical safety properties checked by a Foundry fuzz campaign *before*
+> deployment, and by a runtime monitor that mirrors that campaign *after* it.
 
-**Live dashboard:** [https://guardian.rahilbhavan.com ↗](https://guardian.rahilbhavan.com)
+This is a portfolio / research-demonstration project. It is **not** production
+infrastructure, it does **not** custody real value, and nothing here is
+currently running as a hosted service — see [Scope & honesty](#scope--honesty).
 
 ---
 
 ## Why this exists
 
-Two empirical findings motivate this project:
+Two things are generally true of smart-contract security in practice:
 
-- **Bourveau et al. (2024)** — *Decentralized Finance (DeFi) assurance: early
-  evidence.* Across 8,500+ smart-contract audit reports, **continuous,
-  multi-layered assurance** — not one-time audits — is the distinguishing
-  characteristic of protocols that survive.
-- **Landsman et al. (2025)** — *Auditing Smart Contracts.* Traditional
-  point-in-time static audits show **little empirical evidence of preventing
-  runtime exploits** — flash-loan attacks, dynamic balance manipulation, and
-  other economic exploits land *after* the audit is signed off.
+- A point-in-time audit is a **snapshot**. It attests that the code looked sound
+  on the day it was signed; it cannot speak to the code, parameters, or market
+  conditions that exist afterwards.
+- Pre-deployment invariant fuzzing and post-deployment on-chain monitoring are
+  usually built as **separate tools**, often checking separately-written
+  properties — so "the thing proven in CI" and "the thing watched on-chain" can
+  quietly drift apart.
 
-**The gap:** no open-source tool unifies (a) pre-deployment invariant fuzz
-testing in CI with (b) live on-chain monitoring that enforces those *same*
-invariants post-launch. Guardian Pipeline builds both, and proves the property
-checked before deployment is byte-for-byte the property monitored after it.
+Guardian Pipeline is a worked implementation of one idea: write the safety
+properties **once**, and enforce that exact definition on both sides of
+deployment — proven by a Foundry fuzz campaign in CI, and re-checked by a
+runtime monitor whose checks mirror the harness function-for-function. The
+framing is informed by two papers on DeFi assurance; see [References](#references).
 
 ---
 
@@ -39,111 +41,113 @@ checked before deployment is byte-for-byte the property monitored after it.
 
 ![Architecture diagram](docs/architecture.svg)
 
-Three runtime layers, plus an assurance layer that scores them:
+Four layers — three runtime layers plus an assurance layer that scores them:
 
-1. **Pre-deployment (CI/CD)** — Foundry invariant fuzzing runs on every push.
-   A green badge means all 6 invariants held across a 2,000-run campaign
-   (~300,000 calls per invariant) with zero reverts.
+1. **Pre-deployment (CI/CD)** — Foundry invariant fuzzing runs on every push. A
+   green badge means all 6 invariants held across a 2,000-run campaign (up to
+   ~300,000 handler calls) without an invariant failing.
 2. **Smart contract** — an interest-bearing, over-collateralised lending vault
    (`deposit` · `withdraw` · `borrow` · `repay` · `liquidate` · `accrue`).
    Borrowers pay interest through a borrow index, lenders earn it as a rising
-   share price, and under-water positions are liquidated — so the 6 invariants
-   are genuinely *tensioned*, not true by construction.
-3. **Runtime guardian** — a TypeScript daemon on Base L2. On every block it
+   share price, and under-water positions are liquidated.
+3. **Runtime monitor** — a TypeScript daemon (`guardian/`) that, on every block,
    fetches vault state, evaluates the same 6 invariants, and persists any
-   violation to Supabase — surfaced on the live dashboard within one block
-   (~2 s) of the breach.
-4. **Assurance layer** — backtests 7 historical exploit classes, traces audit
-   findings to the layers that cover them, and rolls everything into a single
-   composite **Assurance Score** that CI gates on.
+   violation to Supabase. It is provided as a **runnable reference
+   implementation** with full setup instructions; it is not currently deployed
+   against a live vault.
+4. **Assurance layer** — backtests 7 historical exploit classes, traces every
+   security-review finding to the layers that cover it, and rolls the result
+   into a single composite **Assurance Score** that CI gates on.
 
-The off-chain evaluator (`guardian/src/evaluator.ts`) is a deliberate 1:1
-mirror of the Solidity `invariant_*` functions in
-`test/invariant/InvariantVault.t.sol` — it discovers every account from vault
-events and reads exact per-user state, so the off-chain check is the same
-maths, not a sampled proxy. The same property, on both sides of deployment.
-See **[docs/architecture.md](docs/architecture.md)**.
+The off-chain evaluator (`guardian/src/evaluator.ts`) is a deliberate 1:1 mirror
+of the Solidity `invariant_*` functions in `test/invariant/InvariantVault.t.sol`
+— it discovers every account from vault events and reads exact per-user state,
+so the off-chain check is the same maths, not a sampled proxy. See
+**[docs/architecture.md](docs/architecture.md)**.
 
 ---
 
 ## The 6 invariants
 
-| ID | Name | Property | Severity |
-|----|------|----------|----------|
-| INV-01 | Protocol solvency | `cash + totalBorrowed ≥ totalSupplyAssets` | Critical |
-| INV-02 | Supply-share integrity | `totalSupplyShares = Σ userSupplyShares[i]` | Critical |
-| INV-03 | Debt-share integrity | `totalBorrowShares = Σ userBorrowShares[i]` | High |
-| INV-04 | Lender-value floor | `totalSupplyAssets ≥ totalSupplyShares` (share price ≥ 1:1) | High |
-| INV-05 | Interest-index floor | `borrowIndex ≥ 1e18` | Medium |
-| INV-06 | No uncollateralised debt | `∀u: userSupplyShares[u] == 0 ⇒ userDebt(u) == 0` | High |
+Not every invariant is equally hard to satisfy, and this project says so
+plainly. The **Class** column is the honest distinction:
 
-Each invariant is asserted by an `invariant_*` function in the Foundry harness
-and mirrored in `evaluator.ts`. Interest accrual and liquidation move the borrow
-index, the share price and every position, so the fuzzer can genuinely break a
-property if the accounting rounds the wrong way — it found and pinned exactly
-such a one-wei solvency leak during development (audit finding GUA-03). The bot
-discovers every account from `Deposited` / `Borrowed` / `Liquidated` events and
-reads exact per-user state, so INV-02/03/06 are checked against the real user
-set, not a proxy. Full reference, including what breaks each one and which layer
-catches it: **[docs/invariants.md](docs/invariants.md)**.
+| ID | Name | Property | Class |
+|----|------|----------|-------|
+| INV-01 | Protocol solvency | `cash + totalBorrowed ≥ totalSupplyAssets` | **Fuzz-tensioned** — a wrong rounding direction breaks it |
+| INV-02 | Supply-share integrity | `totalSupplyShares = Σ userSupplyShares[i]` | Accounting identity — fuzzer regression-checks for a desync |
+| INV-03 | Debt-share integrity | `totalBorrowShares = Σ userBorrowShares[i]` | Accounting identity — fuzzer regression-checks for a desync |
+| INV-04 | Lender-value floor | `totalSupplyAssets ≥ totalSupplyShares` | Structural — non-trivial proof, confirmed empirically |
+| INV-05 | Interest-index floor | `borrowIndex ≥ 1e18` | Structural — true by construction; cheap regression check |
+| INV-06 | No uncollateralised debt | `∀u: userSupplyShares[u] == 0 ⇒ userDebt(u) == 0` | **Fuzz-tensioned** — guarded by `withdraw`/`liquidate` logic |
+
+INV-01 and INV-06 are the properties the fuzz campaign genuinely *attacks*;
+INV-01 caught a real one-wei solvency leak during development (review finding
+GUA-03). INV-04/05 are structural and the harness keeps them as regression
+checks. The harness also runs a `DonationHandler` so the donation/inflation
+attack class is actually exercised, not just asserted. Full reference, including
+what breaks each invariant: **[docs/invariants.md](docs/invariants.md)**.
 
 ---
 
 ## The assurance layer
 
-A point-in-time audit produces a PDF. Guardian Pipeline produces a **living
-score** — recomputed on every commit — composed of four independent layers:
+A point-in-time audit produces a static document. Guardian Pipeline produces a
+**recomputed score** — regenerated by CI on every commit — over three
+pre-deployment components:
 
-| Layer | Weight | What it measures |
-|-------|--------|------------------|
-| Static verification | 30% | Line/branch coverage + fuzz intensity on `Vault.sol` |
-| Exploit resistance | 25% | 7 historical exploit classes replayed (EXP-01…07) |
-| Continuous monitoring | 25% | Live uptime, liveness, and detection latency |
-| Audit traceability | 20% | % of audit findings provably covered by ≥1 invariant + harness test + live monitor |
+| Component | Weight | What it measures |
+|-----------|--------|------------------|
+| Static verification | 45% | Line/branch coverage + fuzz-campaign size on `Vault.sol` |
+| Exploit resistance | 35% | 7 historical exploit classes replayed (EXP-01…07) |
+| Finding traceability | 20% | % of review findings bound to ≥1 invariant + harness test + monitor check |
 
-Every replayed exploit is classified **PREVENTED** (code blocked it),
-**DETECTED** (state corrupted, but an invariant caught it same-block), or
-**MISSED** (value extracted, no invariant noticed — a gap). Current result:
-**6 PREVENTED, 1 DETECTED, 0 MISSED.** CI fails the build if the composite
-score drops below **80**. See **[docs/assurance.md](docs/assurance.md)**.
+The weights are a deliberate editorial choice, documented in the `score.ts`
+header — not presented as empirically derived. Every replayed exploit is
+classified **PREVENTED**, **DETECTED**, or **MISSED**; current result:
+**6 PREVENTED, 1 DETECTED, 0 MISSED**. CI fails the build if the composite score
+drops below **80**. (An earlier design had a fourth "Continuous Monitoring"
+component scored from a live deployment — it was removed, since there is no
+hosted deployment to score.) See **[docs/assurance.md](docs/assurance.md)**.
 
 ---
 
 ## Quickstart
 
-**Prerequisites:** [Foundry](https://getfoundry.sh/), Node.js ≥ 20, an Alchemy
-API key, and a Supabase project (all free tiers work).
+**Prerequisites:** [Foundry](https://getfoundry.sh/) and Node.js ≥ 20. The
+contract layer and both test suites run with no external services.
 
 ```bash
 git clone https://github.com/rahilbhavan/guardian-pipeline
 cd guardian-pipeline
 forge install                        # forge-std + openzeppelin-contracts
-cd guardian && npm install && cd ..
-cd dashboard && npm install && cd ..
 
-# Run the invariant suite locally
-forge test --match-contract InvariantVault -vvv
+forge test                           # 38 tests: unit + invariant + exploit replay
+cd assurance && npm install && npm test && cd ..
 ```
 
-Full deploy-and-run instructions — keystore setup, Base Sepolia deployment,
-Supabase provisioning, starting the bot and dashboard — are in
+Running the **runtime monitor** and **dashboard** additionally needs an Alchemy
+key and a Supabase project (both free tiers); full instructions — keystore
+setup, Base Sepolia deployment, starting the bot — are in
 **[docs/setup.md](docs/setup.md)**.
 
-### See it catch a violation
+---
 
-With the vault deployed and the Guardian bot running:
+## The staged detection demo
+
+The runtime monitor can be filmed catching a violation end-to-end. This is a
+**staged demo, not a caught attack**: `attack()` lives only on
+`AttackableVault` — a demo-only subclass — and is a deliberate one-line flag
+that forces an INV-01 violation. It is not an exploit, and the production
+`Vault` has no such function.
 
 ```bash
-cast send $VAULT_ADDRESS "attack()" \
-  --account guardian-demo \
-  --rpc-url $BASE_SEPOLIA_RPC
+cast send $VAULT_ADDRESS "attack()" --account guardian-demo --rpc-url $BASE_SEPOLIA_RPC
 ```
 
-`attack()` lives only on `AttackableVault` — a demo-only subclass deployed for
-the testnet demo. It inflates lender claims past the assets backing them and
-reverts on Base mainnet; the production `Vault` has no such function. The
-Guardian detects the resulting INV-01 violation on the next block, writes it to
-Supabase, and the dashboard turns red — all within ~2 seconds.
+With the monitor running, it detects the resulting INV-01 violation on the next
+block and writes it to Supabase. The demo proves the *plumbing* — fetch →
+evaluate → alert — works; it does not claim the monitor catches novel exploits.
 
 ---
 
@@ -156,7 +160,7 @@ Supabase, and the dashboard turns red — all within ~2 seconds.
 | `build` | `forge build --sizes`; gates all other jobs |
 | `invariant-fuzz` | 2,000-run invariant campaign; fails on any `[FAIL]` |
 | `coverage` | LCOV report; gates `src/Vault.sol` at ≥ 85% line coverage |
-| `static-analysis` | Slither + Aderyn, uploaded as artifacts |
+| `static-analysis` | Slither + Aderyn, uploaded as artifacts (non-gating) |
 | `assurance` | Exploit replays + composite Assurance Score; gates at ≥ 80 |
 | `gas-snapshot` | `forge snapshot --check`; posts the gas diff as a PR comment |
 
@@ -172,11 +176,11 @@ guardian-pipeline/
 │   ├── unit/             # Deterministic unit coverage
 │   └── exploit/          # 7 historical exploit-class replays
 ├── script/               # Deployment + exploit-replay scripts
-├── audit/                # Illustrative audit report + machine-readable findings
+├── security-review/      # Self-conducted security review + machine-readable findings
 ├── assurance/            # Assurance-Score tooling (Node)
 ├── supabase/migrations/  # Database schema + RLS policies
 ├── .github/workflows/    # CI/CD pipeline (6 jobs)
-├── guardian/             # TypeScript Guardian bot (viem)
+├── guardian/             # TypeScript runtime monitor (viem)
 ├── dashboard/            # React + Vite monitoring dashboard
 └── docs/                 # Architecture, invariants, setup, assurance
 ```
@@ -190,32 +194,74 @@ guardian-pipeline/
 | Smart contracts | Solidity 0.8.24 · OpenZeppelin v5 · Foundry / Forge · Anvil · Cast |
 | Static analysis | Slither · Aderyn |
 | CI/CD | GitHub Actions (6 jobs) |
-| Guardian bot | TypeScript (strict) · viem · Alchemy WebSocket · pino |
-| Persistence & alerting | Supabase (Postgres + real-time) → dashboard |
-| Dashboard | React 18 · Vite · Supabase real-time |
-| Deploy | Vercel (dashboard) · Base Sepolia (contracts) |
+| Runtime monitor | TypeScript (strict) · viem · Alchemy WebSocket · pino |
+| Persistence | Supabase (Postgres + real-time) |
+| Dashboard | React 18 · Vite |
+| Build targets | Base Sepolia (contracts) · Vercel config included for the dashboard |
+
+---
+
+## Scope & honesty
+
+This project is built to be read by an engineer, so it states its limits up
+front:
+
+- **Not production code.** `Vault.sol` is a teaching example — single asset, no
+  price oracle, no bad-debt reserve. Do not custody real value with it. See
+  [SECURITY.md](SECURITY.md).
+- **Nothing is hosted.** The runtime monitor and dashboard are runnable
+  reference implementations; this repo does not point at a live deployment.
+- **The "audit" is a self-review.** [`security-review/`](security-review/) is a
+  point-in-time review written by the repository author — not an independent
+  third-party audit. Commission one separately before any real deployment.
+- **The detection demo is staged.** `AttackableVault.attack()` is a planted flag
+  for filming the monitor, not a real exploit.
 
 ---
 
 ## Documentation
 
-Full set in **[docs/](docs/README.md)** — start there for reading paths and a
-documentation map.
+Full set in **[docs/](docs/README.md)**.
 
 | Doc | Contents |
 |-----|----------|
 | [docs/architecture.md](docs/architecture.md) | The four layers and how state flows between them |
-| [docs/invariants.md](docs/invariants.md) | All 6 invariants — formulas, failure modes, coverage |
-| [docs/contracts.md](docs/contracts.md) | `Vault`, `AttackableVault` + `MockERC20` API — functions, events, errors, storage |
-| [docs/guardian-bot.md](docs/guardian-bot.md) | The off-chain bot, module by module |
+| [docs/invariants.md](docs/invariants.md) | All 6 invariants — formulas, classes, failure modes |
+| [docs/contracts.md](docs/contracts.md) | `Vault`, `AttackableVault`, `MockERC20` API |
+| [docs/guardian-bot.md](docs/guardian-bot.md) | The runtime monitor, module by module |
 | [docs/database.md](docs/database.md) | The Supabase schema, RLS model, and migrations |
-| [docs/testing.md](docs/testing.md) | The three test tiers — unit, invariant fuzz, exploit replays |
+| [docs/testing.md](docs/testing.md) | The three test tiers — unit, invariant fuzz, exploit replay |
 | [docs/ci.md](docs/ci.md) | The six-job CI/CD pipeline in detail |
-| [docs/assurance.md](docs/assurance.md) | Assurance Score, exploit replays, audit traceability |
-| [docs/setup.md](docs/setup.md) | End-to-end local setup, deployment, and the demo |
+| [docs/assurance.md](docs/assurance.md) | Assurance Score, exploit replays, finding traceability |
+| [docs/setup.md](docs/setup.md) | Local setup, deployment, and the staged demo |
 | [docs/glossary.md](docs/glossary.md) | Every project identifier and term, defined |
 | [SECURITY.md](SECURITY.md) | Threat model, trust boundaries, responsible disclosure |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow and conventions |
+
+---
+
+## References
+
+The project's framing is informed by two empirical papers on DeFi audit
+markets:
+
+- **Bourveau, Brendel & Schoenfeld (2024)** — *Decentralized Finance (DeFi)
+  assurance: early evidence.* Review of Accounting Studies 29(3). Hand-codes
+  ~8,500 smart-contract audit reports and documents that this audit market is
+  pervasive, value-relevant, and substantively different from conventional
+  financial audits.
+- **Landsman, Lyandres, Maydew, Rabetti & Zhang (2025)** — *Auditing Smart
+  Contracts.* SSRN. Examines determinants and consequences of audits across
+  ~8,195 reports and 1,575 protocols; finds outcomes depend on auditor
+  characteristics (market share, launch rate, hack rate) more than on the mere
+  presence of an audit.
+
+These papers establish that the DeFi audit ecosystem is real and that audit
+*effectiveness* is an open empirical question. They do **not** themselves
+argue for continuous, multi-layered verification — that framing is this
+project's interpretation of one possible design response, not a claim of
+either paper. They motivate the question; they are not load-bearing for the
+tooling. If you cite this project, read both papers directly first.
 
 ---
 

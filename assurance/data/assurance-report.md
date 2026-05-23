@@ -1,20 +1,19 @@
 # Guardian Pipeline — Assurance Report
 
-> **Assurance Score: 92/100 — grade A-**  
-> Generated 2026-05-22T20:16:56.347Z · commit `28c0105`
+> **Assurance Score: 91/100 — grade A-**  
+> Generated 2026-05-23T00:39:13.340Z · commit `a400890`
 
-The Assurance Score quantifies what the cited papers argue for: continuous, multi-layered verification. Each component is one independent layer — static proof, exploit resistance, live monitoring, and audit traceability — and the composite is the empirical evidence a point-in-time audit cannot provide.
+The Assurance Score rolls the repository's pre-deployment evidence into one reproducible number — static verification, exploit-replay resistance, and the traceability of every security-review finding to a re-runnable check. It is a worked demonstration of one design response — recomputing assurance on every commit — to the open empirical question both cited papers raise about audit effectiveness. The "continuous, multi-layered" framing is this project's, not a claim of either paper.
 
 ## Score components
 
 | Component | Score | Weight | Detail |
 |---|---|---|---|
-| Static Verification | 83.2 | 30% | Vault.sol 97.2% line / 82.6% branch; fuzz campaign 2000x150 (intensity 64/100) |
-| Exploit Resistance | 100 | 25% | 7/7 exploit classes resisted (6 prevented, 1 detected, 0 missed) |
-| Continuous Monitoring | n/a | 25% | Supabase monitoring history unavailable — component excluded from the composite |
-| Audit Traceability | 93.8 | 20% | 93.8% weighted coverage of security-relevant findings |
+| Static Verification | 82 | 45% | Vault.sol 97.2% line / 78.3% branch; fuzz campaign 2000x150 (intensity 64/100) |
+| Exploit Resistance | 100 | 35% | 7/7 exploit classes resisted (6 prevented, 1 detected, 0 missed) |
+| Finding Traceability | 93.8 | 20% | 93.8% weighted coverage of security-relevant findings |
 
-## Audit traceability matrix
+## Finding traceability matrix
 
 7/8 security-relevant findings fully assured · 93.8% weighted coverage.
 
@@ -45,8 +44,8 @@ The Assurance Score quantifies what the cited papers argue for: continuous, mult
 
 ## Research grounding
 
-- **Bourveau et al. (2024), Decentralized Finance (DeFi) assurance: early evidence** — Across 8,500+ audit reports, assurance value comes from continuous, multi-layered verification rather than any single technique.
-- **Landsman et al. (2025), Auditing Smart Contracts** — Static, point-in-time audits show little empirical evidence of preventing runtime exploits.
+- **Bourveau, Brendel & Schoenfeld (2024), Decentralized Finance (DeFi) assurance: early evidence (Review of Accounting Studies 29(3))** — Hand-codes ~8,500 DeFi audit reports; documents the market as pervasive, value-relevant, and substantively different from conventional financial audits.
+- **Landsman, Lyandres, Maydew, Rabetti & Zhang (2025), Auditing Smart Contracts (SSRN)** — Across ~8,195 reports and 1,575 protocols, finds post-deployment outcomes depend on auditor characteristics (market share, launch rate, hack rate) rather than on the mere presence of an audit.
 
 ## CI gate
 

@@ -20,12 +20,12 @@ invariant, 8 exploit-replay).
 
 `test/unit/VaultUnit.t.sol` — deterministic, example-based coverage.
 
-The invariant harness proves the six properties hold; the unit suite pins
+The invariant harness exercises the six properties; the unit suite pins
 down *behaviour*: every happy path, every revert path, every event, interest
-accrual, and liquidation. It is what drives `src/Vault.sol` to 100% line
-coverage — the `coverage` CI job gates at ≥ 85%, and the unit suite alone
-clears that, which is why the coverage job caps invariant fuzzing (it only
-needs the percentage, not a full campaign).
+accrual, and liquidation. Together with the other tiers it drives `src/Vault.sol`
+to ~97% line coverage — the `coverage` CI job gates at ≥ 85%, comfortably
+clear, which is why the coverage job caps invariant fuzzing (it only needs the
+percentage, not a full campaign).
 
 Run it:
 
@@ -44,11 +44,11 @@ forge coverage --report summary          # see per-file coverage
 
 Foundry's invariant fuzzer builds **random call sequences** and asserts all
 six `invariant_*` functions after every call. Instead of fuzzing the vault
-directly, it drives four **handler contracts** — a standard Foundry pattern
+directly, it drives five **handler contracts** — a standard Foundry pattern
 that keeps the fuzzer inside a realistic, meaningful action space.
 
 ```
-setUp(): deploy Vault + MockERC20, register 4 handlers as targets,
+setUp(): deploy Vault + MockERC20, register 5 handlers as targets,
          exclude Vault + token from direct fuzzing
    │
    ▼
@@ -61,8 +61,9 @@ fuzzer ─▶ random sequence of handler calls ─▶ assert invariant_01..06 �
 |---------|------------------|----------------|
 | `DepositHandler` | `deposit`, `withdraw` | 5 actors, each funded `500_000e18` and pre-approved; deposit amount bounded to `1…100_000e18`. |
 | `BorrowHandler` | `borrow`, `repay` | Same 5 actors (deterministic `makeAddr` labels → identical addresses across handlers); borrow bounded to `1…50_000e18`. |
-| `WarpHandler` | `warp` | Advances `block.timestamp` by `1…30 days`, then calls `vault.accrue()` so interest is realised — every warp tensions the borrow index and lender claims. |
+| `WarpHandler` | `warp` | Advances `block.timestamp` by `1…30 days`, then calls `vault.accrue()` so interest is realised — every warp moves the borrow index and lender claims. |
 | `LiquidateHandler` | `liquidate` | A pseudo-random actor liquidates another's position, repaying a bounded `1…debt`; redistributes collateral so INV-06 is exercised. |
+| `DonationHandler` | `donate` | Transfers `1…50_000e18` of the asset straight to the vault from a non-actor donor — the ERC-4626 share-inflation vector. Proves a donation cannot move the share price or erode solvency (review finding GUA-06). |
 
 Two design choices make the campaign effective:
 
@@ -81,7 +82,7 @@ Two design choices make the campaign effective:
 `getActors()` so `invariant_supplyShareIntegrity` (INV-02),
 `invariant_debtShareIntegrity` (INV-03) and `invariant_noUncollateralisedDebt`
 (INV-06) can do a **true per-user** check across every actor — the same per-user
-checks the Guardian bot mirrors live against its event-discovered user set.
+checks the runtime monitor mirrors against its event-discovered user set.
 
 ### Fuzz profiles
 
@@ -90,7 +91,7 @@ Set with `FOUNDRY_PROFILE` (see `foundry.toml`):
 | Profile | Runs | Depth | Calls (approx) | Use |
 |---------|------|-------|----------------|-----|
 | `default` | 500 | 100 | ~50,000 | Local iteration. |
-| `ci` | 2,000 | 150 | ~300,000 | Every push (`invariant-fuzz` job). |
+| `ci` | 2,000 | 150 | up to ~300k | Every push (`invariant-fuzz` job). |
 | `deep` | 10,000 | 200 | ~2,000,000 | Before a release. |
 
 ```bash
@@ -133,7 +134,7 @@ Every replay ends in one of three outcomes:
 
 This maps directly onto the project's thesis: static review proves
 **PREVENTED**; continuous invariant monitoring catches **DETECTED**;
-**MISSED** is the residual risk a point-in-time audit leaves behind.
+**MISSED** is the residual risk a point-in-time review leaves behind.
 
 ### What the gate enforces
 
@@ -181,7 +182,7 @@ forge test -vvv
 FOUNDRY_PROFILE=ci forge test --match-contract InvariantVault -vvv
 forge test --match-path "test/exploit/*" -vvv
 forge coverage --report summary
-cd assurance && npm ci && npm test && npm run check -- --min-score 80 --no-supabase
+cd assurance && npm ci && npm test && npm run check -- --min-score 80
 ```
 
 See [ci.md](ci.md) for how these map onto the six CI jobs, and

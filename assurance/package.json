@@ -2,7 +2,7 @@
   "name": "guardian-assurance",
   "version": "1.0.0",
   "type": "module",
-  "description": "Assurance engine — audit-finding traceability, exploit-replay aggregation, and the composite Assurance Score for the Guardian Pipeline.",
+  "description": "Assurance engine — security-review finding traceability, exploit-replay aggregation, and the composite Assurance Score for the Guardian Pipeline.",
   "bin": {
     "assurance": "src/cli.ts"
   },
@@ -12,10 +12,6 @@
     "check": "tsx src/cli.ts check",
     "test": "node --import tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.0.0",
-    "dotenv": "^16.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

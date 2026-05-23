@@ -33,7 +33,7 @@ Every state-changing path (`deposit`, `withdraw`, `borrow`, `repay`,
 `liquidate`, `accrue`) is callable by anyone. Their safety rests entirely on the
 in-function guards documented in [docs/contracts.md](docs/contracts.md) and on
 the six [invariants](docs/invariants.md). The fuzz harness exists precisely to
-attack this boundary with 300,000+ randomised calls per CI run.
+attack this boundary with up to ~300,000 randomised handler calls per CI run.
 
 ### Boundary 2 — the Guardian's RPC link
 
@@ -60,25 +60,28 @@ it to the browser.
 
 ---
 
-## The `attack()` backdoor — isolated to a separate contract
+## The `attack()` demo flag — isolated to a separate contract
 
-The audited contract, `src/Vault.sol`, contains **no backdoor of any kind**.
-The demo breach lives only in `src/AttackableVault.sol` — a demo-only subclass
-that inflates `totalSupplyAssets` past the assets backing it, forcing an INV-01
-(solvency) violation so the Loom demo can show the Guardian bot detecting it
-live. `AttackableVault` is **never deployed to production**; the testnet demo
-deploys it deliberately. It is contained by two independent guards:
+The reviewed contract, `src/Vault.sol`, contains **no privileged path of any
+kind**. The demo flag lives only in `src/AttackableVault.sol` — a demo-only
+subclass with a deliberate one-line `attack()` that inflates `totalSupplyAssets`
+past the assets backing it, forcing an INV-01 (solvency) violation so the
+runtime monitor can be filmed detecting it end-to-end. It is a planted flag,
+not an exploit. `AttackableVault` is **never deployed to production**; only the
+testnet demo deploys it, deliberately. It is contained by two independent
+guards:
 
 1. **Access control** — `attack()` reverts with `NotAttacker` unless called by
    the `attacker` address fixed at construction. In the Foundry harness that
    address is a dedicated actor the fuzzer never controls.
 2. **Chain gate** — `attack()` reverts with `MainnetDisabled` whenever
    `block.chainid == 8453` (Base mainnet). Even if this exact bytecode were
-   deployed to production, the backdoor cannot fire.
+   deployed to production, the flag cannot fire.
 
 Both guards are exercised by the unit suite and replayed as exploit scenario
-**EXP-01**, where the expected outcome is **DETECTED** — the reference example
-of a runtime breach a static audit cannot prevent but the live layer catches.
+**EXP-01**, where the expected outcome is **DETECTED** — a staged breach used
+to show the runtime monitor catching an insolvency the contract code itself
+permitted. It demonstrates the detection plumbing; it is not a novel exploit.
 
 ---
 
@@ -110,7 +113,7 @@ alone is not enough — assume it is compromised the moment it is pushed).
 These are documented design boundaries, not undisclosed bugs:
 
 - **The vault is a teaching example.** Single asset, a fixed-rate interest
-  model, no price oracle, and no bad-debt reserve (audit finding GUA-08). Do not
+  model, no price oracle, and no bad-debt reserve (review finding GUA-08). Do not
   custody real value.
 - **`MockERC20` has unrestricted `mint` and no transfer hooks** — test-only.
   Never deploy it to a real network.
@@ -134,7 +137,7 @@ configuration — please report it responsibly:
 
 Issues in the demo `Vault` contract that are already listed under
 [Known limitations](#known-limitations) or in
-[docs/assurance.md](docs/assurance.md#audit-traceability) do not need a private
+[docs/assurance.md](docs/assurance.md#finding-traceability) do not need a private
 report — they are documented by design.
 
 You can expect an acknowledgement within a few days. As a non-commercial
@@ -146,6 +149,6 @@ research project there is no bug bounty, but genuine reports will be credited.
 
 - [docs/contracts.md](docs/contracts.md) — the contract's guards and errors.
 - [docs/database.md](docs/database.md) — the RLS model in full.
-- [docs/assurance.md](docs/assurance.md) — audit findings and exploit replays.
+- [docs/assurance.md](docs/assurance.md) — review findings and exploit replays.
 - [docs/guardian-bot.md](docs/guardian-bot.md) — the bot's trust assumptions.
 </content>

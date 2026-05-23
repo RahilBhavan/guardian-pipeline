@@ -85,7 +85,7 @@ jobs:
 
       - name: Check minimum coverage
         run: |
-          # Gate on the contract under audit (src/Vault.sol) — enforce >= 85% lines.
+          # Gate on the reviewed contract (src/Vault.sol) — enforce >= 85% lines.
           # The deploy script and test handlers are intentionally not gated.
           LINE_COV=$(grep 'src/Vault.sol' coverage-summary.txt | grep -oP '\d+\.\d+(?=%)' | head -1)
           echo "Vault.sol line coverage: ${LINE_COV}%"
@@ -139,7 +139,7 @@ jobs:
             docs/aderyn-report.md
 
   assurance:
-    # Feature layer: exploit-class replays, audit traceability, Assurance Score.
+    # Feature layer: exploit-class replays, finding traceability, Assurance Score.
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -180,12 +180,12 @@ jobs:
 
       - name: Compute Assurance Score and enforce the gate
         working-directory: assurance
-        # --no-supabase: CI has no live-monitoring credentials, so the
-        # Continuous Monitoring component degrades gracefully and the score is
-        # re-normalised over the three available layers.
+        # The Assurance Score is a pre-deployment metric — three components, all
+        # computed from repository evidence (coverage, exploit replays, finding
+        # traceability). Fails the build if the composite drops below 80.
         run: |
           npm ci
-          npm run check -- --min-score 80 --no-supabase
+          npm run check -- --min-score 80
 
       - name: Upload assurance report
         if: always()
@@ -201,6 +201,12 @@ jobs:
   gas-snapshot:
     needs: invariant-fuzz
     runs-on: ubuntu-latest
+    # Required so the "Comment gas diff on PR" step can post via
+    # github.rest.issues.createComment — the default GITHUB_TOKEN only has
+    # read-level access on pull_request events.
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:

@@ -90,6 +90,17 @@ export const ERC20_ABI = [
 const MAX_LOG_RANGE = 10n;
 
 /**
+ * Maximum number of users per per-position multicall batch. Each user
+ * contributes two calls (`userSupplyShares` + `userBorrowShares`), so this is
+ * 100 calls per batch — well under the free-tier RPC response-size limit and
+ * comfortably below Multicall3's per-call ceiling. Batches run sequentially so
+ * a growing user set never bursts the RPC. Same lesson as `MAX_LOG_RANGE`:
+ * a request that depends on chain history must be chunked, not assumed
+ * to fit.
+ */
+const USERS_PER_MULTICALL_BATCH = 50;
+
+/**
  * Scan vault events between two blocks and return every address that has ever
  * held a position — depositors, borrowers and liquidation beneficiaries.
  *
@@ -147,10 +158,15 @@ export async function fetchVaultState(
   blockNumber: bigint,
   users: `0x${string}`[],
 ): Promise<VaultState> {
-  // One contract call per state field, plus two per discovered user. The
-  // heterogeneous shape (some calls take args, some do not) means the typed
-  // multicall tuple cannot be inferred, so the result is cast to bigint[] —
-  // every call here returns a single uint256.
+  // The aggregate state is a fixed 7-call multicall. Per-user positions are
+  // batched into chunks of {@link USERS_PER_MULTICALL_BATCH} users — at scale
+  // a single all-users multicall exceeds the free-tier RPC response-size cap
+  // and the bot starts failing every block. Batches run sequentially after
+  // the aggregate fetch so a busy vault never bursts the RPC.
+  //
+  // The heterogeneous shape (some calls take args, some do not) means the
+  // typed multicall tuple cannot be inferred, so each batch result is cast
+  // to bigint[] — every call here returns a single uint256.
   const aggregateCalls = [
     { address: vaultAddress, abi: VAULT_ABI, functionName: 'totalSupplyAssets', args: [] },
     { address: vaultAddress, abi: VAULT_ABI, functionName: 'totalSupplyShares', args: [] },
@@ -161,41 +177,51 @@ export async function fetchVaultState(
     { address: tokenAddress, abi: ERC20_ABI, functionName: 'balanceOf', args: [vaultAddress] },
   ];
 
-  const userCalls = users.flatMap((user) => [
-    { address: vaultAddress, abi: VAULT_ABI, functionName: 'userSupplyShares', args: [user] },
-    { address: vaultAddress, abi: VAULT_ABI, functionName: 'userBorrowShares', args: [user] },
-  ]);
-
-  const [rawResults, block] = await Promise.all([
-    client.multicall({
-      allowFailure: false,
-      blockNumber,
-      contracts: [...aggregateCalls, ...userCalls],
-    }),
+  const [aggregateRaw, block] = await Promise.all([
+    client.multicall({ allowFailure: false, blockNumber, contracts: aggregateCalls }),
     client.getBlock({ blockNumber }),
   ]);
-  const results = rawResults as bigint[];
-  const expected = aggregateCalls.length + userCalls.length;
-  if (results.length !== expected) {
-    throw new Error(`multicall returned ${results.length} results, expected ${expected}`);
+  const aggregateResults = aggregateRaw as bigint[];
+  if (aggregateResults.length !== aggregateCalls.length) {
+    throw new Error(
+      `aggregate multicall returned ${aggregateResults.length} results, expected ${aggregateCalls.length}`,
+    );
   }
-  /** Read a guaranteed-present uint256 cell — the length check above proves it. */
-  const cell = (i: number): bigint => results[i] as bigint;
+
+  const userResults: bigint[] = [];
+  for (let i = 0; i < users.length; i += USERS_PER_MULTICALL_BATCH) {
+    const slice = users.slice(i, i + USERS_PER_MULTICALL_BATCH);
+    const calls = slice.flatMap((user) => [
+      { address: vaultAddress, abi: VAULT_ABI, functionName: 'userSupplyShares', args: [user] },
+      { address: vaultAddress, abi: VAULT_ABI, functionName: 'userBorrowShares', args: [user] },
+    ]);
+    const batchRaw = await client.multicall({ allowFailure: false, blockNumber, contracts: calls });
+    const batch = batchRaw as bigint[];
+    if (batch.length !== calls.length) {
+      throw new Error(
+        `user multicall batch returned ${batch.length} results, expected ${calls.length}`,
+      );
+    }
+    userResults.push(...batch);
+  }
+
+  /** Read a guaranteed-present uint256 cell — the length checks above prove it. */
+  const aggCell = (i: number): bigint => aggregateResults[i] as bigint;
 
   const positions: UserPosition[] = users.map((address, i) => ({
     address,
-    supplyShares: cell(aggregateCalls.length + i * 2),
-    borrowShares: cell(aggregateCalls.length + i * 2 + 1),
+    supplyShares: userResults[i * 2] as bigint,
+    borrowShares: userResults[i * 2 + 1] as bigint,
   }));
 
   return {
-    totalSupplyAssets: cell(0),
-    totalSupplyShares: cell(1),
-    totalBorrowShares: cell(2),
-    totalBorrowed: cell(3),
-    borrowIndex: cell(4),
-    collateralRatio: cell(5),
-    cash: cell(6),
+    totalSupplyAssets: aggCell(0),
+    totalSupplyShares: aggCell(1),
+    totalBorrowShares: aggCell(2),
+    totalBorrowed: aggCell(3),
+    borrowIndex: aggCell(4),
+    collateralRatio: aggCell(5),
+    cash: aggCell(6),
     users: positions,
     blockNumber,
     blockTimestamp: Number(block.timestamp),

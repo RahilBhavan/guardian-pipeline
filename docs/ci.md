@@ -2,9 +2,10 @@
 
 `.github/workflows/invariant-ci.yml` is the pre-deployment half of the
 pipeline. It runs on **every `push` and `pull_request` to `main`** and turns
-the green badge into a precise, falsifiable claim: *all six invariants
-survived a 300,000-call fuzz campaign, the contract is covered, the exploit
-catalogue did not regress, and the composite Assurance Score cleared 80.*
+the green badge into a precise, falsifiable claim: *all six invariants held
+across a 2,000-run fuzz campaign (no `invariant_*` assertion failed), the
+contract is covered, the exploit catalogue did not regress, and the composite
+Assurance Score cleared 80.*
 
 ---
 
@@ -45,7 +46,7 @@ fan-out jobs — nothing else runs until the project compiles.
 ### `invariant-fuzz`
 
 The headline job. Runs the invariant suite under the **`ci` profile**
-(`FOUNDRY_PROFILE: ci` → 2,000 runs × depth 150, ~300,000 calls):
+(`FOUNDRY_PROFILE: ci` → 2,000 runs × depth 150, up to ~300,000 handler calls):
 
 ```bash
 forge test --match-contract InvariantVault -vvv | tee invariant-results.txt
@@ -63,11 +64,11 @@ forge coverage --report lcov --report summary | tee coverage-summary.txt
 
 Runs with a **capped fuzz budget** (`FOUNDRY_INVARIANT_RUNS: 25`,
 `FOUNDRY_INVARIANT_DEPTH: 50`) — the unit suite already drives `src/Vault.sol`
-to 100% line coverage, so a full campaign here would only add runtime. The
-`invariant-fuzz` job owns the real campaign.
+coverage well clear of the 85% gate, so a full campaign here would only add
+runtime. The `invariant-fuzz` job owns the real campaign.
 
 The gate parses the line-coverage percentage for `src/Vault.sol` and **fails
-if it is below 85%** — only the contract under audit is gated; the deploy
+if it is below 85%** — only the reviewed contract is gated; the deploy
 script and test handlers are intentionally excluded. The LCOV report is
 uploaded as the `coverage-report` artifact. **Gating.**
 
@@ -80,7 +81,7 @@ Runs two Solidity static analysers:
 
 Both run with a trailing `|| true` — this job is **non-gating**. Its purpose is
 evidence, not enforcement: the reports are uploaded as the
-`static-analysis-reports` artifact for human review and feed the audit
+`static-analysis-reports` artifact for human review and feed the review
 narrative in [assurance.md](assurance.md). **Non-gating.**
 
 ### `assurance`
@@ -94,11 +95,12 @@ forge coverage (capped)     →  writes assurance/data/coverage-summary.txt
 npm ci && npm run check     →  composite Assurance Score, gate at ≥ 80
 ```
 
-`npm run check` is invoked with `--min-score 80 --no-supabase`. The
-`--no-supabase` flag drops the Continuous Monitoring component — CI has no live
-credentials — and the score is re-normalised over the three available layers.
-The report (`assurance-report.json` / `.md`, `exploit-replays.json`) is
-uploaded as the `assurance-report` artifact. **Gating** — fails the build on a
+`npm run check` is invoked with `--min-score 80`. The Assurance Score is a
+three-component pre-deployment metric — static verification, exploit
+resistance, and finding traceability — all computed from repository evidence,
+so the job needs no external credentials. The report
+(`assurance-report.json` / `.md`, `exploit-replays.json`) is uploaded as the
+`assurance-report` artifact. **Gating** — fails the build on a
 MISSED exploit or a sub-80 score. See [assurance.md](assurance.md).
 
 ### `gas-snapshot`
@@ -161,7 +163,7 @@ Reproduce the gating jobs before pushing — see also the checklist in
 FOUNDRY_PROFILE=ci forge test --match-contract InvariantVault -vvv
 forge coverage --report summary
 forge test --match-path "test/exploit/*" -vvv
-cd assurance && npm ci && npm run check -- --min-score 80 --no-supabase
+cd assurance && npm ci && npm run check -- --min-score 80
 ```
 
 ---

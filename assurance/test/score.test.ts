@@ -9,7 +9,6 @@ import {
   fuzzIntensity,
   gradeFor,
   scoreExploit,
-  scoreMonitoring,
   scoreStatic,
   scoreTraceability,
   WEIGHTS,
@@ -85,38 +84,6 @@ test('scoreExploit is unavailable when the catalogue is empty', () => {
   assert.equal(c.available, false);
 });
 
-test('scoreMonitoring blends uptime, latency and liveness', () => {
-  const perfect = scoreMonitoring({
-    available: true,
-    blocksChecked: 200,
-    expectedBlocks: 200,
-    avgLatencyMs: 100,
-    lastCheckAgeSec: 5,
-  });
-  assert.equal(perfect.score, 100);
-
-  const degraded = scoreMonitoring({
-    available: true,
-    blocksChecked: 100,
-    expectedBlocks: 200,
-    avgLatencyMs: 100,
-    lastCheckAgeSec: 5,
-  });
-  assert.ok(degraded.score < perfect.score);
-});
-
-test('scoreMonitoring penalises stale and slow detection', () => {
-  const stale = scoreMonitoring({
-    available: true,
-    blocksChecked: 200,
-    expectedBlocks: 200,
-    avgLatencyMs: 5000,
-    lastCheckAgeSec: 1200,
-  });
-  // uptime 100, latency 0, liveness 0 -> 0.5*100 = 50
-  assert.equal(stale.score, 50);
-});
-
 test('scoreTraceability caps at 60 when a security-relevant gap exists', () => {
   const withGap = scoreTraceability({ available: true, coveragePct: 95, gaps: 1 });
   assert.ok(withGap.score <= 60);
@@ -135,21 +102,16 @@ test('computeScore re-normalises weights when a component is unavailable', () =>
       invariantDepth: 150,
     }),
     scoreExploit({ available: true, total: 4, prevented: 4, detected: 0, missed: 0 }),
-    scoreMonitoring({
-      available: true,
-      blocksChecked: 200,
-      expectedBlocks: 200,
-      avgLatencyMs: 100,
-      lastCheckAgeSec: 5,
-    }),
     scoreTraceability({ available: true, coveragePct: 100, gaps: 0 }),
   ];
   const score = computeScore(components);
-  // All available components score 100, so the composite is 100 even though
-  // Static Verification (weight 0.30) was dropped.
+  // Both available components score 100, so the composite is 100 even though
+  // Static Verification (weight 0.45) was dropped.
   assert.equal(score.overall, 100);
   assert.equal(score.grade, 'A+');
-  assert.equal(score.effectiveWeight, 0.7);
+  // effectiveWeight = exploitResistance (0.35) + findingTraceability (0.20),
+  // reported to one decimal place.
+  assert.equal(score.effectiveWeight, 0.6);
 });
 
 test('computeScore is 0 when no component is available', () => {

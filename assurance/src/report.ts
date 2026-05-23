@@ -58,22 +58,25 @@ export interface AssuranceReport {
 
 const RESEARCH: ResearchCitation[] = [
   {
-    citation: 'Bourveau et al. (2024), Decentralized Finance (DeFi) assurance: early evidence',
+    citation: 'Bourveau, Brendel & Schoenfeld (2024), Decentralized Finance (DeFi) assurance: early evidence (Review of Accounting Studies 29(3))',
     claim:
-      'Across 8,500+ audit reports, assurance value comes from continuous, multi-layered verification rather than any single technique.',
+      'Hand-codes ~8,500 DeFi audit reports; documents the market as pervasive, value-relevant, and substantively different from conventional financial audits.',
   },
   {
-    citation: 'Landsman et al. (2025), Auditing Smart Contracts',
+    citation: 'Landsman, Lyandres, Maydew, Rabetti & Zhang (2025), Auditing Smart Contracts (SSRN)',
     claim:
-      'Static, point-in-time audits show little empirical evidence of preventing runtime exploits.',
+      'Across ~8,195 reports and 1,575 protocols, finds post-deployment outcomes depend on auditor characteristics (market share, launch rate, hack rate) rather than on the mere presence of an audit.',
   },
 ];
 
 const THESIS =
-  'The Assurance Score quantifies what the cited papers argue for: continuous, ' +
-  'multi-layered verification. Each component is one independent layer — static ' +
-  'proof, exploit resistance, live monitoring, and audit traceability — and the ' +
-  'composite is the empirical evidence a point-in-time audit cannot provide.';
+  "The Assurance Score rolls the repository's pre-deployment evidence into one " +
+  'reproducible number — static verification, exploit-replay resistance, and the ' +
+  'traceability of every security-review finding to a re-runnable check. It is a ' +
+  'worked demonstration of one design response — recomputing assurance on every ' +
+  'commit — to the open empirical question both cited papers raise about audit ' +
+  'effectiveness. The "continuous, multi-layered" framing is this project\'s, not ' +
+  'a claim of either paper.';
 
 /** Inputs to assemble a report from. */
 export interface BuildReportInput {
@@ -100,12 +103,12 @@ function evaluateGate(input: BuildReportInput): GateVerdict {
   }
   if (input.traceability.summary.gaps > 0) {
     reasons.push(
-      `${input.traceability.summary.gaps} security-relevant audit finding(s) have no continuous coverage`,
+      `${input.traceability.summary.gaps} security-relevant review finding(s) have no continuous coverage`,
     );
   }
   if (input.traceability.danglingReferences.length > 0) {
     reasons.push(
-      `${input.traceability.danglingReferences.length} audit finding reference(s) do not resolve to a known artifact`,
+      `${input.traceability.danglingReferences.length} finding reference(s) do not resolve to a known artifact`,
     );
   }
 
@@ -189,7 +192,7 @@ export function renderConsole(report: AssuranceReport): string {
   }
   L.push('');
   L.push(
-    `  Audit traceability   ${traceability.summary.fullyAssured}/${traceability.summary.securityRelevant} fully assured` +
+    `  Finding traceability ${traceability.summary.fullyAssured}/${traceability.summary.securityRelevant} fully assured` +
       `   ${traceability.summary.coveragePct.toFixed(1)}% coverage`,
   );
   for (const f of traceability.findings) {
@@ -245,7 +248,7 @@ export function renderMarkdown(report: AssuranceReport): string {
   }
   M.push('');
 
-  M.push('## Audit traceability matrix');
+  M.push('## Finding traceability matrix');
   M.push('');
   M.push(
     `${traceability.summary.fullyAssured}/${traceability.summary.securityRelevant} security-relevant findings fully assured · ` +

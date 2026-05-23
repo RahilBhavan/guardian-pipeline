@@ -1,19 +1,22 @@
 # Vault Security Review
 
-**Auditor:** Meridian Audit Collective *(illustrative)*
+**Reviewer:** Project author — self-conducted review *(not an independent third-party audit)*
 **Subject:** `src/Vault.sol` — interest-bearing, over-collateralised lending vault
-**Reviewed commit:** `vault-v2`
+**Reviewed commit:** `src/Vault.sol` as of this commit
 **Report date:** 2026-05-21
 **Classification:** Public
 
-> **About this document.** This is an *illustrative* audit report produced for the
-> Guardian Pipeline. It is deliberately written in the format of a real
-> point-in-time security review so the project can demonstrate the central idea
-> of [`audit/findings.json`](./findings.json) and the assurance engine: a static
-> audit is a snapshot, and the Guardian Pipeline converts each of its
-> security-relevant findings into a property that is *continuously* verified —
-> by the Foundry fuzz harness before deployment and by the live Guardian bot
-> after it. See the [Continuous Assurance Addendum](#continuous-assurance-addendum).
+> **About this document.** This is a **self-conducted** security review, written
+> by the repository author — *not* an independent third-party audit. It is
+> included to demonstrate the project's central mechanism, not to substitute for
+> a real audit: it is written in the format of a point-in-time review precisely
+> so the assurance engine can bind each of its security-relevant findings to a
+> property that is then *re-verified on every commit* — by the Foundry fuzz
+> harness pre-deployment, and by the runtime monitor (`guardian/`) when that
+> monitor is run against a deployment. The machine-readable form is
+> [`findings.json`](./findings.json). See the
+> [Continuous Assurance Addendum](#continuous-assurance-addendum). For a
+> production deployment, commission an independent audit separately.
 
 ---
 
@@ -70,7 +73,7 @@ limitation the Guardian Pipeline is built to close.
 **Distribution:** 1 Critical · 1 High · 2 Medium · 2 Low · 2 Informational.
 
 Each finding below carries a **Continuous Assurance** box: the invariants,
-harness tests, live monitors and exploit replays that keep the finding verified
+harness tests, runtime-monitor checks and exploit replays that keep the finding verified
 after this report's snapshot date. Those bindings are machine-readable in
 [`findings.json`](./findings.json) and resolved by `assurance trace`.
 
@@ -81,14 +84,14 @@ after this report's snapshot date. Those bindings are machine-readable in
 ### Demo insolvency backdoor isolated to a separate contract
 
 An earlier revision shipped a privileged `attack()` function inside
-`src/Vault.sol` that forced the vault insolvent for the live-detection demo.
-Auditing a contract that contains its own backdoor is unsound.
+`src/Vault.sol` that forced the vault insolvent for the runtime-detection demo.
+Reviewing a contract that contains its own backdoor is unsound.
 
 **Impact.** Total, immediate insolvency while the function executes.
 
 **Status — Resolved.** `attack()` has been removed from `Vault` entirely and now
 lives only in `src/AttackableVault.sol`, a demo-only subclass that is never
-deployed to production. The audited `Vault` carries no privileged accounting
+deployed to production. The reviewed `Vault` carries no privileged accounting
 path of any kind. `AttackableVault.attack()` additionally reverts on Base
 mainnet (`block.chainid == 8453`) as defence-in-depth.
 
@@ -96,10 +99,10 @@ mainnet (`block.chainid == 8453`) as defence-in-depth.
 deploy only `src/Vault.sol` to production.
 
 > **Continuous Assurance** — invariants `INV-01` · harness `invariant_solvency` ·
-> live `INV-01` · replay `EXP-01`. `INV-01` is fuzz-proven against `Vault`
-> pre-deploy and monitored every block post-deploy; `EXP-01` replays the
-> `AttackableVault` breach to prove the live layer catches an insolvency
-> regardless of its cause.
+> monitor `INV-01` · replay `EXP-01`. `INV-01` is fuzz-proven against `Vault`
+> pre-deployment and is also the runtime monitor's primary check; `EXP-01`
+> replays the `AttackableVault` breach to prove the runtime monitor catches an
+> insolvency regardless of its cause.
 
 ## GUA-02 — Medium
 
@@ -114,11 +117,11 @@ and all five mutating functions are marked `nonReentrant`.
 
 **Recommendation.** Resolved — retain the `ReentrancyGuard`.
 
-> **Continuous Assurance** — invariants `INV-01` · harness *(none)* · live
+> **Continuous Assurance** — invariants `INV-01` · harness *(none)* · monitor
 > `INV-01` · replay *(none)*. **Monitored-only by design:** the
 > `ReentrancyGuard` blocks this class structurally, but the fuzz harness uses a
 > non-callback `MockERC20` and cannot reproduce a reentrant sequence, so it is
-> *not* proven absent by the harness. It is monitored live — a reentrancy that
+> *not* proven absent by the harness. The runtime monitor covers it — a reentrancy that
 > drained value breaks `INV-01` within one block. The traceability map surfaces
 > this as **monitored-only**.
 
@@ -144,10 +147,10 @@ falls by. The invariant campaign runs with zero solvency violations across
 exact.
 
 > **Continuous Assurance** — invariants `INV-01` · harness `invariant_solvency` ·
-> live `INV-01` · replay *(none)*. This finding was surfaced by the harness
-> itself — the pre-deployment layer working as designed. `INV-01` is now both
-> fuzz-proven and monitored live so any reintroduction is caught on both sides
-> of deployment.
+> monitor `INV-01` · replay *(none)*. This finding was surfaced by the harness
+> itself — the pre-deployment layer working as designed. `INV-01` is now
+> fuzz-proven in CI and is also a runtime-monitor check, so any reintroduction
+> is caught both in CI and by the monitor.
 
 ## GUA-04 — Medium
 
@@ -166,7 +169,7 @@ closing the full position.
 uncollateralised debt) hold by construction.
 
 > **Continuous Assurance** — invariants `INV-06` · harness
-> `invariant_noUncollateralisedDebt` · live `INV-06` · replay `EXP-06`. The
+> `invariant_noUncollateralisedDebt` · monitor `INV-06` · replay `EXP-06`. The
 > harness fuzzes liquidation alongside interest accrual; `EXP-06` replays the
 > interest-driven liquidation path end to end.
 
@@ -184,7 +187,7 @@ caller may be surprised; the revert is graceful and corrupts no state.
 by available liquidity, as in any lending market. No code change required.
 
 > **Continuous Assurance** — invariants `INV-01` · harness `invariant_solvency` ·
-> live `INV-01` · replay `EXP-04`. The liquidity revert protects `INV-01`: the
+> monitor `INV-01` · replay `EXP-04`. The liquidity revert protects `INV-01`: the
 > vault never pays out assets it does not hold. `EXP-04` confirms the buffer
 > survives a maximal borrow.
 
@@ -202,7 +205,7 @@ inflation attack; the donated funds simply enlarge the solvency margin.
 `cash >= claims` as a `>=` relation, not equality.
 
 > **Continuous Assurance** — invariants `INV-01`, `INV-04` · harness
-> `invariant_solvency`, `invariant_lenderValueFloor` · live `INV-01`, `INV-04` ·
+> `invariant_solvency`, `invariant_lenderValueFloor` · monitor `INV-01`, `INV-04` ·
 > replay `EXP-02`. `INV-04` and `INV-01` bound the lender side; `EXP-02` replays
 > the donation/inflation class and confirms the victim is not diluted.
 
@@ -221,7 +224,7 @@ surplus when closing a position, as is standard for index-based debt. The
 one-wei direction always favours the protocol.
 
 > **Continuous Assurance** — invariants `INV-01` · harness `invariant_solvency` ·
-> live `INV-01` · replay *(none)*. The one-wei overshoot exists precisely to
+> monitor `INV-01` · replay *(none)*. The one-wei overshoot exists precisely to
 > keep `INV-01` exact; the harness proves the rounding direction never erodes
 > the solvency margin across the full invariant campaign.
 
@@ -242,8 +245,8 @@ factor and a bad-debt socialisation path. The debt remains counted in
 not an accounting break.
 
 > **Continuous Assurance** — invariants `INV-01` · harness `invariant_solvency` ·
-> live `INV-01` · replay `EXP-06`. Residual bad debt does not break `INV-01` —
-> the debt is still counted as an asset — but the live monitor tracks the
+> monitor `INV-01` · replay `EXP-06`. Residual bad debt does not break `INV-01` —
+> the debt is still counted as an asset — but the runtime monitor tracks the
 > solvency margin so erosion is visible. `EXP-06` exercises the interest-driven
 > liquidation path that keeps healthy positions cleared.
 
@@ -251,12 +254,18 @@ not an accounting break.
 
 ## Continuous Assurance Addendum
 
-A security audit is a **point-in-time snapshot**. Landsman et al. (2025),
-*Auditing Smart Contracts*, find little empirical evidence that static
-point-in-time audits prevent runtime exploits — the report above ages the moment
-the code, parameters, or deployment context change. Bourveau et al. (2024),
-*Decentralized Finance (DeFi) assurance: early evidence*, argue the same data
-points toward **continuous, multi-layered assurance**.
+A security audit is a **point-in-time snapshot** — the report above ages the
+moment the code, parameters, or deployment context change. Two empirical
+papers motivate looking past that snapshot. Bourveau, Brendel & Schoenfeld
+(2024), *Decentralized Finance (DeFi) assurance: early evidence* (Review of
+Accounting Studies 29(3)), document the DeFi audit market across ~8,500
+reports — pervasive, value-relevant, distinct from financial audits. Landsman
+et al. (2025), *Auditing Smart Contracts* (SSRN), examine ~8,195 audit reports
+and 1,575 protocols and find that post-deployment outcomes depend on
+*auditor* characteristics rather than on the mere presence of an audit.
+Neither paper itself argues for **continuous, multi-layered assurance** — that
+framing is this project's interpretation of one design response to the
+open question both papers raise.
 
 The Guardian Pipeline operationalises that conclusion. Every **security-relevant**
 finding in this report is bound, in [`findings.json`](./findings.json), to up to
@@ -265,13 +274,13 @@ four assurance layers:
 | Layer | Mechanism | When |
 |---|---|---|
 | **Invariant** | A formal property `INV-01..06` | Definition |
-| **Harness test** | `invariant_*` in the Foundry fuzz suite | Every push, pre-deploy |
-| **Live monitor** | A check in `guardian/src/evaluator.ts` | Every block, post-deploy |
-| **Exploit replay** | An `EXP-*` scenario in `test/exploit/` | Every push, pre-deploy |
+| **Harness test** | `invariant_*` in the Foundry fuzz suite | Every push, pre-deployment |
+| **Runtime monitor** | A check in `guardian/src/evaluator.ts` | Every block, when run against a deployment |
+| **Exploit replay** | An `EXP-*` scenario in `test/exploit/` | Every push, pre-deployment |
 
-A finding is **fully assured** when it is proven by the harness *and* watched by
-a live monitor; **monitored-only** (e.g. GUA-02) when live monitoring is the only
-continuous layer; and a **gap** when no continuous layer covers it. The
+A finding is **fully assured** when it is proven by the harness *and* covered by
+the runtime monitor; **monitored-only** (e.g. GUA-02) when the runtime monitor is
+the only layer covering it; and a **gap** when no layer covers it. The
 `assurance` engine resolves these bindings, scores them, and fails CI if a
 security-relevant finding regresses to a gap. Run `assurance trace` to see the
-live traceability matrix, or `assurance report` for the full assurance score.
+traceability matrix, or `assurance report` for the full assurance score.
