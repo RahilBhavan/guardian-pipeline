@@ -254,12 +254,18 @@ not an accounting break.
 
 ## Continuous Assurance Addendum
 
-A security audit is a **point-in-time snapshot**. Landsman et al. (2025),
-*Auditing Smart Contracts*, find little empirical evidence that static
-point-in-time audits prevent runtime exploits — the report above ages the moment
-the code, parameters, or deployment context change. Bourveau et al. (2024),
-*Decentralized Finance (DeFi) assurance: early evidence*, argue the same data
-points toward **continuous, multi-layered assurance**.
+A security audit is a **point-in-time snapshot** — the report above ages the
+moment the code, parameters, or deployment context change. Two empirical
+papers motivate looking past that snapshot. Bourveau, Brendel & Schoenfeld
+(2024), *Decentralized Finance (DeFi) assurance: early evidence* (Review of
+Accounting Studies 29(3)), document the DeFi audit market across ~8,500
+reports — pervasive, value-relevant, distinct from financial audits. Landsman
+et al. (2025), *Auditing Smart Contracts* (SSRN), examine ~8,195 audit reports
+and 1,575 protocols and find that post-deployment outcomes depend on
+*auditor* characteristics rather than on the mere presence of an audit.
+Neither paper itself argues for **continuous, multi-layered assurance** — that
+framing is this project's interpretation of one design response to the
+open question both papers raise.
 
 The Guardian Pipeline operationalises that conclusion. Every **security-relevant**
 finding in this report is bound, in [`findings.json`](./findings.json), to up to

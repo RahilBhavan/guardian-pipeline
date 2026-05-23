@@ -1,9 +1,9 @@
 # Guardian Pipeline — Assurance Report
 
 > **Assurance Score: 91/100 — grade A-**  
-> Generated 2026-05-22T22:20:19.653Z · commit `8cea9c2`
+> Generated 2026-05-23T00:39:13.340Z · commit `a400890`
 
-The Assurance Score rolls the repository's pre-deployment evidence into one reproducible number — static verification, exploit-replay resistance, and the traceability of every security-review finding to a re-runnable check. It is a demonstration of the continuous, multi-layered assurance the cited research argues for: recomputed on every commit rather than fixed at a point in time.
+The Assurance Score rolls the repository's pre-deployment evidence into one reproducible number — static verification, exploit-replay resistance, and the traceability of every security-review finding to a re-runnable check. It is a worked demonstration of one design response — recomputing assurance on every commit — to the open empirical question both cited papers raise about audit effectiveness. The "continuous, multi-layered" framing is this project's, not a claim of either paper.
 
 ## Score components
 
@@ -44,8 +44,8 @@ The Assurance Score rolls the repository's pre-deployment evidence into one repr
 
 ## Research grounding
 
-- **Bourveau et al. (2024), Decentralized Finance (DeFi) assurance: early evidence** — Across 8,500+ audit reports, assurance value comes from continuous, multi-layered verification rather than any single technique.
-- **Landsman et al. (2025), Auditing Smart Contracts** — Static, point-in-time audits show little empirical evidence of preventing runtime exploits.
+- **Bourveau, Brendel & Schoenfeld (2024), Decentralized Finance (DeFi) assurance: early evidence (Review of Accounting Studies 29(3))** — Hand-codes ~8,500 DeFi audit reports; documents the market as pervasive, value-relevant, and substantively different from conventional financial audits.
+- **Landsman, Lyandres, Maydew, Rabetti & Zhang (2025), Auditing Smart Contracts (SSRN)** — Across ~8,195 reports and 1,575 protocols, finds post-deployment outcomes depend on auditor characteristics (market share, launch rate, hack rate) rather than on the mere presence of an audit.
 
 ## CI gate
 

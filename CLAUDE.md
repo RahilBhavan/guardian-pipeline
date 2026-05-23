@@ -9,11 +9,13 @@ A DeFi security pipeline with two integrated layers:
 
 A third **assurance layer** ties the two together: it maps each security-review finding to the invariant and exploit-replay test that covers it, and emits an assurance score consumed by the dashboard and CI.
 
-**Research grounding** (cite both in the README; flag that the citations should be verified against the source papers before relying on them):
-- Bourveau et al. (2024) *Decentralized Finance (DeFi) assurance: early evidence* — continuous multi-layered assurance across 8,500+ audit reports.
-- Landsman et al. (2025) *Auditing Smart Contracts* — static point-in-time audits show little empirical evidence of preventing runtime exploits.
+**Research grounding** (verified against the source papers as of 2026-05-22):
+- Bourveau, Brendel & Schoenfeld (2024), *Decentralized Finance (DeFi) assurance: early evidence*, Review of Accounting Studies 29(3) — hand-codes ~8,500 DeFi audit reports; documents the market as pervasive, value-relevant, and distinct from conventional financial audits.
+- Landsman, Lyandres, Maydew, Rabetti & Zhang (2025), *Auditing Smart Contracts*, SSRN — examines ~8,195 audit reports across 1,575 protocols; finds post-deployment outcomes depend on auditor characteristics (market share, launch rate, hack rate) rather than the mere presence of an audit.
 
-This project is a **reference implementation** demonstrating the continuous, multi-layered assurance approach those papers motivate — a portfolio / research-demonstration build, not production infrastructure and not a hosted service.
+Neither paper itself argues for "continuous, multi-layered verification" — that is *this project's* interpretation of one possible design response to the question both papers raise (how to make audit effectiveness more measurable). Never put that framing in either paper's mouth in README/docs/code.
+
+This project is a **reference implementation** of one such design — a portfolio / research-demonstration build, not production infrastructure and not a hosted service.
 
 ---
 
@@ -95,6 +97,32 @@ Guard/
 - Do not hardcode the Alchemy key anywhere — always read from `process.env`.
 - Do not install Hardhat — this project is Foundry-only for the contract layer.
 - Do not expose the Supabase service-role key to the browser — the bot writes with it server-side; the dashboard reads with the anon key only.
+
+---
+
+## Commit cadence — durable authorization
+
+When working through a multi-item punch list (the kind produced by a critical
+review or a `/loop`-style task plan), commit **and** push to `origin` after each
+item is implemented and verified. One commit per item — never batch multiple
+items into one commit.
+
+This standing authorization covers ordinary work pushes on a feature branch:
+
+- Run the relevant local check first (`forge test`, package `npm test`,
+  `tsc --noEmit`, or `npm run build` — whichever the item touches). Do not
+  commit if the check fails.
+- Use conventional-commit prefixes (`feat:` / `fix:` / `refactor:` / `docs:` /
+  `test:` / `chore:`) — match the existing log style.
+- Stage files explicitly by path; never `git add -A` / `git add .`.
+- Push to the current branch's upstream — never to `main` directly, never
+  force-push, never `--no-verify`.
+- After pushing, state the commit SHA and the next item in one line, then
+  proceed to the next item without re-asking permission.
+
+This authorization does **not** extend to: merging PRs, force-pushing, pushing
+to `main`, opening/closing PRs from the CLI, or any of the other hard stops in
+`~/.claude/CLAUDE.md`. Those still require a fresh in-session confirmation.
 
 ---
 

@@ -242,17 +242,26 @@ Full set in **[docs/](docs/README.md)**.
 
 ## References
 
-The project's framing is informed by two papers on DeFi assurance:
+The project's framing is informed by two empirical papers on DeFi audit
+markets:
 
-- **Bourveau et al. (2024)** — *Decentralized Finance (DeFi) assurance: early
-  evidence.* Argues that assurance value comes from continuous, multi-layered
-  verification rather than any single technique.
-- **Landsman et al. (2025)** — *Auditing Smart Contracts.* Reports that static,
-  point-in-time audits show little empirical evidence of preventing runtime
-  exploits.
+- **Bourveau, Brendel & Schoenfeld (2024)** — *Decentralized Finance (DeFi)
+  assurance: early evidence.* Review of Accounting Studies 29(3). Hand-codes
+  ~8,500 smart-contract audit reports and documents that this audit market is
+  pervasive, value-relevant, and substantively different from conventional
+  financial audits.
+- **Landsman, Lyandres, Maydew, Rabetti & Zhang (2025)** — *Auditing Smart
+  Contracts.* SSRN. Examines determinants and consequences of audits across
+  ~8,195 reports and 1,575 protocols; finds outcomes depend on auditor
+  characteristics (market share, launch rate, hack rate) more than on the mere
+  presence of an audit.
 
-These motivate the approach but are not load-bearing for the tooling. If you
-cite this project, verify both references against the source papers first.
+These papers establish that the DeFi audit ecosystem is real and that audit
+*effectiveness* is an open empirical question. They do **not** themselves
+argue for continuous, multi-layered verification — that framing is this
+project's interpretation of one possible design response, not a claim of
+either paper. They motivate the question; they are not load-bearing for the
+tooling. If you cite this project, read both papers directly first.
 
 ---
 

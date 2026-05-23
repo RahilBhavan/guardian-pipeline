@@ -78,11 +78,11 @@ tooling terms follow.
 
 | Term | Meaning |
 |------|---------|
-| **Bourveau et al. (2024)** | *Decentralized Finance (DeFi) assurance: early evidence.* Argues continuous, multi-layered assurance — not one-time audits — distinguishes protocols that survive. |
-| **Landsman et al. (2025)** | *Auditing Smart Contracts.* Reports static point-in-time audits show little empirical evidence of preventing runtime exploits. |
+| **Bourveau, Brendel & Schoenfeld (2024)** | *Decentralized Finance (DeFi) assurance: early evidence* (Review of Accounting Studies 29(3)). Hand-codes ~8,500 audit reports; documents the DeFi audit market as pervasive, value-relevant, and substantively different from conventional financial audits. |
+| **Landsman, Lyandres, Maydew, Rabetti & Zhang (2025)** | *Auditing Smart Contracts* (SSRN). Across ~8,195 reports and 1,575 protocols, finds post-deployment outcomes depend on auditor characteristics — market share, launch rate, hack rate — rather than on the mere presence of an audit. |
 
-These two papers motivate the project's framing; Guardian Pipeline is a
-reference implementation demonstrating their argument, not a claim to have
-settled it. Verify both citations against the source papers before relying on
-them. See the [root README](../README.md#why-this-exists).
+These papers establish that the DeFi audit market is real and that audit
+*effectiveness* is an open empirical question. The continuous, multi-layered
+framing is this project's interpretation — not a claim of either paper. See
+the [References section of the root README](../README.md#references).
 </content>

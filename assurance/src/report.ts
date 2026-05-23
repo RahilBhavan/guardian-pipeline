@@ -58,14 +58,14 @@ export interface AssuranceReport {
 
 const RESEARCH: ResearchCitation[] = [
   {
-    citation: 'Bourveau et al. (2024), Decentralized Finance (DeFi) assurance: early evidence',
+    citation: 'Bourveau, Brendel & Schoenfeld (2024), Decentralized Finance (DeFi) assurance: early evidence (Review of Accounting Studies 29(3))',
     claim:
-      'Across 8,500+ audit reports, assurance value comes from continuous, multi-layered verification rather than any single technique.',
+      'Hand-codes ~8,500 DeFi audit reports; documents the market as pervasive, value-relevant, and substantively different from conventional financial audits.',
   },
   {
-    citation: 'Landsman et al. (2025), Auditing Smart Contracts',
+    citation: 'Landsman, Lyandres, Maydew, Rabetti & Zhang (2025), Auditing Smart Contracts (SSRN)',
     claim:
-      'Static, point-in-time audits show little empirical evidence of preventing runtime exploits.',
+      'Across ~8,195 reports and 1,575 protocols, finds post-deployment outcomes depend on auditor characteristics (market share, launch rate, hack rate) rather than on the mere presence of an audit.',
   },
 ];
 
@@ -73,8 +73,10 @@ const THESIS =
   "The Assurance Score rolls the repository's pre-deployment evidence into one " +
   'reproducible number — static verification, exploit-replay resistance, and the ' +
   'traceability of every security-review finding to a re-runnable check. It is a ' +
-  'demonstration of the continuous, multi-layered assurance the cited research ' +
-  'argues for: recomputed on every commit rather than fixed at a point in time.';
+  'worked demonstration of one design response — recomputing assurance on every ' +
+  'commit — to the open empirical question both cited papers raise about audit ' +
+  'effectiveness. The "continuous, multi-layered" framing is this project\'s, not ' +
+  'a claim of either paper.';
 
 /** Inputs to assemble a report from. */
 export interface BuildReportInput {

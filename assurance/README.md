@@ -16,15 +16,18 @@ It implements three features:
 
 ## Research grounding
 
-- **Bourveau et al. (2024)**, *DeFi assurance: early evidence* — value comes
-  from continuous, multi-layered verification, not any single technique.
-- **Landsman et al. (2025)**, *Auditing Smart Contracts* — static point-in-time
-  audits show little empirical evidence of preventing runtime exploits.
+- **Bourveau, Brendel & Schoenfeld (2024)**, *DeFi assurance: early evidence*
+  (Review of Accounting Studies 29(3)) — hand-codes ~8,500 audit reports;
+  documents the DeFi audit market as pervasive and value-relevant.
+- **Landsman, Lyandres, Maydew, Rabetti & Zhang (2025)**, *Auditing Smart
+  Contracts* (SSRN) — across ~8,195 reports and 1,575 protocols, finds
+  post-deployment outcomes depend on auditor characteristics, not just on
+  whether an audit happened.
 
-The Assurance Score is a worked demonstration of the continuous, multi-layered
-verification the first paper argues for. *Verify both citations against the
-source papers before relying on them — they motivate the project but are not
-load-bearing for the tooling itself.*
+These establish that the audit ecosystem is real and that audit effectiveness
+is an open empirical question. The "continuous, multi-layered" framing is
+*this project's* interpretation of one design response — not a claim of either
+paper. They motivate the work; they are not load-bearing for the tooling.
 
 ## Commands
 

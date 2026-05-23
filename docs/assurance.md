@@ -5,10 +5,16 @@ signed. Guardian Pipeline produces an **Assurance Score** — recomputed by the
 `assurance` CI job on every commit — that summarises how well the contract is
 covered by the repository's own pre-deployment evidence.
 
-The framing is informed by **Landsman et al. (2025)** (static audits show little
-evidence of preventing runtime exploits) and **Bourveau et al. (2024)** (value
-comes from continuous, multi-layered verification). The score is a worked
-demonstration of that argument, not a claim to have settled it.
+The framing is informed by two empirical papers on DeFi audit markets —
+**Bourveau, Brendel & Schoenfeld (2024)**, which documents ~8,500 audit
+reports as pervasive and value-relevant, and **Landsman et al. (2025)**, which
+finds post-deployment outcomes depend on auditor characteristics rather than
+on the mere presence of an audit. Neither paper itself argues for "continuous,
+multi-layered verification" — that framing is this project's interpretation of
+one design response to the open question both papers raise about audit
+effectiveness. The score is a worked demonstration of that interpretation, not
+a claim to have settled the question. See the [References section of the
+README](../README.md#references).
 
 ---
 
