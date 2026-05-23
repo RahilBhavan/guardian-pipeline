@@ -170,7 +170,7 @@ cd assurance && npm ci && npm run check -- --min-score 80
 
 ## Related documents
 
-- [testing.md](testing.md) — the three test tiers these jobs run.
+- [testing.md](testing.md) — the four test tiers these jobs run.
 - [assurance.md](assurance.md) — the Assurance Score the `assurance` job gates.
 - [architecture.md](architecture.md#layer-1--pre-deployment-cicd) — CI as Layer 1.
 </content>

@@ -22,7 +22,7 @@ Reference-grade detail on each component, accurate to the source.
 | [contracts.md](contracts.md) | `Vault.sol` + `MockERC20.sol` API — every function, event, error, and storage slot. |
 | [guardian-bot.md](guardian-bot.md) | The off-chain bot, module by module — the per-block lifecycle, config, error handling. |
 | [database.md](database.md) | The Supabase schema — both tables, indexes, the RLS model, real-time, migrations. |
-| [testing.md](testing.md) | The three test tiers — unit, invariant fuzzing, exploit replays — and how to read a counterexample. |
+| [testing.md](testing.md) | The four test tiers — unit, parameterized fuzz, invariant fuzz, exploit replays — and how to read a counterexample. |
 | [ci.md](ci.md) | The six-job CI/CD pipeline — the job graph, what each job gates, secrets, artifacts. |
 | [assurance.md](assurance.md) | The Assurance Score, the exploit-replay catalogue, and finding traceability. |
 

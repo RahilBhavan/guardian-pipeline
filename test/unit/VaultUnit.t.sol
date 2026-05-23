@@ -22,6 +22,7 @@ contract VaultUnit is Test {
 
     uint256 internal constant FUND = 1_000_000e18;
     uint256 internal constant APR_BPS = 10_00; // 10%
+    uint256 internal constant LIQ_BONUS_BPS = 5_00; // 5%
 
     event Deposited(address indexed user, uint256 amount, uint256 sharesMinted);
     event Withdrawn(address indexed user, uint256 shares, uint256 amountOut);
@@ -33,7 +34,7 @@ contract VaultUnit is Test {
 
     function setUp() public {
         token = new MockERC20();
-        vault = new Vault(address(token), APR_BPS);
+        vault = new Vault(address(token), APR_BPS, LIQ_BONUS_BPS);
 
         address[3] memory users = [alice, bob, carol];
         for (uint256 i = 0; i < users.length; i++) {
@@ -308,7 +309,7 @@ contract VaultUnit is Test {
     /* -------------------- AttackableVault (demo only) ----------------------- */
 
     function test_attackableVault_attackBreaksSolvency() public {
-        AttackableVault av = new AttackableVault(address(token), APR_BPS, attacker);
+        AttackableVault av = new AttackableVault(address(token), APR_BPS, LIQ_BONUS_BPS, attacker);
         token.mint(alice, FUND);
         vm.prank(alice);
         token.approve(address(av), type(uint256).max);
@@ -326,14 +327,14 @@ contract VaultUnit is Test {
     }
 
     function test_attackableVault_onlyAttacker() public {
-        AttackableVault av = new AttackableVault(address(token), APR_BPS, attacker);
+        AttackableVault av = new AttackableVault(address(token), APR_BPS, LIQ_BONUS_BPS, attacker);
         vm.prank(alice);
         vm.expectRevert(AttackableVault.NotAttacker.selector);
         av.attack();
     }
 
     function test_attackableVault_disabledOnMainnet() public {
-        AttackableVault av = new AttackableVault(address(token), APR_BPS, attacker);
+        AttackableVault av = new AttackableVault(address(token), APR_BPS, LIQ_BONUS_BPS, attacker);
         vm.chainId(8453); // Base mainnet
         vm.prank(attacker);
         vm.expectRevert(AttackableVault.MainnetDisabled.selector);

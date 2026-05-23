@@ -1,6 +1,6 @@
 # Testing strategy
 
-Guardian Pipeline's contract layer is verified by **three complementary test
+Guardian Pipeline's contract layer is verified by **four complementary test
 tiers**, each answering a different question. Together they are the evidence
 behind the green CI badge and the `static-verification` slice of the
 [Assurance Score](assurance.md).
@@ -8,11 +8,13 @@ behind the green CI badge and the `static-verification` slice of the
 | Tier | Directory | Question it answers | CI gate |
 |------|-----------|---------------------|---------|
 | Unit | `test/unit/` | Does every individual path behave exactly as specified? | via `coverage` (≥ 85% lines) |
+| Parameterized fuzz | `test/fuzz/` | Do the invariants hold under *any* APR / liquidation-bonus parameter pair the constructor accepts? | runs with the standard `forge test` job |
 | Invariant fuzz | `test/invariant/` | Do the six properties survive *any* call sequence? | `invariant-fuzz` (zero `[FAIL]`) |
 | Exploit replay | `test/exploit/` | Does the vault resist known DeFi exploit *classes*? | `assurance` (no regression, no `MISSED`) |
 
-`forge test` runs all three — **38 tests across 3 suites** (24 unit, 6
-invariant, 8 exploit-replay).
+`forge test` runs all four — **52 tests across 4 suites** (24 unit + 7
+`_burnDebt` boundary tests + 7 parameterized fuzz + 6 invariant +
+8 exploit-replay).
 
 ---
 
@@ -36,7 +38,46 @@ forge coverage --report summary          # see per-file coverage
 
 ---
 
-## Tier 2 — Invariant fuzzing
+## Tier 2 — Parameterized fuzz
+
+`test/fuzz/VaultParameterized.t.sol` — Foundry's standard fuzzer over the
+*constructor parameters*.
+
+The invariant harness only ever deploys a Vault at the canonical 10% APR
+and 5% liquidation bonus. The parameterized fuzz tests close that gap: each
+run deploys a *fresh* Vault with a random APR (1..10000 bps) and/or a random
+liquidation bonus (100..5000 bps), drives a deterministic adversarial
+sequence through it — deposit, max-borrow, warp, accrue, attempted
+withdraw, attempted liquidation — and re-asserts the four invariants that
+can be checked statelessly: INV-01, INV-04, INV-05, and a spot-check of
+INV-06.
+
+Three fuzz tests bound the coverage:
+
+- `testFuzz_aprOnly`     — vary APR, hold bonus at 5%.
+- `testFuzz_bonusOnly`   — vary bonus, hold APR at 10%.
+- `testFuzz_aprAndBonus` — vary both, the strongest property statement.
+
+Four further unit tests pin the constructor's revert path:
+`InvalidLiquidationBonus` on zero and on values above 50%, plus
+accept-paths at the bounds (1 bp and 5000 bps).
+
+`test/unit/VaultBurnDebt.t.sol` is a sibling suite that pins down the
+rounding boundaries of the private `_burnDebt` helper — full-close
+charges the exact realised drop in `totalBorrowed`, partial repay below
+one share's worth burns zero shares but still grows cash, etc. The
+invariant harness eventually catches `_burnDebt` errors as INV-01
+failures several calls downstream, but the focused suite localises the
+failure to the rounding choice itself.
+
+```bash
+forge test --match-path "test/fuzz/*"      -vvv
+forge test --match-contract VaultBurnDebt  -vvv
+```
+
+---
+
+## Tier 3 — Invariant fuzzing
 
 `test/invariant/InvariantVault.t.sol` — the core of the pre-deployment layer.
 
@@ -111,7 +152,7 @@ profile's campaign with zero failures.*
 
 ---
 
-## Tier 3 — Exploit replays
+## Tier 4 — Exploit replays
 
 `test/exploit/` — replays seven *classes* of real-world DeFi exploit against a
 freshly-deployed vault.
@@ -163,6 +204,25 @@ dashboard.
 
 ---
 
+## Formal verification — a known gap
+
+This repo does **not** ship a Certora or Halmos symbolic proof of the six
+invariants. The campaign is empirical: 2,000-run invariant fuzz on CI
+plus 256-run parameterized fuzz over the constructor space. A symbolic
+proof would close the residual "is there *any* sequence we missed"
+question — fuzzing can only show none of the runs it tried broke the
+property.
+
+The invariants are deliberately shaped to be Certora/Halmos-compatible:
+each one is an `assertGe` / `assertEq` over public state with no
+external side effects, and `lib/openzeppelin-contracts/lib/halmos-cheatcodes`
+is already present in the dependency tree. A future iteration could
+prove INV-01, INV-04, and INV-06 symbolically without a contract
+rewrite; until then this section documents the gap honestly rather than
+silently leaving it.
+
+---
+
 ## Assurance-engine tests
 
 The Node assurance engine has its own unit suite —
@@ -175,7 +235,7 @@ covers the scoring and traceability logic. See
 ## Running everything
 
 ```bash
-# The whole contract suite — 38 tests
+# The whole contract suite — 52 tests
 forge test -vvv
 
 # What CI runs, in order

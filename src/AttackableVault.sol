@@ -25,10 +25,13 @@ contract AttackableVault is Vault {
     error NotAttacker();
     error MainnetDisabled();
 
-    /// @param _token    ERC-20 asset handled by the vault.
-    /// @param _aprBps   Annual borrow rate in basis points.
-    /// @param _attacker Address allowed to trigger the demo breach.
-    constructor(address _token, uint256 _aprBps, address _attacker) Vault(_token, _aprBps) {
+    /// @param _token            ERC-20 asset handled by the vault.
+    /// @param _aprBps           Annual borrow rate in basis points.
+    /// @param _liquidationBonus Liquidation bonus in basis points (see {Vault}).
+    /// @param _attacker         Address allowed to trigger the demo breach.
+    constructor(address _token, uint256 _aprBps, uint256 _liquidationBonus, address _attacker)
+        Vault(_token, _aprBps, _liquidationBonus)
+    {
         attacker = _attacker;
     }
 
