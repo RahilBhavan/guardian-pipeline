@@ -366,8 +366,13 @@ contract Vault is ReentrancyGuard {
     }
 
     /// @notice Outstanding debt of a single borrower, in debt-asset units.
+    /// @dev    Floors the division so the sum of `userDebt(a)` across every
+    ///         borrower can never exceed {totalBorrowed} — the rounding
+    ///         direction protected by INV-10. Marked `virtual` so the
+    ///         INV-10 mutant subclass can flip floor to ceil and prove the
+    ///         invariant catches it.
     /// @param user The borrower to value.
-    function userDebt(address user) public view returns (uint256) {
+    function userDebt(address user) public view virtual returns (uint256) {
         return (userBorrowShares[user] * borrowIndex) / WAD;
     }
 

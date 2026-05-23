@@ -242,6 +242,30 @@ contract InvariantVault is Test {
         }
     }
 
+    /// @notice INV-10 Debt rounding favours the protocol — the sum of every
+    ///         actor's `userDebt` never exceeds {Vault.totalBorrowed}.
+    /// @dev    `userDebt(a) = floor(userBorrowShares[a] * borrowIndex / WAD)`
+    ///         and `totalBorrowed = floor(totalBorrowShares * borrowIndex /
+    ///         WAD)`. Sum-of-floors is always ≤ floor-of-sum, so the
+    ///         invariant holds for any code path that preserves the floor
+    ///         direction. A mutation that flipped the user-side division
+    ///         to ceil (rounding individual debts up) would push the sum
+    ///         past the floored total by up to one wei per borrower and
+    ///         this invariant would fire. Proven load-bearing by
+    ///         `test/mutant/MutantINV10.t.sol`.
+    function invariant_debtRoundingFavoursProtocol() public view {
+        address[] memory actors = depositHandler.getActors();
+        uint256 sumUserDebt;
+        for (uint256 i = 0; i < actors.length; i++) {
+            sumUserDebt += vault.userDebt(actors[i]);
+        }
+        assertLe(
+            sumUserDebt,
+            vault.totalBorrowed(),
+            "INV-10: sum of userDebt exceeds totalBorrowed - rounding flipped against protocol"
+        );
+    }
+
     /// @notice INV-12 Accrue idempotence — calling accrue() twice within the
     ///         same block produces byte-identical state.
     /// @dev    Tensioned by the `if (dt == 0) return;` guard in
