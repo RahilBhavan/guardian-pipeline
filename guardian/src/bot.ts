@@ -119,6 +119,14 @@ async function main(): Promise<void> {
   // Prevent overlapping checks if a block arrives before the previous finishes.
   let checking = false;
 
+  // Track consecutive block-check failures so a persistently dead RPC escalates
+  // instead of spamming the same error every block. The thresholds re-log at
+  // a widening cadence — first failure is loud, subsequent failures are quiet
+  // until a milestone is hit. On the first success after a failure run, log a
+  // recovery line so the operator sees the gap closed.
+  const FAILURE_ESCALATION_THRESHOLDS = new Set([1, 5, 25, 100, 500]);
+  let consecutiveFailures = 0;
+
   async function onBlock(blockNumber: bigint): Promise<void> {
     if (checking) {
       logger.debug({ block: blockNumber.toString() }, 'Skipping block — previous check still running');
@@ -190,8 +198,27 @@ async function main(): Promise<void> {
           'All invariants healthy',
         );
       }
+
+      // Successful check — if we were in a failure run, surface that we recovered.
+      if (consecutiveFailures > 0) {
+        logger.info(
+          { recoveredAfter: consecutiveFailures, block: blockNumber.toString() },
+          'Block checks recovered after consecutive failures',
+        );
+        consecutiveFailures = 0;
+      }
     } catch (err) {
-      logger.error({ err, block: blockNumber.toString() }, 'Block check failed');
+      consecutiveFailures += 1;
+      const escalate = FAILURE_ESCALATION_THRESHOLDS.has(consecutiveFailures);
+      const fields = { err, block: blockNumber.toString(), consecutiveFailures };
+      if (escalate) {
+        logger.error(
+          fields,
+          `Block check failed (${consecutiveFailures} consecutive — investigate RPC/network)`,
+        );
+      } else {
+        logger.debug(fields, 'Block check failed');
+      }
     } finally {
       checking = false;
     }
