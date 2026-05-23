@@ -71,6 +71,10 @@ contract InvariantVault is Test {
     DonationHandler internal donationHandler;
     OracleHandler internal oracleHandler;
 
+    /// @notice Highest solvency margin observed so far in this run, used to
+    ///         assert {invariant_solvencyMonotone}.
+    uint256 internal priorSolvencyMargin;
+
     /// @notice Demo seed price for the campaign: 1 collateral == 2,000 debt
     ///         units, matching the MockOracle deployed by the scripts.
     uint256 internal constant INITIAL_PRICE = 2_000e18;
@@ -173,6 +177,30 @@ contract InvariantVault is Test {
                 );
             }
         }
+    }
+
+    /// @notice INV-07 Per-block solvency monotonicity — the solvency margin
+    ///         (totalAssets - totalSupplyAssets) never decreases between
+    ///         consecutive handler calls.
+    /// @dev    Every action in the handler suite is required to either leave
+    ///         the margin unchanged (deposit/withdraw at floored share
+    ///         price, full repay, accrue, oracle move, collateral
+    ///         deposit/withdraw) or grow it (borrow with ceil-rounded
+    ///         shares, partial repay/liquidate with floor-rounded share
+    ///         drop, donation of either asset). A code change that flipped
+    ///         a single floor to a ceiling — say, floored borrow shares so
+    ///         the recorded debt undercounts the assets transferred — would
+    ///         let the margin shrink on the next borrow and fail this
+    ///         invariant. Proven load-bearing by
+    ///         `test/mutant/MutantINV07.t.sol`.
+    function invariant_solvencyMonotone() public {
+        uint256 current = vault.totalAssets() - vault.totalSupplyAssets();
+        assertGe(
+            current,
+            priorSolvencyMargin,
+            "INV-07: solvency margin shrank between calls"
+        );
+        priorSolvencyMargin = current;
     }
 
     /// @notice INV-12 Accrue idempotence — calling accrue() twice within the

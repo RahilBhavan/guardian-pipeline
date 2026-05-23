@@ -265,8 +265,11 @@ contract Vault is ReentrancyGuard {
     // --------------------------------------------------------------------- //
 
     /// @notice Borrow `amount` of the debt asset against posted collateral.
+    /// @dev    Marked `virtual` so the INV-07 mutant subclass can swap the
+    ///         ceil-rounded share computation for a floor-rounded one and
+    ///         demonstrate the solvency-monotonicity invariant catches it.
     /// @param amount Quantity of the debt asset to borrow. Must be non-zero.
-    function borrow(uint256 amount) external nonReentrant {
+    function borrow(uint256 amount) external virtual nonReentrant {
         accrue();
         if (amount == 0) revert ZeroAmount();
 
