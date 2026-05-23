@@ -1,9 +1,11 @@
 # The assurance layer
 
 A point-in-time audit produces a static document that is stale the moment it is
-signed. Guardian Pipeline produces an **Assurance Score** — recomputed by the
-`assurance` CI job on every commit — that summarises how well the contract is
-covered by the repository's own pre-deployment evidence.
+signed. Guardian Pipeline produces a **self-computed Assurance Score** —
+recomputed by the `assurance` CI job on every commit — that summarises how
+well the contract is covered by the repository's own pre-deployment evidence.
+"Self-computed" is load-bearing: see [What this score is **not**](#what-this-score-is-not)
+before reading the headline number.
 
 The framing is informed by two empirical papers on DeFi audit markets —
 **Bourveau, Brendel & Schoenfeld (2024)**, which documents ~8,500 audit
@@ -52,6 +54,40 @@ figures are in `assurance/data/assurance-report.json`.
 
 The full report is emitted as `assurance/data/assurance-report.json` and
 `assurance-report.md`, and bundled into the dashboard build.
+
+---
+
+## What this score is **not**
+
+Every input that goes into the score is produced by this repository. The same
+author writes the invariants, picks the exploit set, tags the findings against
+those invariants, picks the weights, and grades the output. The methodology is
+documented in the open and the inputs are reproducible — that part is honest —
+but the score is **not**:
+
+- **An audit.** No independent party has reviewed this code. `security-review/`
+  is written by the repository author. Commission a real audit before any real
+  deployment.
+- **External validation.** Nothing about an 80, 91, or 100 here means a
+  separate, motivated reviewer has tried and failed to break the contract.
+  Lifting the score is a code-and-process exercise inside this repo, not a
+  result earned against an adversary.
+- **A live-deployment outcome.** The score is computed entirely from CI
+  artefacts. It does not — and *cannot* — speak to incident-free runtime,
+  because there is no live deployment to score. An earlier draft included a
+  fourth "Continuous Monitoring" component sourced from a hosted Guardian
+  instance; it was removed because the hosted instance does not exist.
+- **A measure of the runtime monitor's effectiveness.** The monitor ships as a
+  runnable reference implementation. The score covers properties the monitor
+  is *designed* to catch; it does not measure properties it *has* caught
+  against real traffic.
+- **An audit rebuttal.** "A−" is what the project's own rubric returns for the
+  project's own code. Treat it as evidence the methodology is reproducible —
+  not as evidence the code is safe.
+
+The right way to read the headline figure is: *"this codebase grades itself A−
+against the rubric the codebase ships."* Everything load-bearing about the
+score is on either side of that sentence.
 
 ---
 

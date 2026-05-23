@@ -174,7 +174,9 @@ Every replay ends in one of three outcomes:
 | **MISSED** | Value was extracted and *no* invariant noticed — a genuine gap. |
 
 This maps directly onto the project's thesis: static review proves
-**PREVENTED**; continuous invariant monitoring catches **DETECTED**;
+**PREVENTED**; the invariant monitor is *designed* to catch **DETECTED**
+events in production (the monitor ships as a runnable reference implementation;
+this project is not currently operating it against a live vault);
 **MISSED** is the residual risk a point-in-time review leaves behind.
 
 ### What the gate enforces
