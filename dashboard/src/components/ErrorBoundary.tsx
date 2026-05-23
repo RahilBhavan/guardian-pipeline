@@ -40,17 +40,17 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <section className="panel" role="alert" aria-live="polite">
           <div className="panel-title">{this.props.name}</div>
-          <div className="realtime-banner" style={{ borderBottom: 'none' }}>
+          <div className="realtime-banner is-inline">
             <span className="dot" aria-hidden />
             This panel encountered an error.
           </div>
-          <div style={{ padding: '12px 16px', fontSize: 12 }}>
-            <code style={{ display: 'block', marginBottom: 12, whiteSpace: 'pre-wrap' }}>
-              {error.message}
-            </code>
-            <button type="button" onClick={this.handleRetry}>
-              Retry
-            </button>
+          <div className="boundary-fallback">
+            <code>{error.message}</code>
+            <div className="actions">
+              <button type="button" className="btn" onClick={this.handleRetry}>
+                Retry
+              </button>
+            </div>
           </div>
         </section>
       );
