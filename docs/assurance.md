@@ -183,6 +183,6 @@ Matrix**, and **Exploit Replay** panels.
 
 - [architecture.md](architecture.md) — the assurance layer among the four layers.
 - [invariants.md](invariants.md) — the six invariants violations roll up from.
-- [testing.md](testing.md) — the exploit-replay tier in detail.
-- [ci.md](ci.md) — the `assurance` CI job that gates on the score.
+- [invariants.md#testing-strategy](invariants.md#testing-strategy) — the four test tiers including exploit replay.
+- [../README.md#cicd-pipeline](../README.md#cicd-pipeline) — the `assurance` CI job that gates on the score.
 - [../assurance/README.md](../assurance/README.md) — the assurance engine's CLI.

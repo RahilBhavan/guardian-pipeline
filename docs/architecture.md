@@ -46,8 +46,8 @@ all 6 invariants after each step.
 A green CI badge is a claim: *all 6 invariants held across the campaign — no
 `invariant_*` assertion failed.* (Handlers wrap legitimately-reverting calls in
 `try/catch`, so a revert is a valid no-op, not a campaign failure — see
-[testing.md](testing.md).) The full job breakdown is in [ci.md](ci.md) and the
-[root README](../README.md#cicd-pipeline).
+[invariants.md#testing-strategy](invariants.md#testing-strategy).) The full
+job summary is in the [root README](../README.md#cicd-pipeline).
 
 ## Layer 2 — Smart contract
 
@@ -145,8 +145,8 @@ git push ──▶ GitHub Actions ──▶ Forge fuzz + Slither/Aderyn + Assura
 - [contracts.md](contracts.md) — the `Vault` / `AttackableVault` / `MockERC20` API reference
 - [guardian-bot.md](guardian-bot.md) — the off-chain bot, module by module
 - [database.md](database.md) — the Supabase schema and RLS model
-- [testing.md](testing.md) — the four test tiers
-- [ci.md](ci.md) — the six-job CI/CD pipeline
+- [invariants.md#testing-strategy](invariants.md#testing-strategy) — the four test tiers
+- [../README.md#cicd-pipeline](../README.md#cicd-pipeline) — the six-job CI/CD pipeline summary
 - [assurance.md](assurance.md) — the Assurance Score and exploit replays
 - [setup.md](setup.md) — running every layer locally
 - [glossary.md](glossary.md) — terminology

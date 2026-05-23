@@ -26,6 +26,44 @@ pretend they are. Each invariant below carries a **class**:
 
 ---
 
+## Testing strategy
+
+Four complementary test tiers ship evidence for these invariants. The CI gate
+on each is set so the green badge is a precise, falsifiable claim.
+
+| Tier | Directory | Question it answers | CI gate |
+|------|-----------|---------------------|---------|
+| Unit | `test/unit/` | Does every individual path behave exactly as specified? | via `coverage` (≥ 85% lines on `Vault.sol`) |
+| Parameterized fuzz | `test/fuzz/` | Do the invariants hold under *any* APR / liquidation-bonus parameter pair? | runs with `forge test` |
+| Invariant fuzz | `test/invariant/` | Do the six properties survive *any* call sequence? | `invariant-fuzz` (zero `[FAIL]`) |
+| Exploit replay | `test/exploit/` | Does the vault resist known DeFi exploit classes? | `assurance` (no regression, no `MISSED`) |
+
+The invariant suite drives five handlers (Deposit, Borrow, Warp, Liquidate,
+Donation) so a campaign explores meaningful state transitions — including the
+ERC-4626 share-inflation vector via direct donations — instead of burning runs
+on amounts that trivially revert. The donation handler exists specifically to
+prove the donation/inflation attack class is exercised, not just asserted.
+
+Counterexamples shrink to a minimal failing call sequence under
+`[FAIL] invariant_<name>()`. For how the tiers run as CI jobs, see
+[the CI/CD section in the root README](../README.md#cicd-pipeline).
+
+### Formal verification — a known gap
+
+This repo does **not** ship a Certora or Halmos symbolic proof of the six
+invariants. The campaign is empirical: a 2,000-run invariant fuzz on CI plus
+256-run parameterized fuzz over the constructor space. A symbolic proof would
+close the residual *is there any sequence we missed* question — fuzzing can
+only show none of the runs it tried broke the property. The invariants are
+deliberately shaped to be Certora/Halmos-compatible (each is an `assertGe` /
+`assertEq` over public state with no external side effects), and
+`lib/openzeppelin-contracts/lib/halmos-cheatcodes` is already in the
+dependency tree. A future iteration can prove INV-01, INV-04, and INV-06
+symbolically without a contract rewrite; until then this section documents
+the gap honestly.
+
+---
+
 ## INV-01 · Protocol solvency · *Critical*
 
 ```
@@ -143,5 +181,4 @@ For how violations roll up into the Assurance Score, see
 
 - [contracts.md](contracts.md) — the in-contract guards that protect each invariant.
 - [guardian-bot.md](guardian-bot.md#evaluatorts) — how the bot evaluates them off-chain.
-- [testing.md](testing.md) — how the harness and exploit replays exercise them.
 - [assurance.md](assurance.md) — how violations roll up into the Assurance Score.

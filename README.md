@@ -1,7 +1,7 @@
 # Guardian Pipeline
 
 [![Invariant CI](https://github.com/rahilbhavan/guardian-pipeline/actions/workflows/invariant-ci.yml/badge.svg)](https://github.com/rahilbhavan/guardian-pipeline/actions/workflows/invariant-ci.yml)
-[![Vault coverage](https://img.shields.io/badge/Vault.sol%20line%20coverage-97%25-brightgreen)](./docs/testing.md)
+[![Vault coverage](https://img.shields.io/badge/Vault.sol%20line%20coverage-97%25-brightgreen)](./docs/invariants.md#testing-strategy)
 [![Assurance score](https://img.shields.io/badge/assurance%20score-CI--gated%20%E2%89%A580-0052FF)](./docs/assurance.md)
 [![Built for Base](https://img.shields.io/badge/Base_L2-0052FF)](https://base.org)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.24-363636)](https://soliditylang.org)
@@ -232,28 +232,28 @@ front:
 - **No formal verification.** The invariant proofs are empirical (Foundry fuzz
   + parameterized constructor fuzz), not symbolic — a Certora/Halmos proof
   would close the residual "is there *any* sequence we missed" question and
-  is left as a known gap. See [docs/testing.md](docs/testing.md#formal-verification--a-known-gap).
+  is left as a known gap. See [docs/invariants.md](docs/invariants.md#formal-verification--a-known-gap).
 
 ---
 
 ## Documentation
 
-Full set in **[docs/](docs/README.md)**.
-
 | Doc | Contents |
 |-----|----------|
+| [docs/assurance.md](docs/assurance.md) | **Start here.** Assurance Score, exploit replays, finding traceability |
 | [docs/architecture.md](docs/architecture.md) | The four layers and how state flows between them |
-| [docs/invariants.md](docs/invariants.md) | All 6 invariants — formulas, classes, failure modes |
+| [docs/invariants.md](docs/invariants.md) | All 6 invariants — formulas, classes, failure modes, the four test tiers |
 | [docs/contracts.md](docs/contracts.md) | `Vault`, `AttackableVault`, `MockERC20` API |
 | [docs/guardian-bot.md](docs/guardian-bot.md) | The runtime monitor, module by module |
 | [docs/database.md](docs/database.md) | The Supabase schema, RLS model, and migrations |
-| [docs/testing.md](docs/testing.md) | The four test tiers — unit, parameterized fuzz, invariant fuzz, exploit replay |
-| [docs/ci.md](docs/ci.md) | The six-job CI/CD pipeline in detail |
-| [docs/assurance.md](docs/assurance.md) | Assurance Score, exploit replays, finding traceability |
 | [docs/setup.md](docs/setup.md) | Local setup, deployment, and the staged demo |
 | [docs/glossary.md](docs/glossary.md) | Every project identifier and term, defined |
 | [SECURITY.md](SECURITY.md) | Threat model, trust boundaries, responsible disclosure |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow and conventions |
+
+The CI/CD pipeline reference lives in the [CI/CD pipeline](#cicd-pipeline)
+section above — there is no separate `ci.md`. The four test tiers are
+documented in [invariants.md#testing-strategy](docs/invariants.md#testing-strategy).
 
 ---
 
