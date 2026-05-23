@@ -122,7 +122,7 @@ git clone https://github.com/rahilbhavan/guardian-pipeline
 cd guardian-pipeline
 forge install                        # forge-std + openzeppelin-contracts
 
-forge test                           # 38 tests: unit + invariant + exploit replay
+forge test                           # 52 tests: unit + parameterized fuzz + invariant + exploit replay
 cd assurance && npm install && npm test && cd ..
 ```
 
@@ -216,6 +216,10 @@ front:
   third-party audit. Commission one separately before any real deployment.
 - **The detection demo is staged.** `AttackableVault.attack()` is a planted flag
   for filming the monitor, not a real exploit.
+- **No formal verification.** The invariant proofs are empirical (Foundry fuzz
+  + parameterized constructor fuzz), not symbolic — a Certora/Halmos proof
+  would close the residual "is there *any* sequence we missed" question and
+  is left as a known gap. See [docs/testing.md](docs/testing.md#formal-verification--a-known-gap).
 
 ---
 
@@ -230,7 +234,7 @@ Full set in **[docs/](docs/README.md)**.
 | [docs/contracts.md](docs/contracts.md) | `Vault`, `AttackableVault`, `MockERC20` API |
 | [docs/guardian-bot.md](docs/guardian-bot.md) | The runtime monitor, module by module |
 | [docs/database.md](docs/database.md) | The Supabase schema, RLS model, and migrations |
-| [docs/testing.md](docs/testing.md) | The three test tiers — unit, invariant fuzz, exploit replay |
+| [docs/testing.md](docs/testing.md) | The four test tiers — unit, parameterized fuzz, invariant fuzz, exploit replay |
 | [docs/ci.md](docs/ci.md) | The six-job CI/CD pipeline in detail |
 | [docs/assurance.md](docs/assurance.md) | Assurance Score, exploit replays, finding traceability |
 | [docs/setup.md](docs/setup.md) | Local setup, deployment, and the staged demo |

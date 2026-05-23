@@ -145,7 +145,7 @@ git push ──▶ GitHub Actions ──▶ Forge fuzz + Slither/Aderyn + Assura
 - [contracts.md](contracts.md) — the `Vault` / `AttackableVault` / `MockERC20` API reference
 - [guardian-bot.md](guardian-bot.md) — the off-chain bot, module by module
 - [database.md](database.md) — the Supabase schema and RLS model
-- [testing.md](testing.md) — the three test tiers
+- [testing.md](testing.md) — the four test tiers
 - [ci.md](ci.md) — the six-job CI/CD pipeline
 - [assurance.md](assurance.md) — the Assurance Score and exploit replays
 - [setup.md](setup.md) — running every layer locally
