@@ -4,7 +4,7 @@
  * Reads the `alerts` and `blocks_checked` tables on mount, then keeps both live
  * via Supabase Postgres real-time subscriptions. No polling, no page refresh.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase, VAULT_ADDRESS } from './supabase';
 import { INVARIANTS } from './types';
 import type { AlertRow, BlockCheckedRow, LatencyPoint } from './types';
@@ -16,6 +16,16 @@ import { TraceabilityMatrix } from './components/TraceabilityMatrix';
 import { ExploitReplay } from './components/ExploitReplay';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { assuranceReport } from './assurance';
+
+/** Cap on initial-load retries before we ask the user to refresh. */
+const MAX_INITIAL_LOAD_ATTEMPTS = 10;
+/** Backoff schedule (ms) for failed initial loads — capped at 30s. */
+const INITIAL_LOAD_BACKOFF_MS = [1000, 2000, 4000, 8000, 16000, 30000];
+
+function backoffMsFor(attempt: number): number {
+  const idx = Math.min(attempt - 1, INITIAL_LOAD_BACKOFF_MS.length - 1);
+  return INITIAL_LOAD_BACKOFF_MS[Math.max(0, idx)] ?? 30000;
+}
 
 /** All six invariants set to a single status value. */
 function allInvariants(value: boolean | null): Record<string, boolean | null> {
@@ -74,63 +84,139 @@ export function App() {
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
   const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>('CONNECTING');
   const [initialLoadError, setInitialLoadError] = useState<string | null>(null);
+  const [initialLoadAttempts, setInitialLoadAttempts] = useState<number>(0);
+  const [nextRetryMs, setNextRetryMs] = useState<number | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  /**
+   * The mount effect owns lifecycle flags — components below trigger reloads
+   * via the manual-retry callback, but the cancelled/timeout refs let us abort
+   * cleanly on unmount and prevent the retry from racing a manual refresh.
+   */
+  const cancelledRef = useRef<boolean>(false);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const attemptRef = useRef<number>(0);
 
-    async function load(): Promise<void> {
-      const { data: recentAlerts, error: alertsError } = await supabase
-        .from('alerts')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50);
+  /**
+   * Initial-history load. Returns true on success so the retry loop can stop
+   * scheduling. Sets `initialLoadError` on failure so the banner renders.
+   */
+  const load = useCallback(async (): Promise<boolean> => {
+    const { data: recentAlerts, error: alertsError } = await supabase
+      .from('alerts')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(50);
 
-      const { data: recentBlocks, error: blocksError } = await supabase
-        .from('blocks_checked')
-        .select('*')
-        .order('checked_at', { ascending: false })
-        .limit(100);
+    const { data: recentBlocks, error: blocksError } = await supabase
+      .from('blocks_checked')
+      .select('*')
+      .order('checked_at', { ascending: false })
+      .limit(100);
 
-      if (cancelled) return;
+    if (cancelledRef.current) return false;
 
-      if (alertsError || blocksError) {
-        setInitialLoadError((alertsError ?? blocksError)?.message ?? 'unknown error');
-        return;
-      }
-      setInitialLoadError(null);
+    if (alertsError || blocksError) {
+      setInitialLoadError((alertsError ?? blocksError)?.message ?? 'unknown error');
+      return false;
+    }
+    setInitialLoadError(null);
+    setNextRetryMs(null);
 
-      const alertRows = (recentAlerts ?? []) as AlertRow[];
-      setAlerts(alertRows);
+    const alertRows = (recentAlerts ?? []) as AlertRow[];
+    setAlerts(alertRows);
 
-      const blockRows = (recentBlocks ?? []) as BlockCheckedRow[];
-      const newest = blockRows[0];
-      if (newest) {
-        setLatestBlock(newest.block_number);
-        setLastChecked(new Date(newest.checked_at));
+    const blockRows = (recentBlocks ?? []) as BlockCheckedRow[];
+    const newest = blockRows[0];
+    if (newest) {
+      setLatestBlock(newest.block_number);
+      setLastChecked(new Date(newest.checked_at));
 
-        // Derive current invariant health from the most recent checked block.
-        if (newest.all_passed) {
-          setInvariantStatus(allInvariants(true));
-        } else {
-          const status = allInvariants(true);
-          for (const a of alertRows) {
-            if (a.block_number === newest.block_number) status[a.invariant_id] = false;
-          }
-          setInvariantStatus(status);
+      // Derive current invariant health from the most recent checked block.
+      if (newest.all_passed) {
+        setInvariantStatus(allInvariants(true));
+      } else {
+        const status = allInvariants(true);
+        for (const a of alertRows) {
+          if (a.block_number === newest.block_number) status[a.invariant_id] = false;
         }
+        setInvariantStatus(status);
       }
-
-      // Oldest-first for the left-to-right sparkline.
-      setLatencyHistory(
-        [...blockRows].reverse().map((b) => ({
-          blockNumber: b.block_number,
-          latencyMs: b.latency_ms ?? 0,
-          checkedAt: new Date(b.checked_at),
-        })),
-      );
     }
 
-    void load();
+    // Oldest-first for the left-to-right sparkline.
+    setLatencyHistory(
+      [...blockRows].reverse().map((b) => ({
+        blockNumber: b.block_number,
+        latencyMs: b.latency_ms ?? 0,
+        checkedAt: new Date(b.checked_at),
+      })),
+    );
+
+    return true;
+  }, []);
+
+  /**
+   * Schedule the next retry with capped exponential backoff. Tracks the
+   * attempt counter via a ref so the scheduled callback always reads the
+   * latest count, even if React batches the state update.
+   */
+  const scheduleRetry = useCallback((): void => {
+    if (cancelledRef.current) return;
+    const attempt = attemptRef.current;
+    if (attempt >= MAX_INITIAL_LOAD_ATTEMPTS) {
+      setNextRetryMs(null);
+      return;
+    }
+    const wait = backoffMsFor(attempt);
+    setNextRetryMs(wait);
+    retryTimeoutRef.current = setTimeout(() => {
+      if (cancelledRef.current) return;
+      attemptRef.current += 1;
+      setInitialLoadAttempts(attemptRef.current);
+      void load().then((ok) => {
+        if (cancelledRef.current) return;
+        if (!ok) scheduleRetry();
+        else {
+          attemptRef.current = 0;
+          setInitialLoadAttempts(0);
+        }
+      });
+    }, wait);
+  }, [load]);
+
+  /**
+   * Banner "Retry now" handler — clears any queued backoff retry, resets the
+   * counter, and fires `load()` immediately.
+   */
+  const retryNow = useCallback((): void => {
+    if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+    retryTimeoutRef.current = null;
+    attemptRef.current = 1;
+    setInitialLoadAttempts(1);
+    setNextRetryMs(null);
+    void load().then((ok) => {
+      if (cancelledRef.current) return;
+      if (!ok) scheduleRetry();
+      else {
+        attemptRef.current = 0;
+        setInitialLoadAttempts(0);
+      }
+    });
+  }, [load, scheduleRetry]);
+
+  useEffect(() => {
+    cancelledRef.current = false;
+    attemptRef.current = 1;
+    setInitialLoadAttempts(1);
+
+    void load().then((ok) => {
+      if (cancelledRef.current) return;
+      if (!ok) scheduleRetry();
+      else {
+        attemptRef.current = 0;
+        setInitialLoadAttempts(0);
+      }
+    });
 
     const channel = supabase
       .channel('guardian-realtime')
@@ -173,9 +259,14 @@ export function App() {
       });
 
     return () => {
-      cancelled = true;
+      cancelledRef.current = true;
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
       void supabase.removeChannel(channel);
     };
+    // load/scheduleRetry are stable (useCallback with no state deps), so this
+    // effect runs once on mount and tears down on unmount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const avgLatency = useMemo<number | null>(() => {
@@ -189,6 +280,19 @@ export function App() {
       ? REALTIME_BANNER_COPY[realtimeStatus]
       : null;
 
+  const exhausted = initialLoadAttempts >= MAX_INITIAL_LOAD_ATTEMPTS && initialLoadError !== null;
+  const initialBanner = (() => {
+    if (!initialLoadError) return null;
+    if (exhausted) {
+      return `Could not load history after ${MAX_INITIAL_LOAD_ATTEMPTS} attempts (${initialLoadError}). Refresh to retry.`;
+    }
+    if (nextRetryMs !== null) {
+      const secs = Math.ceil(nextRetryMs / 1000);
+      return `Could not load history (attempt ${initialLoadAttempts}: ${initialLoadError}). Retrying in ${secs}s…`;
+    }
+    return `Could not load history (attempt ${initialLoadAttempts}: ${initialLoadError}). Live updates may still arrive.`;
+  })();
+
   return (
     <div className="app">
       <header className="topbar">
@@ -199,10 +303,13 @@ export function App() {
         <span className="vault">{VAULT_ADDRESS}</span>
       </header>
 
-      {initialLoadError && (
+      {initialBanner && (
         <div className="realtime-banner" role="alert">
           <span className="dot" aria-hidden />
-          Could not load history from Supabase ({initialLoadError}). Live updates may still arrive.
+          <span style={{ flex: 1 }}>{initialBanner}</span>
+          <button type="button" onClick={retryNow}>
+            Retry now
+          </button>
         </div>
       )}
       {!initialLoadError && bannerCopy && (
