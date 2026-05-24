@@ -3,9 +3,9 @@
     "title": "Vault Security Review",
     "subject": "src/Vault.sol",
     "reviewer": "Project author — self-conducted review (not an independent third-party audit)",
-    "reportDate": "2026-05-21",
+    "reportDate": "2026-05-23",
     "reviewedCommit": "src/Vault.sol as of this commit",
-    "methodology": "Manual line-by-line review, property enumeration, rounding-direction analysis, and adversarial scenario modelling against an interest-bearing, over-collateralised single-asset lending vault.",
+    "methodology": "Manual line-by-line review, property enumeration, rounding-direction analysis, and adversarial scenario modelling against a two-asset, oracle-priced, over-collateralised lending vault.",
     "note": "This is a self-conducted, point-in-time security review written by the repository author — not an independent third-party audit. It is included to demonstrate the project's central mechanism: each security-relevant finding is bound to a fuzz-harness invariant, a runtime-monitor check, and an exploit replay, so the finding is re-verified on every commit rather than fixed once at review time. For an independent audit, commission one separately."
   },
   "severityScale": ["Critical", "High", "Medium", "Low", "Informational", "Gas"],
@@ -13,50 +13,32 @@
   "findings": [
     {
       "id": "GUA-01",
-      "title": "Demo insolvency backdoor isolated to a separate contract",
-      "severity": "Critical",
-      "status": "Resolved",
-      "category": "Access Control",
-      "location": "src/AttackableVault.sol:38-44",
-      "securityRelevant": true,
-      "description": "An earlier revision shipped a privileged attack() function inside src/Vault.sol that forced the vault insolvent for the demo. Reviewing a contract that contains its own backdoor is unsound. Remediation: attack() has been removed from Vault entirely and now lives only in src/AttackableVault.sol, a demo-only subclass that is never deployed to production. The reviewed Vault carries no privileged accounting path of any kind.",
-      "recommendation": "Resolved. Keep the demo breach confined to AttackableVault and deploy only src/Vault.sol to production. AttackableVault additionally reverts attack() on Base mainnet as defence-in-depth.",
-      "continuousAssurance": {
-        "invariants": ["INV-01"],
-        "harnessTests": ["invariant_solvency"],
-        "liveMonitors": ["INV-01"],
-        "exploitReplays": ["EXP-01"],
-        "rationale": "INV-01 is fuzz-proven against Vault pre-deploy and is also the runtime monitor's first check. EXP-01 replays the AttackableVault breach to prove the runtime monitor catches an insolvency regardless of its cause."
-      }
-    },
-    {
-      "id": "GUA-02",
       "title": "Reentrancy exposure on state-mutating functions",
       "severity": "Medium",
       "status": "Resolved",
       "category": "Reentrancy",
-      "location": "src/Vault.sol:150-281",
+      "location": "src/Vault.sol — deposit / withdraw / depositCollateral / withdrawCollateral / borrow / repay / liquidate",
       "securityRelevant": true,
-      "description": "deposit, withdraw, borrow, repay and liquidate move ERC-20 value. A token with transfer hooks (ERC-777-style) would otherwise open a reentrancy surface against the liquidity and collateral checks. Remediation: the contract inherits OpenZeppelin's ReentrancyGuard and all five mutating functions are marked nonReentrant.",
-      "recommendation": "Resolved — retain the ReentrancyGuard. The fuzz harness exercises a non-callback MockERC20 and cannot reproduce a reentrant sequence, so INV-01 remains the continuous safety net for this class rather than the harness.",
+      "description": "All seven mutating entrypoints move ERC-20 value across either the debt asset or the collateral asset. A token with transfer hooks (ERC-777-style) would otherwise open a reentrancy surface against the liquidity, collateral-cap and oracle reads. Remediation: the contract inherits OpenZeppelin's ReentrancyGuard and every mutating function is marked nonReentrant.",
+      "recommendation": "Resolved — retain the ReentrancyGuard. The fuzz harness exercises non-callback MockERC20s and cannot reproduce a reentrant sequence, so INV-01 remains the continuous safety net for this class rather than the harness.",
       "continuousAssurance": {
         "invariants": ["INV-01"],
         "harnessTests": [],
         "liveMonitors": ["INV-01"],
         "exploitReplays": [],
-        "rationale": "The ReentrancyGuard blocks this class structurally, but the harness exercises a non-callback MockERC20 and cannot reproduce a reentrant call sequence — so the finding is not proven absent by the harness. The runtime monitor covers it instead: any reentrancy that drained value would break INV-01, which the monitor re-checks every block when run against a deployment. The traceability map surfaces this as monitored-only — a deliberately partial-coverage finding."
+        "rationale": "The ReentrancyGuard blocks this class structurally, but the harness exercises non-callback MockERC20s and cannot reproduce a reentrant call sequence — so the finding is not proven absent by the harness. The runtime monitor covers it instead: any reentrancy that drained value would break INV-01, which the monitor re-checks every block when run against a deployment. The traceability map surfaces this as monitored-only — a deliberately partial-coverage finding."
       }
     },
     {
-      "id": "GUA-03",
+      "id": "GUA-02",
       "title": "Full-close repayment could erode the solvency margin by one wei",
       "severity": "High",
       "status": "Resolved",
       "category": "Rounding",
-      "location": "src/Vault.sol:330-360",
+      "location": "src/Vault.sol — _burnDebt",
       "securityRelevant": true,
       "description": "An earlier revision of _burnDebt charged a full repayment the borrower's nominal userDebt(). Because totalBorrowed() floors totalBorrowShares * borrowIndex, removing a borrower's shares can drop the floored aggregate by one wei more than the nominal debt — so the vault collected one wei less than debt actually fell, eroding the solvency margin. The invariant fuzz harness found this within a few hundred runs (a shrunk deposit/borrow/repay sequence). Remediation: a full close now charges the realised drop in totalBorrowed(), so cash rises by exactly what debt falls by.",
-      "recommendation": "Resolved. The realised-drop accounting keeps INV-01 exact; the invariant campaign now runs with zero solvency violations across 300,000+ calls.",
+      "recommendation": "Resolved. The realised-drop accounting keeps INV-01 exact across the campaign.",
       "continuousAssurance": {
         "invariants": ["INV-01"],
         "harnessTests": ["invariant_solvency"],
@@ -66,68 +48,68 @@
       }
     },
     {
-      "id": "GUA-04",
+      "id": "GUA-03",
       "title": "Liquidation seizing all collateral must clear the full debt",
       "severity": "Medium",
       "status": "Resolved",
       "category": "Liquidation",
-      "location": "src/Vault.sol:241-279",
+      "location": "src/Vault.sol — liquidate",
       "securityRelevant": true,
-      "description": "liquidate seizes collateral worth the repaid amount plus the liquidation bonus. Without a guard, a partial repayment could seize a borrower's entire share balance while leaving debt outstanding — an account with zero collateral but non-zero debt, i.e. unrecoverable bad debt. Remediation: when the seizure would consume all of the borrower's shares, liquidate reverts with MustClearDebt unless the liquidator is closing the full position.",
+      "description": "liquidate seizes collateral worth the repaid amount plus the liquidation bonus, converted to collateral units at the current oracle price. Without a guard, a partial repayment could seize a borrower's entire collateral balance while leaving debt outstanding — an account with zero collateral but non-zero debt, i.e. unrecoverable bad debt. Remediation: when the seizure would consume all of the borrower's collateral, liquidate reverts with MustClearDebt unless the liquidator is closing the full position.",
       "recommendation": "Resolved. The MustClearDebt guard makes INV-06 (no uncollateralised debt) hold by construction.",
       "continuousAssurance": {
         "invariants": ["INV-06"],
         "harnessTests": ["invariant_noUncollateralisedDebt"],
         "liveMonitors": ["INV-06"],
-        "exploitReplays": ["EXP-06"],
-        "rationale": "INV-06 asserts a zero-collateral account holds no debt. The harness fuzzes liquidation alongside interest accrual; EXP-06 replays the interest-driven liquidation path end to end. Both confirm the guard holds."
+        "exploitReplays": ["EXP-05", "EXP-07"],
+        "rationale": "INV-06 asserts a zero-collateral account holds no debt. The harness fuzzes liquidation alongside interest accrual and oracle moves; EXP-05 replays the interest-driven path and EXP-07 the price-drop path end to end. Both confirm the guard holds."
       }
     },
     {
-      "id": "GUA-05",
+      "id": "GUA-04",
       "title": "Sustained interest can make a lender redemption exceed idle cash",
       "severity": "Low",
       "status": "Acknowledged",
       "category": "Liquidity",
-      "location": "src/Vault.sol:174-180",
+      "location": "src/Vault.sol — withdraw",
       "securityRelevant": true,
       "description": "withdraw pays out shares * totalSupplyAssets / totalSupplyShares and reverts with InsufficientLiquidity if idle cash cannot cover it. Once interest has lifted a lender's claim above the un-borrowed cash, a full redemption reverts until borrowers repay. This is correct behaviour for a lending vault, but a caller may be surprised; the revert is graceful and corrupts no state.",
-      "recommendation": "Acknowledged. Document that lender redemptions are bounded by available liquidity, as in any lending market. No code change required — the revert is the intended outcome.",
+      "recommendation": "Acknowledged. Document that lender redemptions are bounded by available liquidity, as in any lending market. No code change required.",
       "continuousAssurance": {
         "invariants": ["INV-01"],
         "harnessTests": ["invariant_solvency"],
         "liveMonitors": ["INV-01"],
-        "exploitReplays": ["EXP-04"],
-        "rationale": "The liquidity revert protects INV-01: the vault never pays out assets it does not hold. EXP-04 confirms the buffer survives a maximal borrow, and INV-01 holds the line in both the harness and the runtime monitor."
+        "exploitReplays": [],
+        "rationale": "The liquidity revert protects INV-01: the vault never pays out assets it does not hold. DepositHandler and BorrowHandler in the fuzz campaign drive deposits and borrows up to the cap on every run, so the buffer's survival under maximal borrow is continuously fuzzed against the solvency invariant - no dedicated replay is needed for this class."
       }
     },
     {
-      "id": "GUA-06",
-      "title": "Share price is immune to direct token donations",
+      "id": "GUA-05",
+      "title": "Share price and collateral accounting are immune to direct token donations",
       "severity": "Informational",
       "status": "Acknowledged",
       "category": "Accounting",
-      "location": "src/Vault.sol:62-66",
+      "location": "src/Vault.sol — sharePrice / userCollateral",
       "securityRelevant": true,
-      "description": "Anyone can transfer the asset directly to the vault, raising token.balanceOf(vault). Because sharePrice is derived from the stored totalSupplyAssets — not the token balance — a donation cannot move the shares-to-assets ratio. This structurally prevents the ERC-4626 first-depositor inflation attack; the donated funds simply enlarge the solvency margin.",
-      "recommendation": "Acknowledged. No change required — the stored-assets accounting model is the mitigation. Monitors must treat cash >= claims as a >= relation, not equality.",
+      "description": "Anyone can transfer either asset directly to the vault, raising the relevant balanceOf. Because sharePrice is derived from stored totalSupplyAssets (not the debt-asset balance) and per-user collateral is tracked through depositCollateral (not the collateral-asset balance), neither donation can move the shares-to-assets ratio nor grant unearned collateral — the funds simply enlarge the solvency margin (debt side) or sit inert (collateral side).",
+      "recommendation": "Acknowledged. No change required — the stored-quantities accounting model is the mitigation. Monitors must treat cash >= claims as a >= relation, not equality.",
       "continuousAssurance": {
         "invariants": ["INV-01", "INV-04"],
         "harnessTests": ["invariant_solvency", "invariant_lenderValueFloor"],
         "liveMonitors": ["INV-01", "INV-04"],
-        "exploitReplays": ["EXP-02"],
-        "rationale": "INV-04 (share price >= 1:1) and INV-01 (solvency) bound the lender side. The DonationHandler interleaves direct token transfers into the fuzz campaign, so the harness now actively proves a donation cannot move the share price; EXP-02 replays the donation/inflation class and confirms the victim is not diluted."
+        "exploitReplays": ["EXP-01"],
+        "rationale": "INV-04 (share price >= 1:1) and INV-01 (solvency) bound the lender side. DonationHandler interleaves direct token transfers of both assets into the fuzz campaign, so the harness now actively proves a donation on either surface cannot move the share price; EXP-01 replays the donation/inflation class with both donations and confirms the victim is not diluted."
       }
     },
     {
-      "id": "GUA-07",
+      "id": "GUA-06",
       "title": "A full-close repayment may charge up to one wei above userDebt()",
       "severity": "Informational",
       "status": "Acknowledged",
       "category": "Rounding",
-      "location": "src/Vault.sol:344-352",
+      "location": "src/Vault.sol — _burnDebt full-close branch",
       "securityRelevant": true,
-      "description": "Closing a position charges the realised drop in floored totalBorrowed(), which equals userDebt() or, by one wei of index rounding, one wei more. A caller repaying exactly userDebt() may therefore transfer one extra wei. This is the deliberate fix for GUA-03 — charging the realised cost is what keeps solvency exact.",
+      "description": "Closing a position charges the realised drop in floored totalBorrowed(), which equals userDebt() or, by one wei of index rounding, one wei more. A caller repaying exactly userDebt() may therefore transfer one extra wei. This is the deliberate fix for GUA-02 — charging the realised cost is what keeps solvency exact.",
       "recommendation": "Acknowledged. Document that callers should approve a small surplus when closing a position, as is standard for index-based debt. The one-wei direction always favours the protocol.",
       "continuousAssurance": {
         "invariants": ["INV-01"],
@@ -138,21 +120,39 @@
       }
     },
     {
-      "id": "GUA-08",
+      "id": "GUA-07",
       "title": "Deeply under-water positions can leave residual bad debt",
       "severity": "Low",
       "status": "Acknowledged",
       "category": "Economic Design",
-      "location": "src/Vault.sol:241-279",
+      "location": "src/Vault.sol — liquidate",
       "securityRelevant": true,
-      "description": "If interest pushes a borrower's debt above the full value of their collateral, no rational liquidator will repay it — closing the position would cost more than the collateral seized. The position then retains both shares and debt indefinitely. The 80% collateral cap and 5% liquidation bonus incentivise liquidation well before this point, but an idle, deeply under-water position is not structurally prevented.",
+      "description": "If interest or an oracle price drop pushes a borrower's debt above the full value of their collateral, no rational liquidator will repay it — closing the position would cost more than the collateral seized. The position then retains both collateral and debt indefinitely. The 80% collateral cap and 5% liquidation bonus incentivise liquidation well before this point, but an idle, deeply under-water position is not structurally prevented.",
       "recommendation": "Acknowledged. For a production deployment, add a reserve factor and a bad-debt socialisation path. The debt remains counted in totalBorrowed, so INV-01 stays well-defined; the residual risk is economic, not an accounting break.",
       "continuousAssurance": {
         "invariants": ["INV-01"],
         "harnessTests": ["invariant_solvency"],
         "liveMonitors": ["INV-01"],
-        "exploitReplays": ["EXP-06"],
-        "rationale": "Residual bad debt does not break INV-01 — the debt is still counted as an asset — but the runtime monitor tracks the solvency margin so erosion is visible. EXP-06 exercises the interest-driven liquidation path that keeps healthy positions cleared."
+        "exploitReplays": ["EXP-05", "EXP-07"],
+        "rationale": "Residual bad debt does not break INV-01 — the debt is still counted as an asset — but the runtime monitor tracks the solvency margin so erosion is visible. EXP-05 and EXP-07 exercise the interest-driven and price-driven liquidation paths that keep healthy positions cleared."
+      }
+    },
+    {
+      "id": "GUA-08",
+      "title": "Vault trusts the oracle implicitly — no staleness, deviation or circuit-breaker checks",
+      "severity": "Medium",
+      "status": "Acknowledged",
+      "category": "Oracle Risk",
+      "location": "src/Vault.sol — borrow / withdrawCollateral / liquidate / collateralValue (IPriceOracle.price)",
+      "securityRelevant": true,
+      "description": "Every collateral-value read calls oracle.price() and uses the returned value without further checks. A stale price, a manipulated price, or an oracle returning an extreme value will flow straight into the collateral cap and liquidation seizure calculations. The MockOracle shipped with the repo is permissionless for testing; a real deployment must wrap an authenticated feed (Chainlink/Pyth/Redstone) behind IPriceOracle with staleness windows, deviation thresholds and a circuit-breaker.",
+      "recommendation": "Acknowledged. The IPriceOracle interface is the integration boundary: a production deployment must supply an oracle adapter that implements staleness, deviation and breaker logic. The vault itself is parametric on the oracle and does not need changes.",
+      "continuousAssurance": {
+        "invariants": ["INV-01", "INV-06"],
+        "harnessTests": ["invariant_solvency", "invariant_noUncollateralisedDebt"],
+        "liveMonitors": ["INV-01", "INV-06"],
+        "exploitReplays": ["EXP-03", "EXP-07"],
+        "rationale": "OracleHandler moves the price across a 4x band during the fuzz campaign, so INV-01 and INV-06 are proven against arbitrary oracle moves within that window. EXP-03 (Cream 2021) replays the staleness-side of the oracle class against the Vault's MAX_STALENESS freshness gate; EXP-07 replays a price-drop driven liquidation. Active in-window source manipulation (deviation, TWAP, circuit-breaker) is still left to the deployer's IPriceOracle adapter."
       }
     }
   ]

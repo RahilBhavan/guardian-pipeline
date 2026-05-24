@@ -1,7 +1,7 @@
 # Guardian Pipeline — Assurance Report
 
 > **Assurance Score: 91/100 — grade A-**  
-> Generated 2026-05-23T00:39:13.340Z · commit `a400890`
+> Generated 2026-05-24T14:07:48.692Z · commit `9cc5623`
 
 The Assurance Score rolls the repository's pre-deployment evidence into one reproducible number — static verification, exploit-replay resistance, and the traceability of every security-review finding to a re-runnable check. It is a worked demonstration of one design response — recomputing assurance on every commit — to the open empirical question both cited papers raise about audit effectiveness. The "continuous, multi-layered" framing is this project's, not a claim of either paper.
 
@@ -10,7 +10,7 @@ The Assurance Score rolls the repository's pre-deployment evidence into one repr
 | Component | Score | Weight | Detail |
 |---|---|---|---|
 | Static Verification | 82 | 45% | Vault.sol 97.2% line / 78.3% branch; fuzz campaign 2000x150 (intensity 64/100) |
-| Exploit Resistance | 100 | 35% | 7/7 exploit classes resisted (6 prevented, 1 detected, 0 missed) |
+| Exploit Resistance | 100 | 35% | 7/7 exploit classes resisted (7 prevented, 0 detected, 0 missed) |
 | Finding Traceability | 93.8 | 20% | 93.8% weighted coverage of security-relevant findings |
 
 ## Finding traceability matrix
@@ -19,28 +19,28 @@ The Assurance Score rolls the repository's pre-deployment evidence into one repr
 
 | Finding | Severity | Coverage | Invariants | Harness | Live | Replays |
 |---|---|---|---|---|---|---|
-| GUA-01 Demo insolvency backdoor isolated to a separate contract | Critical | fully assured | INV-01 | 1 | INV-01 | EXP-01 |
-| GUA-03 Full-close repayment could erode the solvency margin by one wei | High | fully assured | INV-01 | 1 | INV-01 | — |
-| GUA-02 Reentrancy exposure on state-mutating functions | Medium | monitored only | INV-01 | 0 | INV-01 | — |
-| GUA-04 Liquidation seizing all collateral must clear the full debt | Medium | fully assured | INV-06 | 1 | INV-06 | EXP-06 |
-| GUA-05 Sustained interest can make a lender redemption exceed idle cash | Low | fully assured | INV-01 | 1 | INV-01 | EXP-04 |
-| GUA-08 Deeply under-water positions can leave residual bad debt | Low | fully assured | INV-01 | 1 | INV-01 | EXP-06 |
-| GUA-06 Share price is immune to direct token donations | Informational | fully assured | INV-01, INV-04 | 2 | INV-01, INV-04 | EXP-02 |
-| GUA-07 A full-close repayment may charge up to one wei above userDebt() | Informational | fully assured | INV-01 | 1 | INV-01 | — |
+| GUA-02 Full-close repayment could erode the solvency margin by one wei | High | fully assured | INV-01 | 1 | INV-01 | — |
+| GUA-01 Reentrancy exposure on state-mutating functions | Medium | monitored only | INV-01 | 0 | INV-01 | — |
+| GUA-03 Liquidation seizing all collateral must clear the full debt | Medium | fully assured | INV-06 | 1 | INV-06 | EXP-05, EXP-07 |
+| GUA-08 Vault trusts the oracle implicitly — no staleness, deviation or circuit-breaker checks | Medium | fully assured | INV-01, INV-06 | 2 | INV-01, INV-06 | EXP-03, EXP-07 |
+| GUA-04 Sustained interest can make a lender redemption exceed idle cash | Low | fully assured | INV-01 | 1 | INV-01 | — |
+| GUA-07 Deeply under-water positions can leave residual bad debt | Low | fully assured | INV-01 | 1 | INV-01 | EXP-05, EXP-07 |
+| GUA-05 Share price and collateral accounting are immune to direct token donations | Informational | fully assured | INV-01, INV-04 | 2 | INV-01, INV-04 | EXP-01 |
+| GUA-06 A full-close repayment may charge up to one wei above userDebt() | Informational | fully assured | INV-01 | 1 | INV-01 | — |
 
 ## Exploit-replay catalogue
 
-6 prevented · 1 detected · 0 missed — 100.0% resistance.
+7 prevented · 0 detected · 0 missed — 100.0% resistance.
 
 | Scenario | Exploit class | Outcome | Safety-net invariants |
 |---|---|---|---|
-| EXP-01 Privileged solvency break | Access control / privileged-function abuse | DETECTED | INV-01 |
-| EXP-02 ERC-4626 first-depositor inflation | Share-price manipulation | PREVENTED | INV-01, INV-04 |
-| EXP-03 Bad-debt collateral strip | Undercollateralised borrowing | PREVENTED | INV-01, INV-06 |
-| EXP-04 Reserve liquidity drain | Reserve / liquidity mismatch | PREVENTED | INV-01 |
-| EXP-05 Over-borrow beyond collateral cap | Collateralisation bypass | PREVENTED | INV-01 |
-| EXP-06 Interest-driven liquidation | Under-collateralisation via interest accrual | PREVENTED | INV-01, INV-06 |
-| EXP-07 Rounding-dust extraction | Rounding-error accumulation | PREVENTED | INV-01 |
+| EXP-01 ERC-4626 first-depositor inflation | Share-price manipulation | PREVENTED | INV-01, INV-04 |
+| EXP-02 Euler 2023 - donateToReserves health bypass | Health-check bypass on collateral reduction | PREVENTED | INV-01, INV-06 |
+| EXP-03 Cream 2021 - oracle staleness defense | Oracle suppression / stale price | PREVENTED | INV-11 |
+| EXP-04 Over-borrow beyond collateral cap | Collateralisation bypass | PREVENTED | INV-01 |
+| EXP-05 Interest-driven liquidation | Under-collateralisation via interest accrual | PREVENTED | INV-01, INV-06 |
+| EXP-06 bZx Sep 2020 - cross-account state mutation | Cross-account access (transferFrom typo) | PREVENTED | INV-06 |
+| EXP-07 Oracle price-drop liquidation | Collateral-value collapse | PREVENTED | INV-01, INV-06 |
 
 ## Research grounding
 
