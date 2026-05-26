@@ -100,8 +100,15 @@ dashboard-build: ## Type-check and bundle the dashboard for production
 halmos: ## [sprint 3] Symbolic proofs for INV-01, INV-06, INV-10
 	@echo "[halmos] not yet wired — sprint 3 adds symbolic proofs as a CI gate"
 
-echidna: ## [sprint 2] Independent fuzz campaign cross-checking Foundry
-	@echo "[echidna] not yet wired — sprint 2 adds an independent fuzz engine"
+echidna: ## Independent fuzz campaign cross-checking Foundry
+	@if command -v echidna >/dev/null 2>&1; then \
+		echidna . --contract EchidnaVault --config echidna.yaml ; \
+	else \
+		echo "[echidna] binary not installed locally — skipping. Install:"; \
+		echo "  brew install echidna   # macOS"; \
+		echo "  https://github.com/crytic/echidna#installation"; \
+		echo "  CI uses the Trail of Bits docker image."; \
+	fi
 
 slither: ## [sprint 3] Static analysis feeding the AMC score
 	@echo "[slither] not yet wired — sprint 3 adds slither output to the AMC score"

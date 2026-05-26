@@ -28,14 +28,15 @@ pretend they are. Each invariant below carries a **class**:
 
 ## Testing strategy
 
-Four complementary test tiers ship evidence for these invariants. The CI gate
+Five complementary test tiers ship evidence for these invariants. The CI gate
 on each is set so the green badge is a precise, falsifiable claim.
 
 | Tier | Directory | Question it answers | CI gate |
 |------|-----------|---------------------|---------|
 | Unit | `test/unit/` | Does every individual path behave exactly as specified? | via `coverage` (≥ 85% lines on `Vault.sol`) |
 | Parameterized fuzz | `test/fuzz/` | Do the invariants hold under *any* APR / liquidation-bonus parameter pair? | runs with `forge test` |
-| Invariant fuzz | `test/invariant/` | Do the six properties survive *any* call sequence? | `invariant-fuzz` (zero `[FAIL]`) |
+| Invariant fuzz (Foundry) | `test/invariant/` | Do the six properties survive *any* call sequence? | `invariant-fuzz` (zero `[FAIL]`) |
+| Invariant fuzz (Echidna) | `test/echidna/` | Does an independent fuzz engine reach the same conclusion as Foundry? | `make echidna` (skipped locally if binary missing) |
 | Exploit replay | `test/exploit/` | Does the vault resist known DeFi exploit classes? | `assurance` (no regression, no `MISSED`) |
 
 The invariant suite drives five handlers (Deposit, Borrow, Warp, Liquidate,
