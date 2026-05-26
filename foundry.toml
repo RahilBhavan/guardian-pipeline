@@ -10,6 +10,13 @@ remappings = [
 ]
 fs_permissions = [{ access = "read-write", path = "./" }]
 
+# FFI enabled so test/differential/ShareMathDifferential.t.sol can shell out
+# to assurance/bin/refmath-cli.mjs (zero-dep Node script) and compare its
+# uint256 output against the Solidity result. That differential test is the
+# only consumer; no other test in the suite uses vm.ffi. The repo is a closed
+# system (no third-party test deps), so the FFI foot-gun surface is bounded.
+ffi = true
+
 [profile.default.fuzz]
 runs = 256
 max_test_rejects = 65536

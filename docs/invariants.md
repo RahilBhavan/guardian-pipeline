@@ -28,7 +28,7 @@ pretend they are. Each invariant below carries a **class**:
 
 ## Testing strategy
 
-Five complementary test tiers ship evidence for these invariants. The CI gate
+Six complementary test tiers ship evidence for these invariants. The CI gate
 on each is set so the green badge is a precise, falsifiable claim.
 
 | Tier | Directory | Question it answers | CI gate |
@@ -37,6 +37,7 @@ on each is set so the green badge is a precise, falsifiable claim.
 | Parameterized fuzz | `test/fuzz/` | Do the invariants hold under *any* APR / liquidation-bonus parameter pair? | runs with `forge test` |
 | Invariant fuzz (Foundry) | `test/invariant/` | Do the six properties survive *any* call sequence? | `invariant-fuzz` (zero `[FAIL]`) |
 | Invariant fuzz (Echidna) | `test/echidna/` | Does an independent fuzz engine reach the same conclusion as Foundry? | `make echidna` (skipped locally if binary missing) |
+| Differential | `test/differential/` | Does Solidity's share/debt math agree with a TS reference on every input? | runs with `forge test` (FFI to `assurance/bin/refmath-cli.mjs`) |
 | Exploit replay | `test/exploit/` | Does the vault resist known DeFi exploit classes? | `assurance` (no regression, no `MISSED`) |
 
 The invariant suite drives five handlers (Deposit, Borrow, Warp, Liquidate,
