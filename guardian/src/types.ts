@@ -2,8 +2,36 @@
  * Shared type definitions for the Guardian bot. No logic lives here.
  */
 
-/** The six invariant identifiers, mirroring the Solidity harness. */
-export type InvariantId = 'INV-01' | 'INV-02' | 'INV-03' | 'INV-04' | 'INV-05' | 'INV-06';
+/** The twelve invariant identifiers, mirroring the Solidity harness. */
+export type InvariantId =
+  | 'INV-01'
+  | 'INV-02'
+  | 'INV-03'
+  | 'INV-04'
+  | 'INV-05'
+  | 'INV-06'
+  | 'INV-07'
+  | 'INV-08'
+  | 'INV-09'
+  | 'INV-10'
+  | 'INV-11'
+  | 'INV-12';
+
+/**
+ * One realised liquidation observed in the polled block, with the oracle
+ * price read at the same block. INV-08 reconciles `(debtRepaid,
+ * collateralSeized)` against `seized * price * BPS <= paid * (BPS + bonus) * WAD`.
+ */
+export interface LiquidationEvent {
+  blockNumber: bigint;
+  borrower: `0x${string}`;
+  /** Debt-asset units the liquidator paid to clear part of the borrower's debt. */
+  debtRepaid: bigint;
+  /** Collateral-asset units the liquidator received from the vault. */
+  collateralSeized: bigint;
+  /** Oracle `price()` read at {@link blockNumber}. */
+  oraclePrice: bigint;
+}
 
 /** A single account's position in the vault at a given block. */
 export interface UserPosition {
@@ -32,12 +60,30 @@ export interface VaultState {
   collateralRatio: bigint;
   /** The vault's own debt-asset balance — idle cash. */
   cash: bigint;
+  /** Unix seconds of the last on-chain accrue() (vault.lastAccrualTime). */
+  lastAccrualTime: bigint;
+  /** Oracle staleness budget (vault.MAX_STALENESS), seconds. */
+  maxStaleness: bigint;
+  /** Liquidation bonus in BPS (vault.liquidationBonus). */
+  liquidationBonus: bigint;
+  /** Unix seconds the oracle reports as its last refresh (oracle.lastUpdatedAt). */
+  oracleLastUpdatedAt: bigint;
   /** Per-account positions for every address discovered from vault events. */
   users: UserPosition[];
+  /** Liquidations realised in this block, harvested from the Liquidated event. */
+  liquidationEvents: LiquidationEvent[];
   blockNumber: bigint;
   /** Unix seconds of the block whose state was read. */
   blockTimestamp: number;
 }
+
+/**
+ * The previous {@link VaultState} observation for a vault, fed into the
+ * delta invariants (INV-07 solvencyMonotone, INV-09 debtMonotoneUnderAccrual).
+ * Absent on the very first observed block after deploy or restart — the
+ * delta checks short-circuit to a non-failing "no prior" result in that case.
+ */
+export type PriorVaultState = VaultState | null;
 
 /** The outcome of evaluating a single invariant against a {@link VaultState}. */
 export interface InvariantResult {

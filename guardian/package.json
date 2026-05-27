@@ -8,7 +8,8 @@
     "start": "node dist/bot.js",
     "build": "tsup src/bot.ts --format esm --dts",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --import tsx src/health.test.ts test/evaluator.test.ts"
+    "test": "node --test --import tsx src/health.test.ts test/evaluator.test.ts test/fixtures.test.ts test/stateHistory.test.ts",
+    "parity": "node scripts/parity-check.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.0.0",

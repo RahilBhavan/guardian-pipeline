@@ -17,10 +17,12 @@ import {OracleHandler} from "./handlers/OracleHandler.sol";
 /// @notice Wires seven handlers — deposit/withdraw, collateral
 ///         deposit/withdraw, borrow/repay, time-warp + accrual, liquidation,
 ///         oracle-price moves, and direct-token donations of either asset —
-///         into the fuzzer and asserts all six Vault invariants hold after
-///         every randomised call sequence. The same six checks are mirrored
-///         1:1 by `guardian/src/evaluator.ts`, so the property proven
-///         pre-deployment is the property the runtime monitor evaluates.
+///         into the fuzzer and asserts all twelve Vault invariants hold
+///         after every randomised call sequence. The twelve checks are
+///         mirrored by `guardian/src/evaluator.ts` across three channels —
+///         snapshot, delta, and event-reconciliation — for a 12-of-12
+///         mirror, so the property proven pre-deployment is the property
+///         the runtime monitor evaluates.
 /// @dev    The campaign runs with `fail_on_revert = true`. Every handler is
 ///         written so its fuzz entrypoints either succeed against the live
 ///         vault state or short-circuit with an early `return` — no

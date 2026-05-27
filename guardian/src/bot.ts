@@ -18,11 +18,17 @@ import { createPublicClient, webSocket, type Chain, type PublicClient } from 'vi
 import { base, baseSepolia } from 'viem/chains';
 import pino from 'pino';
 import { createClient } from '@supabase/supabase-js';
-import { discoverUsers, fetchVaultState } from './fetcher.js';
+import {
+  discoverUsers,
+  fetchLiquidationsInRange,
+  fetchOracleAddress,
+  fetchVaultState,
+} from './fetcher.js';
 import { evaluateInvariants } from './evaluator.js';
+import { loadPreviousState, savePreviousState } from './stateHistory.js';
 import { logAlertToSupabase, logBlockCheck } from './router.js';
 import { createGuardianState, startHealthServer, type GuardianState } from './health.js';
-import type { AlertPayload, BotConfig } from './types.js';
+import type { AlertPayload, BotConfig, PriorVaultState } from './types.js';
 
 const logger = pino({
   level: process.env.LOG_LEVEL ?? 'info',
@@ -139,6 +145,13 @@ async function main(): Promise<void> {
     logger.info('Vault contract verified on-chain');
   }
 
+  // Resolve the oracle address once — `oracle` is immutable on the vault,
+  // so caching is safe for the lifetime of the process. The per-block
+  // multicall folds in oracle.lastUpdatedAt() for INV-11 and liquidation
+  // events fold in oracle.price() at their block for INV-08.
+  const oracleAddress = await fetchOracleAddress(client, config.vaultAddress);
+  logger.info({ oracle: oracleAddress }, 'Resolved oracle address');
+
   const { error: dbError } = await supabase.from('blocks_checked').select('id').limit(1);
   if (dbError) {
     logger.warn({ error: dbError.message }, 'Supabase reachability check failed — alerts may not persist');
@@ -154,6 +167,21 @@ async function main(): Promise<void> {
   }
   let lastScannedBlock = headBlock;
   logger.info({ users: knownUsers.size }, 'Seeded user set from vault history');
+
+  // Load the prior {VaultState} so INV-07/09 have a delta baseline on the
+  // first block after restart. `null` on a fresh deploy or after a load
+  // failure — the delta checks short-circuit to PASS for one block in
+  // that case. Captured in a `let` so each tick can replace it with the
+  // just-evaluated snapshot.
+  let priorState: PriorVaultState = await loadPreviousState(
+    supabase,
+    config.vaultAddress,
+    logger,
+  );
+  logger.info(
+    { hasPrior: priorState !== null, vault: config.vaultAddress },
+    'Loaded prior vault state for delta invariants',
+  );
 
   // Prevent overlapping checks if a block arrives before the previous finishes.
   let checking = false;
@@ -250,15 +278,26 @@ async function main(): Promise<void> {
     state.blockChecksTotal += 1;
 
     try {
-      // Pick up any accounts that appeared since the last checked block.
+      // Pick up any accounts that appeared since the last checked block,
+      // and harvest the Liquidation events landed in the same window so
+      // INV-08 reconciles every realised liquidation. The window is
+      // identical for both — `discoverUsers` and `fetchLiquidationsInRange`
+      // share the same paginated `eth_getLogs` budget.
+      let blockLiquidations: Awaited<ReturnType<typeof fetchLiquidationsInRange>> = [];
       if (blockNumber > lastScannedBlock) {
-        const fresh = await discoverUsers(
-          client,
-          config.vaultAddress,
-          lastScannedBlock + 1n,
-          blockNumber,
-        );
+        const scanFrom = lastScannedBlock + 1n;
+        const [fresh, liquidations] = await Promise.all([
+          discoverUsers(client, config.vaultAddress, scanFrom, blockNumber),
+          fetchLiquidationsInRange(
+            client,
+            config.vaultAddress,
+            oracleAddress,
+            scanFrom,
+            blockNumber,
+          ),
+        ]);
         for (const user of fresh) knownUsers.add(user);
+        blockLiquidations = liquidations;
         lastScannedBlock = blockNumber;
       }
 
@@ -266,12 +305,20 @@ async function main(): Promise<void> {
         client,
         config.vaultAddress,
         config.debtAsset,
+        oracleAddress,
         blockNumber,
         [...knownUsers],
+        blockLiquidations,
       );
-      const results = evaluateInvariants(vaultState);
+      const results = evaluateInvariants(vaultState, priorState);
       const violations = results.filter((r) => !r.passed);
       const detectionLatencyMs = Date.now() - startedAt;
+
+      // Persist and rotate the prior so the next tick has a fresh delta
+      // baseline. Save is fire-and-forget — a write failure logs a warning
+      // and the next block's delta short-circuits at most once.
+      void savePreviousState(supabase, vaultState, config.vaultAddress, logger);
+      priorState = vaultState;
 
       // Record every checked block so the dashboard can show latency + liveness.
       void logBlockCheck(

@@ -6,10 +6,12 @@
  * `CollateralDeposited`, `Borrowed` and `Liquidated` events, so the
  * off-chain evaluator can check the supply- and debt-share sum identities
  * (INV-02/03) and the no-uncollateralised-debt rule (INV-06) against the
- * *exact* user set — not a sampled proxy.
+ * *exact* user set — not a sampled proxy. The aggregate also pulls the
+ * oracle freshness fields (INV-11), accrual timestamp (INV-12) and bonus
+ * (INV-08), keeping the evaluator a pure function of the snapshot.
  */
 import type { PublicClient } from 'viem';
-import type { UserPosition, VaultState } from './types.js';
+import type { LiquidationEvent, UserPosition, VaultState } from './types.js';
 
 /** `Deposited(address indexed user, uint256, uint256)`. */
 export const DEPOSITED_EVENT = {
@@ -63,6 +65,10 @@ export const VAULT_ABI = [
   { name: 'totalBorrowed', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { name: 'borrowIndex', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { name: 'collateralRatio', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { name: 'lastAccrualTime', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { name: 'liquidationBonus', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { name: 'MAX_STALENESS', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { name: 'oracle', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   {
     name: 'userSupplyShares',
     type: 'function',
@@ -88,6 +94,18 @@ export const VAULT_ABI = [
   COLLATERAL_DEPOSITED_EVENT,
   BORROWED_EVENT,
   LIQUIDATED_EVENT,
+] as const;
+
+/**
+ * Minimal IPriceOracle ABI — only the two views INV-08 and INV-11 need.
+ * `price()` returns collateral-priced-in-debt scaled by 1e18, and is read
+ * at the liquidation's same block so the INV-08 reconciliation uses the
+ * price the on-chain liquidate() saw (subject to no oracle move within
+ * the block — see {@link fetchLiquidationsInRange}).
+ */
+export const ORACLE_ABI = [
+  { name: 'price', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { name: 'lastUpdatedAt', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
 ] as const;
 
 /** Minimal ERC-20 ABI — only `balanceOf`. */
@@ -161,28 +179,55 @@ export async function discoverUsers(
 }
 
 /**
+ * Read the vault's configured oracle address once at startup so per-block
+ * snapshots can include the oracle freshness/price reads inside the same
+ * multicall. The oracle is `immutable` on the vault, so caching is safe
+ * for the lifetime of the bot.
+ */
+export async function fetchOracleAddress(
+  client: PublicClient,
+  vaultAddress: `0x${string}`,
+): Promise<`0x${string}`> {
+  const raw = await client.readContract({
+    address: vaultAddress,
+    abi: VAULT_ABI,
+    functionName: 'oracle',
+    args: [],
+  });
+  return raw as `0x${string}`;
+}
+
+/**
  * Fetch a full {@link VaultState} snapshot at a given block.
  *
  * @param client            A viem public client connected to Base.
  * @param vaultAddress      The deployed vault address.
  * @param debtAssetAddress  The debt asset whose vault balance is the idle cash.
+ * @param oracleAddress     The vault's price oracle, resolved once at startup
+ *                          via {@link fetchOracleAddress}.
  * @param blockNumber       Block at which to read state.
  * @param users             Addresses whose per-user position should be read.
+ * @param liquidationEvents Liquidations harvested for this block via
+ *                          {@link fetchLiquidationsInRange}. Defaults to `[]`.
  */
 export async function fetchVaultState(
   client: PublicClient,
   vaultAddress: `0x${string}`,
   debtAssetAddress: `0x${string}`,
+  oracleAddress: `0x${string}`,
   blockNumber: bigint,
   users: `0x${string}`[],
+  liquidationEvents: LiquidationEvent[] = [],
 ): Promise<VaultState> {
-  // The aggregate state is a fixed 7-call multicall (six vault views + the
-  // debt-asset balance that backs INV-01's `cash` term). Per-user positions
-  // are batched into chunks of {@link USERS_PER_MULTICALL_BATCH} users — at
-  // scale a single all-users multicall exceeds the free-tier RPC
-  // response-size cap and the bot starts failing every block. Batches run
-  // sequentially after the aggregate fetch so a busy vault never bursts
-  // the RPC.
+  // The aggregate state is a fixed 12-call multicall: 10 vault views
+  // (six original + lastAccrualTime/liquidationBonus/MAX_STALENESS for
+  // INV-08/11/12) + 2 oracle views (price/lastUpdatedAt for INV-08/11) +
+  // the debt-asset balance that backs INV-01's `cash` term. Per-user
+  // positions are batched into chunks of {@link USERS_PER_MULTICALL_BATCH}
+  // users — at scale a single all-users multicall exceeds the free-tier
+  // RPC response-size cap and the bot starts failing every block. Batches
+  // run sequentially after the aggregate fetch so a busy vault never
+  // bursts the RPC.
   const aggregateCalls = [
     { address: vaultAddress, abi: VAULT_ABI, functionName: 'totalSupplyAssets', args: [] },
     { address: vaultAddress, abi: VAULT_ABI, functionName: 'totalSupplyShares', args: [] },
@@ -190,6 +235,10 @@ export async function fetchVaultState(
     { address: vaultAddress, abi: VAULT_ABI, functionName: 'totalBorrowed', args: [] },
     { address: vaultAddress, abi: VAULT_ABI, functionName: 'borrowIndex', args: [] },
     { address: vaultAddress, abi: VAULT_ABI, functionName: 'collateralRatio', args: [] },
+    { address: vaultAddress, abi: VAULT_ABI, functionName: 'lastAccrualTime', args: [] },
+    { address: vaultAddress, abi: VAULT_ABI, functionName: 'liquidationBonus', args: [] },
+    { address: vaultAddress, abi: VAULT_ABI, functionName: 'MAX_STALENESS', args: [] },
+    { address: oracleAddress, abi: ORACLE_ABI, functionName: 'lastUpdatedAt', args: [] },
     { address: debtAssetAddress, abi: ERC20_ABI, functionName: 'balanceOf', args: [vaultAddress] },
   ];
 
@@ -239,9 +288,83 @@ export async function fetchVaultState(
     totalBorrowed: aggCell(3),
     borrowIndex: aggCell(4),
     collateralRatio: aggCell(5),
-    cash: aggCell(6),
+    lastAccrualTime: aggCell(6),
+    liquidationBonus: aggCell(7),
+    maxStaleness: aggCell(8),
+    oracleLastUpdatedAt: aggCell(9),
+    cash: aggCell(10),
     users: positions,
+    liquidationEvents,
     blockNumber,
     blockTimestamp: Number(block.timestamp),
   };
+}
+
+/**
+ * Scan the polled block range for `Liquidated` events and annotate each
+ * with the oracle price at its block. The price read happens per-block
+ * (not per-event), so multiple liquidations in the same block share a
+ * single oracle read. INV-08 reconciles `(collateralSeized, debtRepaid)`
+ * against `seized * price * BPS <= paid * (BPS + bonus) * WAD` — see
+ * {@link evaluator.inv08}.
+ */
+export async function fetchLiquidationsInRange(
+  client: PublicClient,
+  vaultAddress: `0x${string}`,
+  oracleAddress: `0x${string}`,
+  fromBlock: bigint,
+  toBlock: bigint,
+): Promise<LiquidationEvent[]> {
+  if (toBlock < fromBlock) return [];
+
+  const out: LiquidationEvent[] = [];
+  for (let from = fromBlock; from <= toBlock; from += MAX_LOG_RANGE) {
+    const to = from + MAX_LOG_RANGE - 1n < toBlock ? from + MAX_LOG_RANGE - 1n : toBlock;
+    const logs = await client.getLogs({
+      address: vaultAddress,
+      event: LIQUIDATED_EVENT,
+      fromBlock: from,
+      toBlock: to,
+    });
+    if (logs.length === 0) continue;
+
+    // Group log indices by block so we read oracle.price() at most once per
+    // block. {Map<blockNumber, log[]>} preserves discovery order.
+    const byBlock = new Map<bigint, typeof logs>();
+    for (const log of logs) {
+      const block = log.blockNumber;
+      if (block === null) continue;
+      const bucket = byBlock.get(block);
+      if (bucket) bucket.push(log);
+      else byBlock.set(block, [log]);
+    }
+
+    for (const [block, blockLogs] of byBlock) {
+      const priceRaw = await client.readContract({
+        address: oracleAddress,
+        abi: ORACLE_ABI,
+        functionName: 'price',
+        args: [],
+        blockNumber: block,
+      });
+      const price = priceRaw as bigint;
+      for (const log of blockLogs) {
+        if (
+          log.args.borrower === undefined ||
+          log.args.debtRepaid === undefined ||
+          log.args.collateralSeized === undefined
+        ) {
+          continue;
+        }
+        out.push({
+          blockNumber: block,
+          borrower: log.args.borrower,
+          debtRepaid: log.args.debtRepaid,
+          collateralSeized: log.args.collateralSeized,
+          oraclePrice: price,
+        });
+      }
+    }
+  }
+  return out;
 }

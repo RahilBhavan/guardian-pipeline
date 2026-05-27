@@ -65,8 +65,3 @@ export const INVARIANT_IDS: ReadonlySet<string> = new Set(INVARIANTS.map((i) => 
 
 /** The set of harness `invariant_*` function names. */
 export const HARNESS_TESTS: ReadonlySet<string> = new Set(INVARIANTS.map((i) => i.harnessTest));
-
-/** Look up an invariant by ID. */
-export function invariantById(id: string): InvariantMeta | undefined {
-  return INVARIANTS.find((i) => i.id === id);
-}
