@@ -1,0 +1,5 @@
+No tests match the provided pattern:
+	`--match-contract`: InvariantNothing
+
+Filters used:
+	No tests to run.
