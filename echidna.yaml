@@ -1,0 +1,54 @@
+# Echidna configuration — independent fuzz engine cross-checking the
+# Foundry invariant campaign in test/invariant/InvariantVault.t.sol.
+#
+# Invoke from the repo root:
+#   echidna . --contract EchidnaVault --config echidna.yaml
+#
+# The `make echidna` target wraps this and degrades gracefully when
+# Echidna isn't installed locally.
+
+# How long each property-mode call sequence is allowed to grow.
+seqLen: 100
+
+# Total number of test sequences. Tune downward for fast local feedback;
+# CI overrides via the command line for longer campaigns.
+testLimit: 50000
+
+# Property mode — Echidna calls every `echidna_*` view function after each
+# sequence step and fails on the first one that returns false. Matches the
+# assert-style invariants used by the Foundry harness.
+testMode: property
+
+# Forge layout — Echidna calls `forge build` under the hood when this is set,
+# so the foundry.toml remappings (`@openzeppelin/=lib/openzeppelin-contracts/`)
+# are applied automatically.
+cryticArgs: ["--foundry-compile-all"]
+
+# Stop drilling into a single sequence as soon as a property breaks; shrink
+# afterwards. Default shrink budget is sufficient.
+shrinkLimit: 5000
+
+# Coverage-guided fuzzing — strongly preferred over pure random.
+coverage: true
+
+# Allow Echidna to call any deployed contract, not just EchidnaVault. Lets
+# it drive EchidnaActor instances directly when it discovers them.
+allContracts: true
+
+# Deployer address — Echidna deploys EchidnaVault from here; the constructor
+# seeds the vault and three actor proxies in turn.
+deployer: "0x30000"
+
+# Allowed transaction senders.
+sender:
+  - "0x10000"
+  - "0x20000"
+  - "0x30000"
+
+# 1 second of simulated wall-clock per call — keeps the MAX_STALENESS (1 day)
+# freshness gate from triggering across a 100-call sequence even if the
+# harness never calls op_pokeOracle.
+blockTime: 1
+
+# No filtered functions — every op_* and echidna_* on EchidnaVault is fair game.
+filterFunctions: []

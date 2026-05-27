@@ -10,31 +10,42 @@ remappings = [
 ]
 fs_permissions = [{ access = "read-write", path = "./" }]
 
+# FFI enabled so test/differential/ShareMathDifferential.t.sol can shell out
+# to assurance/bin/refmath-cli.mjs (zero-dep Node script) and compare its
+# uint256 output against the Solidity result. That differential test is the
+# only consumer; no other test in the suite uses vm.ffi. The repo is a closed
+# system (no third-party test deps), so the FFI foot-gun surface is bounded.
+ffi = true
+
 [profile.default.fuzz]
 runs = 256
 max_test_rejects = 65536
 
 [profile.default.invariant]
-runs = 500           # per CI run (fast); override locally with --invariant-runs
+# `fail_on_revert = true`: every handler call must succeed against live state.
+# Handlers short-circuit (early `return`) on the same conditions the vault
+# would revert on, so the fuzzer never silently absorbs a failed call as a
+# "tried it" — coverage numbers reflect calls that actually mutated state.
+runs = 500           # per local run (fast); override with --invariant-runs
 depth = 100          # max calls per sequence
-fail_on_revert = false
+fail_on_revert = true
 shrink_run_limit = 5000
 call_override = false
 
 [profile.ci]
-# Used in GitHub Actions — more thorough
+# Used in GitHub Actions — more thorough.
 [profile.ci.invariant]
 runs = 2000
 depth = 150
-fail_on_revert = false
+fail_on_revert = true
 shrink_run_limit = 5000
 
 [profile.deep]
-# Run locally for maximum coverage before a release
+# Run locally for maximum coverage before a release.
 [profile.deep.invariant]
 runs = 10000
 depth = 200
-fail_on_revert = false
+fail_on_revert = true
 shrink_run_limit = 5000
 
 [rpc_endpoints]

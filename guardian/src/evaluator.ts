@@ -3,7 +3,7 @@
  *
  * Every check here is the exact logical twin of its counterpart in
  * test/invariant/InvariantVault.t.sol. The six properties proven across
- * hundreds of thousands of fuzz runs pre-deployment are the same six enforced
+ * tens of thousands of fuzz calls pre-deployment are the same six enforced
  * live, block by block. Unlike a sampled proxy, INV-02/03/06 are evaluated
  * against the *actual* per-user positions the fetcher discovers from vault
  * events — so the mirror is genuinely 1:1, not an approximation.
@@ -76,12 +76,12 @@ function inv05(state: VaultState): InvariantResult {
 }
 
 /**
- * INV-06 No uncollateralised debt — an account with zero collateral shares must
- * carry no debt. `actualValue` reports the count of offending accounts.
+ * INV-06 No uncollateralised debt — an account with zero posted collateral
+ * must carry no debt. `actualValue` reports the count of offending accounts.
  */
 function inv06(state: VaultState): InvariantResult {
   const offenders = state.users.filter(
-    (u) => u.supplyShares === 0n && u.borrowShares > 0n,
+    (u) => u.collateral === 0n && u.borrowShares > 0n,
   ).length;
   return {
     id: 'INV-06',
@@ -89,7 +89,7 @@ function inv06(state: VaultState): InvariantResult {
     passed: offenders === 0,
     actualValue: BigInt(offenders),
     boundValue: 0n,
-    description: 'no account may hold debt while holding zero collateral shares',
+    description: 'no account may hold debt while holding zero posted collateral',
   };
 }
 

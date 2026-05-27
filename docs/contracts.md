@@ -337,5 +337,5 @@ Full broadcast instructions — keystore setup, RPC, `--verify` — are in
 
 - [invariants.md](invariants.md) — the six invariants the contract must hold.
 - [guardian-bot.md](guardian-bot.md) — how the off-chain bot reads this contract.
-- [testing.md](testing.md) — how the harness and exploit replays exercise it.
+- [invariants.md#testing-strategy](invariants.md#testing-strategy) — how the harness and exploit replays exercise it.
 - [SECURITY.md](../SECURITY.md) — trust boundaries and the `attack()` demo flag.

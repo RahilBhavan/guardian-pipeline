@@ -38,7 +38,7 @@ function loadConfig(): BotConfig {
   const required = [
     'ALCHEMY_KEY',
     'VAULT_ADDRESS',
-    'TOKEN_ADDRESS',
+    'DEBT_ASSET',
     'SUPABASE_URL',
     'SUPABASE_SERVICE_KEY',
   ];
@@ -49,7 +49,7 @@ function loadConfig(): BotConfig {
   // Validate address-shaped vars up front so a typo fails at startup with a
   // clear message, not as an obscure RPC error on every block.
   const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
-  for (const key of ['VAULT_ADDRESS', 'TOKEN_ADDRESS']) {
+  for (const key of ['VAULT_ADDRESS', 'DEBT_ASSET']) {
     if (!ADDRESS_RE.test(process.env[key] as string)) {
       throw new Error(`Invalid ${key}: expected a 0x-prefixed 40-hex-character address`);
     }
@@ -69,7 +69,7 @@ function loadConfig(): BotConfig {
   return {
     rpcUrl,
     vaultAddress: process.env.VAULT_ADDRESS as `0x${string}`,
-    tokenAddress: process.env.TOKEN_ADDRESS as `0x${string}`,
+    debtAsset: process.env.DEBT_ASSET as `0x${string}`,
     deployBlock: BigInt(process.env.VAULT_DEPLOY_BLOCK ?? '0'),
     supabaseUrl: process.env.SUPABASE_URL as string,
     supabaseKey,
@@ -265,7 +265,7 @@ async function main(): Promise<void> {
       const vaultState = await fetchVaultState(
         client,
         config.vaultAddress,
-        config.tokenAddress,
+        config.debtAsset,
         blockNumber,
         [...knownUsers],
       );

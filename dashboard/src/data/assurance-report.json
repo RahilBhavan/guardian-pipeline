@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-05-23T00:39:13.340Z",
-  "gitSha": "a400890",
+  "generatedAt": "2026-05-24T14:07:48.692Z",
+  "gitSha": "9cc5623",
   "thesis": "The Assurance Score rolls the repository's pre-deployment evidence into one reproducible number — static verification, exploit-replay resistance, and the traceability of every security-review finding to a re-runnable check. It is a worked demonstration of one design response — recomputing assurance on every commit — to the open empirical question both cited papers raise about audit effectiveness. The \"continuous, multi-layered\" framing is this project's, not a claim of either paper.",
   "research": [
     {
@@ -37,11 +37,11 @@
         "score": 100,
         "available": true,
         "weight": 0.35,
-        "detail": "7/7 exploit classes resisted (6 prevented, 1 detected, 0 missed)",
+        "detail": "7/7 exploit classes resisted (7 prevented, 0 detected, 0 missed)",
         "metrics": {
           "total": 7,
-          "prevented": 6,
-          "detected": 1,
+          "prevented": 7,
+          "detected": 0,
           "missed": 0
         }
       },
@@ -63,36 +63,7 @@
   "traceability": {
     "findings": [
       {
-        "id": "GUA-01",
-        "title": "Demo insolvency backdoor isolated to a separate contract",
-        "severity": "Critical",
-        "status": "Resolved",
-        "category": "Access Control",
-        "securityRelevant": true,
-        "tier": "fully-assured",
-        "weight": 1,
-        "layers": {
-          "invariants": 1,
-          "harnessTests": 1,
-          "liveMonitors": 1,
-          "exploitReplays": 1
-        },
-        "invariants": [
-          "INV-01"
-        ],
-        "harnessTests": [
-          "invariant_solvency"
-        ],
-        "liveMonitors": [
-          "INV-01"
-        ],
-        "exploitReplays": [
-          "EXP-01"
-        ],
-        "issues": []
-      },
-      {
-        "id": "GUA-03",
+        "id": "GUA-02",
         "title": "Full-close repayment could erode the solvency margin by one wei",
         "severity": "High",
         "status": "Resolved",
@@ -119,7 +90,7 @@
         "issues": []
       },
       {
-        "id": "GUA-02",
+        "id": "GUA-01",
         "title": "Reentrancy exposure on state-mutating functions",
         "severity": "Medium",
         "status": "Resolved",
@@ -144,7 +115,7 @@
         "issues": []
       },
       {
-        "id": "GUA-04",
+        "id": "GUA-03",
         "title": "Liquidation seizing all collateral must clear the full debt",
         "severity": "Medium",
         "status": "Resolved",
@@ -156,7 +127,7 @@
           "invariants": 1,
           "harnessTests": 1,
           "liveMonitors": 1,
-          "exploitReplays": 1
+          "exploitReplays": 2
         },
         "invariants": [
           "INV-06"
@@ -168,12 +139,46 @@
           "INV-06"
         ],
         "exploitReplays": [
-          "EXP-06"
+          "EXP-05",
+          "EXP-07"
         ],
         "issues": []
       },
       {
-        "id": "GUA-05",
+        "id": "GUA-08",
+        "title": "Vault trusts the oracle implicitly — no staleness, deviation or circuit-breaker checks",
+        "severity": "Medium",
+        "status": "Acknowledged",
+        "category": "Oracle Risk",
+        "securityRelevant": true,
+        "tier": "fully-assured",
+        "weight": 1,
+        "layers": {
+          "invariants": 2,
+          "harnessTests": 2,
+          "liveMonitors": 2,
+          "exploitReplays": 2
+        },
+        "invariants": [
+          "INV-01",
+          "INV-06"
+        ],
+        "harnessTests": [
+          "invariant_solvency",
+          "invariant_noUncollateralisedDebt"
+        ],
+        "liveMonitors": [
+          "INV-01",
+          "INV-06"
+        ],
+        "exploitReplays": [
+          "EXP-03",
+          "EXP-07"
+        ],
+        "issues": []
+      },
+      {
+        "id": "GUA-04",
         "title": "Sustained interest can make a lender redemption exceed idle cash",
         "severity": "Low",
         "status": "Acknowledged",
@@ -185,7 +190,7 @@
           "invariants": 1,
           "harnessTests": 1,
           "liveMonitors": 1,
-          "exploitReplays": 1
+          "exploitReplays": 0
         },
         "invariants": [
           "INV-01"
@@ -196,13 +201,11 @@
         "liveMonitors": [
           "INV-01"
         ],
-        "exploitReplays": [
-          "EXP-04"
-        ],
+        "exploitReplays": [],
         "issues": []
       },
       {
-        "id": "GUA-08",
+        "id": "GUA-07",
         "title": "Deeply under-water positions can leave residual bad debt",
         "severity": "Low",
         "status": "Acknowledged",
@@ -214,7 +217,7 @@
           "invariants": 1,
           "harnessTests": 1,
           "liveMonitors": 1,
-          "exploitReplays": 1
+          "exploitReplays": 2
         },
         "invariants": [
           "INV-01"
@@ -226,13 +229,14 @@
           "INV-01"
         ],
         "exploitReplays": [
-          "EXP-06"
+          "EXP-05",
+          "EXP-07"
         ],
         "issues": []
       },
       {
-        "id": "GUA-06",
-        "title": "Share price is immune to direct token donations",
+        "id": "GUA-05",
+        "title": "Share price and collateral accounting are immune to direct token donations",
         "severity": "Informational",
         "status": "Acknowledged",
         "category": "Accounting",
@@ -258,12 +262,12 @@
           "INV-04"
         ],
         "exploitReplays": [
-          "EXP-02"
+          "EXP-01"
         ],
         "issues": []
       },
       {
-        "id": "GUA-07",
+        "id": "GUA-06",
         "title": "A full-close repayment may charge up to one wei above userDebt()",
         "severity": "Informational",
         "status": "Acknowledged",
@@ -304,8 +308,8 @@
   "exploits": {
     "summary": {
       "total": 7,
-      "prevented": 6,
-      "detected": 1,
+      "prevented": 7,
+      "detected": 0,
       "missed": 0,
       "regressions": 0,
       "resistancePct": 100
@@ -313,27 +317,10 @@
     "scenarios": [
       {
         "id": "EXP-01",
-        "name": "Privileged solvency break",
-        "exploitClass": "Access control / privileged-function abuse",
-        "reference": "Admin-key class: a privileged role mutates protocol accounting directly, as in forced-mint and forced-debt incidents.",
-        "description": "The attacker calls the demo-only attack() entrypoint on AttackableVault, inflating totalSupplyAssets so lender claims exceed the assets backing them. The production Vault has no such function; this scenario exists to prove INV-01 catches the resulting insolvency.",
-        "targetInvariants": [
-          "INV-01"
-        ],
-        "reverted": false,
-        "violatedInvariants": [
-          "INV-01"
-        ],
-        "attackerProfited": false,
-        "expectedOutcome": "DETECTED",
-        "outcome": "DETECTED"
-      },
-      {
-        "id": "EXP-02",
         "name": "ERC-4626 first-depositor inflation",
         "exploitClass": "Share-price manipulation",
         "reference": "ERC-4626 inflation attack class: an attacker donates assets to skew the shares-to-assets ratio so a later depositor is diluted to zero shares.",
-        "description": "The attacker seeds the vault with 1 wei, donates 9,000 tokens directly, then a victim deposits and redeems. The vault prices shares off stored totalSupplyAssets, not the token balance, so a direct donation cannot move the ratio and the victim redeems in full.",
+        "description": "The attacker seeds the vault with 1 wei, donates 9,000 of each asset directly, then a victim deposits and redeems. The vault prices shares off stored totalSupplyAssets (lender side) and tracks userCollateral directly (borrower side), so neither donation moves the ratio and the victim redeems in full.",
         "targetInvariants": [
           "INV-01",
           "INV-04"
@@ -345,14 +332,29 @@
         "outcome": "PREVENTED"
       },
       {
-        "id": "EXP-03",
-        "name": "Bad-debt collateral strip",
-        "exploitClass": "Undercollateralised borrowing",
-        "reference": "Bad-debt class: a borrower removes collateral while keeping debt open, leaving the protocol with unbacked liabilities.",
-        "description": "A borrower deposits 10,000, borrows the full 8,000 cap, then attempts to withdraw all shares. Vault.withdraw re-checks the collateral cap on the post-withdrawal balance and reverts with CollateralCapExceeded.",
+        "id": "EXP-02",
+        "name": "Euler 2023 - donateToReserves health bypass",
+        "exploitClass": "Health-check bypass on collateral reduction",
+        "reference": "Euler Finance, 13 March 2023, ~$197M loss. EToken.donateToReserves burned the donor's eTokens without rerunning the account's collateral check; an attacker pushed themselves underwater via donation and a confederate liquidated for the depth-scaled bonus.",
+        "description": "A borrower posts 10 collateral and borrows the full 16,000 cap. The Euler analog is then attempted: a collateral-reducing call with debt open at the cap. Vault.withdrawCollateral re-checks the cap on the post-state and reverts with CollateralCapExceeded - the donateToReserves class is structurally impossible because no collateral-reducing path skips the health check.",
         "targetInvariants": [
           "INV-01",
           "INV-06"
+        ],
+        "reverted": true,
+        "violatedInvariants": [],
+        "attackerProfited": false,
+        "expectedOutcome": "PREVENTED",
+        "outcome": "PREVENTED"
+      },
+      {
+        "id": "EXP-03",
+        "name": "Cream 2021 - oracle staleness defense",
+        "exploitClass": "Oracle suppression / stale price",
+        "reference": "Cream Finance, 27 October 2021, ~$130M loss. The attacker donated to a Yearn vault to inflate its share price, then used the over-valued yUSDVault-2 position as collateral to over-borrow across Cream's lending markets.",
+        "description": "An attacker honestly posts 10 collateral, then time advances past MAX_STALENESS without an oracle refresh. The next borrow must consult _freshPrice() and revert with OraclePriceStale before any state changes. This covers the staleness subset of the Cream class; active in-window source manipulation is GUA-08 and is the runtime monitor's tracking surface, not a contract-level defense.",
+        "targetInvariants": [
+          "INV-11"
         ],
         "reverted": true,
         "violatedInvariants": [],
@@ -362,25 +364,10 @@
       },
       {
         "id": "EXP-04",
-        "name": "Reserve liquidity drain",
-        "exploitClass": "Reserve / liquidity mismatch",
-        "reference": "Reserve-mismatch class: outstanding borrows exceed idle reserves and an LP redemption cannot be honoured.",
-        "description": "Three LPs deposit 150,000, a borrower drains the maximum 40,000, then an LP withdraws their full 50,000. Free liquidity (110,000) provably stays above any single LP balance, so the withdrawal succeeds; were it not, withdraw reverts with InsufficientLiquidity rather than corrupting state.",
-        "targetInvariants": [
-          "INV-01"
-        ],
-        "reverted": false,
-        "violatedInvariants": [],
-        "attackerProfited": false,
-        "expectedOutcome": "PREVENTED",
-        "outcome": "PREVENTED"
-      },
-      {
-        "id": "EXP-05",
         "name": "Over-borrow beyond collateral cap",
         "exploitClass": "Collateralisation bypass",
         "reference": "Undercollateralised-loan class: a borrower draws more debt than their collateral backs.",
-        "description": "A borrower with 10,000 collateral requests 8,000 + 1 wei, exceeding the 80% cap. Vault.borrow reverts with CollateralCapExceeded before any state changes.",
+        "description": "A borrower with 10 collateral (20,000 in debt-asset units at the oracle's 2,000 price) requests 16,000 + 1 wei, exceeding the 80% cap. Vault.borrow reverts with CollateralCapExceeded before any state changes.",
         "targetInvariants": [
           "INV-01"
         ],
@@ -391,11 +378,11 @@
         "outcome": "PREVENTED"
       },
       {
-        "id": "EXP-06",
+        "id": "EXP-05",
         "name": "Interest-driven liquidation",
         "exploitClass": "Under-collateralisation via interest accrual",
         "reference": "Liquidation-cascade class: borrower interest outruns collateral value until the position is insolvent and must be cleared.",
-        "description": "A borrower draws the full 8,000 cap; two years of accrued interest pushes the debt past the collateral cap. A third-party liquidator repays the debt and seizes collateral plus the 5% bonus. All six invariants hold throughout; liquidation is the designed, solvency-preserving response.",
+        "description": "A borrower draws the full 16,000 cap; two years of accrued interest pushes the debt past the cap. A third-party liquidator repays the debt and seizes collateral plus the 5% bonus. All six invariants hold throughout; liquidation is the designed, solvency-preserving response.",
         "targetInvariants": [
           "INV-01",
           "INV-06"
@@ -407,13 +394,29 @@
         "outcome": "PREVENTED"
       },
       {
-        "id": "EXP-07",
-        "name": "Rounding-dust extraction",
-        "exploitClass": "Rounding-error accumulation",
-        "reference": "Dust-drain class: an attacker loops tiny deposits/withdrawals to harvest favourable rounding.",
-        "description": "The attacker runs 50 single-wei deposit/withdraw cycles. Mint and redeem both floor-divide toward the protocol, so no value is extracted across any number of loops.",
+        "id": "EXP-06",
+        "name": "bZx Sep 2020 - cross-account state mutation",
+        "exploitClass": "Cross-account access (transferFrom typo)",
+        "reference": "bZx, 13 September 2020, ~$8M loss. A DSToken transferFrom typo (msg.sender substituted for the from argument) let an attacker move balances from arbitrary accounts.",
+        "description": "An attacker tries to withdraw a victim's posted collateral. Vault.withdrawCollateral reads userCollateral[msg.sender], which is zero for the attacker, so the call reverts with InsufficientCollateral and the victim's collateral is untouched. No vault entrypoint mutates another account's state except liquidate, which gates on the borrower being underwater.",
         "targetInvariants": [
-          "INV-01"
+          "INV-06"
+        ],
+        "reverted": true,
+        "violatedInvariants": [],
+        "attackerProfited": false,
+        "expectedOutcome": "PREVENTED",
+        "outcome": "PREVENTED"
+      },
+      {
+        "id": "EXP-07",
+        "name": "Oracle price-drop liquidation",
+        "exploitClass": "Collateral-value collapse",
+        "reference": "Volatile-collateral class: a price drop pushes a position past its cap and liquidation is the designed response.",
+        "description": "A borrower posts 10 collateral at a 2,000 seed price (20,000 value), borrows 15,000, then the oracle halves the price. The position is underwater at the new price; a liquidator repays the debt and seizes collateral plus the 5% bonus. All six invariants hold throughout.",
+        "targetInvariants": [
+          "INV-01",
+          "INV-06"
         ],
         "reverted": false,
         "violatedInvariants": [],
@@ -475,6 +478,24 @@
     {
       "at": "2026-05-23T00:39:13.340Z",
       "gitSha": "a400890",
+      "overall": 91,
+      "grade": "A-"
+    },
+    {
+      "at": "2026-05-24T14:05:01.986Z",
+      "gitSha": "9cc5623",
+      "overall": 91,
+      "grade": "A-"
+    },
+    {
+      "at": "2026-05-24T14:06:52.890Z",
+      "gitSha": "9cc5623",
+      "overall": 91,
+      "grade": "A-"
+    },
+    {
+      "at": "2026-05-24T14:07:48.692Z",
+      "gitSha": "9cc5623",
       "overall": 91,
       "grade": "A-"
     }

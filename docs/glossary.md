@@ -13,7 +13,7 @@ tooling terms follow.
 | **`INV-01` … `INV-06`** | The six **invariants** — mathematical properties the vault must hold in every reachable state. Defined identically in the Foundry harness, the Guardian evaluator, and the exploit replays. Full reference: [invariants.md](invariants.md). |
 | **`EXP-01` … `EXP-07`** | The seven **exploit-replay scenarios** — classes of real-world DeFi attack replayed against the vault. Each is classified PREVENTED / DETECTED / MISSED. Catalogue: [assurance.md](assurance.md#exploit-replays). |
 | **`GUA-01` … `GUA-08`** | The eight findings in the self-conducted security review (`security-review/`), each traced to the layers that cover it. See [assurance.md](assurance.md#finding-traceability). |
-| **Assurance Score** | A composite 0–100 metric, recomputed every commit, weighting three pre-deployment components (static verification 45%, exploit resistance 35%, finding traceability 20%). CI gates at ≥ 80. |
+| **Assurance Methodology Coverage (AMC)** | A composite 0–100 metric, recomputed every commit, weighting three pre-deployment components (static verification 45%, exploit resistance 35%, finding traceability 20%). Measures methodology rigor — *not* code security. CI gates at ≥ 80. Earlier revisions called this the "Assurance Score"; the JSON and CLI field names still read `score`. |
 | **Guardian bot** | The off-chain TypeScript daemon (`guardian/`) — a runnable reference runtime monitor that, when run against a deployed vault, checks the invariants block by block. |
 | **The four layers** | Pre-deployment CI, the smart contract, the runtime Guardian, and the assurance layer. See [architecture.md](architecture.md). |
 

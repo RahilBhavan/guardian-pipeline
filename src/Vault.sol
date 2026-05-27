@@ -4,22 +4,27 @@ pragma solidity ^0.8.24;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IPriceOracle} from "./IPriceOracle.sol";
 
 /// @title  Vault — an interest-bearing, over-collateralised lending vault
-/// @notice Lenders deposit a single ERC-20 and receive shares whose value rises
-///         as borrowers pay interest. Borrowers post shares as collateral and
-///         may borrow up to `collateralRatio` of their share value; their debt
-///         grows over time through a `borrowIndex`. Positions that drift
-///         under-water can be cleared by anyone via {liquidate} for a bonus.
-/// @dev    Accounting follows the Morpho-style dual-tracked model: the lender
-///         side stores `totalSupplyAssets` directly, the borrower side scales a
-///         `borrowIndex`. Interest moves both sides by the *same* realised
-///         amount, so the solvency margin can never erode by rounding — it can
-///         only grow. The contract's value is in six mathematical invariants,
-///         each one *tensioned* by interest accrual and liquidation, proven
-///         pre-deployment by the Foundry fuzz harness
-///         (test/invariant/InvariantVault.t.sol) and monitored live by the
-///         Guardian bot (guardian/src/evaluator.ts):
+/// @notice Lenders deposit the **debt asset** and receive shares whose value
+///         rises as borrowers pay interest. Borrowers post a separate
+///         **collateral asset**, valued through an {IPriceOracle}, and may
+///         borrow the debt asset up to `collateralRatio` of their collateral
+///         value; their debt grows over time through a `borrowIndex`.
+///         Positions that drift under-water can be cleared by anyone via
+///         {liquidate} for a {liquidationBonus}.
+/// @dev    Two-token, oracle-priced model. The lender side uses Morpho-style
+///         dual-tracked accounting (`totalSupplyAssets` stored directly,
+///         interest moved by the realised drop in floored `totalBorrowed`) so
+///         the solvency margin can never erode by rounding — it can only grow.
+///         The borrower side is split: `userCollateral` holds the collateral
+///         asset; `userBorrowShares` index the debt asset. Liquidation seizes
+///         collateral priced through the oracle. The contract's value is in
+///         six mathematical invariants, each one *tensioned* by interest
+///         accrual, liquidation, or oracle movement, proven pre-deployment by
+///         the Foundry fuzz harness (test/invariant/InvariantVault.t.sol) and
+///         monitored live by the Guardian bot (guardian/src/evaluator.ts):
 ///
 ///         | ID     | Name                     | Property                                              |
 ///         |--------|--------------------------|-------------------------------------------------------|
@@ -28,7 +33,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 ///         | INV-03 | Debt-share integrity     | totalBorrowShares == sum(userBorrowShares[i])         |
 ///         | INV-04 | Lender-value floor       | totalSupplyAssets >= totalSupplyShares  (price >= 1)  |
 ///         | INV-05 | Interest-index floor     | borrowIndex >= 1e18                                   |
-///         | INV-06 | No uncollateralised debt | userSupplyShares[u] == 0  =>  userDebt(u) == 0        |
+///         | INV-06 | No uncollateralised debt | userCollateral[u] == 0  =>  userDebt(u) == 0          |
 contract Vault is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -41,23 +46,36 @@ contract Vault is ReentrancyGuard {
     /// @notice Seconds in a 365-day year — the interest-rate time base.
     uint256 public constant SECONDS_PER_YEAR = 365 days;
 
-    /// @notice The ERC-20 asset deposited, borrowed, repaid and seized.
-    IERC20 public immutable token;
+    /// @notice Maximum tolerated gap between the oracle's
+    ///         {IPriceOracle.lastUpdatedAt} and `block.timestamp`. Any
+    ///         price-dependent path that reads the oracle through
+    ///         {_freshPrice} reverts with {OraclePriceStale} when the gap
+    ///         exceeds this — the freshness gate INV-11 enforces.
+    uint256 public constant MAX_STALENESS = 1 days;
 
-    /// @notice Per-second borrow rate, scaled by {WAD}. Derived from the APR
-    ///         passed to the constructor: `aprBps * WAD / BPS / SECONDS_PER_YEAR`.
+    /// @notice The ERC-20 lenders deposit and borrowers receive/repay.
+    IERC20 public immutable debtAsset;
+
+    /// @notice The ERC-20 borrowers post as collateral and liquidators seize.
+    IERC20 public immutable collateralAsset;
+
+    /// @notice Oracle giving the price of one collateral unit in debt-asset
+    ///         units, scaled by {WAD}.
+    IPriceOracle public immutable oracle;
+
+    /// @notice Per-second borrow rate, scaled by {WAD}.
     uint256 public immutable borrowRatePerSecond;
 
     /// @notice Maximum borrow as a fraction of collateral value, in basis points.
     uint256 public immutable collateralRatio;
 
-    /// @notice Extra collateral a liquidator seizes, in basis points — the bonus
-    ///         that incentivises third parties to clear under-water positions.
+    /// @notice Extra collateral a liquidator seizes, in basis points.
     uint256 public immutable liquidationBonus;
 
-    /// @notice Total assets owed to lenders, in asset units. Stored directly and
-    ///         grown by realised interest — never derived from the token balance,
-    ///         which is what makes the vault immune to donation/inflation attacks.
+    /// @notice Total debt-asset units owed to lenders. Stored directly and
+    ///         grown by realised interest — never derived from the token
+    ///         balance, which is what makes the vault immune to
+    ///         donation/inflation attacks on the lender side.
     uint256 public totalSupplyAssets;
 
     /// @notice Total lender shares outstanding.
@@ -66,16 +84,19 @@ contract Vault is ReentrancyGuard {
     /// @notice Lender shares held per address.
     mapping(address => uint256) public userSupplyShares;
 
-    /// @notice Total borrow shares outstanding. A borrow share's asset value is
-    ///         `borrowIndex`-scaled, so interest accrues to every borrower at
-    ///         once without a per-user storage write.
+    /// @notice Total collateral-asset units posted across every borrower.
+    uint256 public totalCollateral;
+
+    /// @notice Collateral-asset units posted per address.
+    mapping(address => uint256) public userCollateral;
+
+    /// @notice Total borrow shares outstanding.
     uint256 public totalBorrowShares;
 
     /// @notice Borrow shares owed per address.
     mapping(address => uint256) public userBorrowShares;
 
-    /// @notice Debt-scaling index, scaled by {WAD}. Starts at 1e18 and rises
-    ///         monotonically — `userDebt = userBorrowShares * borrowIndex / 1e18`.
+    /// @notice Debt-scaling index, scaled by {WAD}.
     uint256 public borrowIndex;
 
     /// @notice Unix timestamp of the most recent interest accrual.
@@ -83,6 +104,8 @@ contract Vault is ReentrancyGuard {
 
     event Deposited(address indexed user, uint256 amount, uint256 sharesMinted);
     event Withdrawn(address indexed user, uint256 shares, uint256 amountOut);
+    event CollateralDeposited(address indexed user, uint256 amount);
+    event CollateralWithdrawn(address indexed user, uint256 amount);
     event Borrowed(address indexed user, uint256 amount, uint256 borrowShares);
     event Repaid(address indexed user, uint256 amount, uint256 borrowSharesBurned);
     event Liquidated(
@@ -95,27 +118,34 @@ contract Vault is ReentrancyGuard {
 
     error ZeroAmount();
     error InsufficientShares();
+    error InsufficientCollateral();
     error InsufficientLiquidity();
     error CollateralCapExceeded();
     error NoDebt();
     error PositionHealthy();
     error MustClearDebt();
     error InvalidLiquidationBonus();
+    error OraclePriceStale();
 
-    /// @param _token            Address of the ERC-20 asset handled by the vault.
+    /// @param _debtAsset        ERC-20 lenders deposit and borrowers receive.
+    /// @param _collateralAsset  ERC-20 borrowers post as collateral.
+    /// @param _oracle           Price oracle for the collateral asset.
     /// @param _aprBps           Annual borrow rate in basis points (e.g. 1000 == 10% APR).
-    /// @param _liquidationBonus Extra collateral seized by liquidators, in basis
-    ///                          points. Must be in `(0, 50_00]` — i.e. strictly
-    ///                          positive and no more than 50%. A zero bonus
-    ///                          removes the liquidator's incentive to clear
-    ///                          under-water positions; a bonus above 50% lets a
-    ///                          single liquidation seize disproportionate
-    ///                          collateral relative to the debt repaid.
-    constructor(address _token, uint256 _aprBps, uint256 _liquidationBonus) {
+    /// @param _liquidationBonus Extra collateral seized by liquidators, in
+    ///                          basis points. Must be in `(0, 50_00]`.
+    constructor(
+        address _debtAsset,
+        address _collateralAsset,
+        address _oracle,
+        uint256 _aprBps,
+        uint256 _liquidationBonus
+    ) {
         if (_liquidationBonus == 0 || _liquidationBonus > 50_00) {
             revert InvalidLiquidationBonus();
         }
-        token = IERC20(_token);
+        debtAsset = IERC20(_debtAsset);
+        collateralAsset = IERC20(_collateralAsset);
+        oracle = IPriceOracle(_oracle);
         borrowRatePerSecond = (_aprBps * WAD) / BPS / SECONDS_PER_YEAR;
         collateralRatio = 80_00; // 80%
         liquidationBonus = _liquidationBonus;
@@ -128,14 +158,14 @@ contract Vault is ReentrancyGuard {
     // --------------------------------------------------------------------- //
 
     /// @notice Accrue borrower interest since the last accrual and credit it to
-    ///         lenders. Idempotent within a block. Called at the start of every
-    ///         state-mutating function; also callable directly so off-chain
-    ///         tooling can force state to a fresh block.
+    ///         lenders. Idempotent within a block.
     /// @dev    Borrowers are charged by raising {borrowIndex}; the *realised*
     ///         charge is then added to {totalSupplyAssets}. Both sides move by
-    ///         the identical amount, so INV-01 (solvency) holds exactly — the
-    ///         accrual path introduces no rounding drift in either direction.
-    function accrue() public {
+    ///         the identical amount, so INV-01 (solvency) holds exactly.
+    ///         Marked `virtual` so the mutation-testing suite under
+    ///         `test/mutant/` can subclass with deliberately broken variants
+    ///         and prove INV-12 (accrue idempotence) is load-bearing.
+    function accrue() public virtual {
         uint256 dt = block.timestamp - lastAccrualTime;
         if (dt == 0) return;
         lastAccrualTime = block.timestamp;
@@ -156,8 +186,8 @@ contract Vault is ReentrancyGuard {
     //                            Lender actions                             //
     // --------------------------------------------------------------------- //
 
-    /// @notice Deposit `amount` of the asset and receive lender shares.
-    /// @param amount Quantity of the ERC-20 asset to deposit. Must be non-zero.
+    /// @notice Deposit `amount` of the debt asset and receive lender shares.
+    /// @param amount Quantity of the debt asset to deposit. Must be non-zero.
     function deposit(uint256 amount) external nonReentrant {
         accrue();
         if (amount == 0) revert ZeroAmount();
@@ -167,7 +197,7 @@ contract Vault is ReentrancyGuard {
             totalSupplyShares == 0 ? amount : (amount * totalSupplyShares) / totalSupplyAssets;
         if (shares == 0) revert ZeroAmount();
 
-        token.safeTransferFrom(msg.sender, address(this), amount);
+        debtAsset.safeTransferFrom(msg.sender, address(this), amount);
 
         totalSupplyAssets += amount;
         totalSupplyShares += shares;
@@ -176,9 +206,10 @@ contract Vault is ReentrancyGuard {
         emit Deposited(msg.sender, amount, shares);
     }
 
-    /// @notice Burn `shares` and redeem the underlying asset.
-    /// @dev    Reverts if free liquidity is insufficient or if the redemption
-    ///         would leave the caller under-collateralised.
+    /// @notice Burn `shares` and redeem the underlying debt asset.
+    /// @dev    Reverts if free liquidity is insufficient. Lender shares are
+    ///         not collateral in this design, so the redemption is
+    ///         independent of any borrowing the caller may have done.
     /// @param shares Quantity of lender shares to burn. Must be non-zero.
     function withdraw(uint256 shares) external nonReentrant {
         accrue();
@@ -187,40 +218,73 @@ contract Vault is ReentrancyGuard {
 
         // Floor division — the vault pays out no more than the shares are worth.
         uint256 amountOut = (shares * totalSupplyAssets) / totalSupplyShares;
-        if (token.balanceOf(address(this)) < amountOut) revert InsufficientLiquidity();
-
-        // The caller must remain collateralised against the shares they keep.
-        uint256 remainingShares = userSupplyShares[msg.sender] - shares;
-        uint256 remainingCollateral =
-            (remainingShares * totalSupplyAssets) / totalSupplyShares;
-        uint256 maxBorrow = (remainingCollateral * collateralRatio) / BPS;
-        if (userDebt(msg.sender) > maxBorrow) revert CollateralCapExceeded();
+        if (debtAsset.balanceOf(address(this)) < amountOut) revert InsufficientLiquidity();
 
         totalSupplyAssets -= amountOut;
         totalSupplyShares -= shares;
-        userSupplyShares[msg.sender] = remainingShares;
+        userSupplyShares[msg.sender] -= shares;
 
-        token.safeTransfer(msg.sender, amountOut);
+        debtAsset.safeTransfer(msg.sender, amountOut);
 
         emit Withdrawn(msg.sender, shares, amountOut);
+    }
+
+    // --------------------------------------------------------------------- //
+    //                           Collateral actions                          //
+    // --------------------------------------------------------------------- //
+
+    /// @notice Post `amount` of the collateral asset to back future borrows.
+    /// @param amount Quantity of the collateral asset to post. Must be non-zero.
+    function depositCollateral(uint256 amount) external nonReentrant {
+        if (amount == 0) revert ZeroAmount();
+
+        collateralAsset.safeTransferFrom(msg.sender, address(this), amount);
+
+        userCollateral[msg.sender] += amount;
+        totalCollateral += amount;
+
+        emit CollateralDeposited(msg.sender, amount);
+    }
+
+    /// @notice Pull back `amount` of posted collateral.
+    /// @dev    Reverts if the remaining collateral can no longer back the
+    ///         caller's outstanding debt at the current oracle price.
+    /// @param amount Quantity of the collateral asset to withdraw. Must be non-zero.
+    function withdrawCollateral(uint256 amount) external nonReentrant {
+        accrue();
+        if (amount == 0) revert ZeroAmount();
+        if (amount > userCollateral[msg.sender]) revert InsufficientCollateral();
+
+        uint256 remainingCollateral = userCollateral[msg.sender] - amount;
+        uint256 remainingValue = (remainingCollateral * oracle.price()) / WAD;
+        uint256 maxBorrow = (remainingValue * collateralRatio) / BPS;
+        if (userDebt(msg.sender) > maxBorrow) revert CollateralCapExceeded();
+
+        userCollateral[msg.sender] = remainingCollateral;
+        totalCollateral -= amount;
+
+        collateralAsset.safeTransfer(msg.sender, amount);
+
+        emit CollateralWithdrawn(msg.sender, amount);
     }
 
     // --------------------------------------------------------------------- //
     //                           Borrower actions                            //
     // --------------------------------------------------------------------- //
 
-    /// @notice Borrow `amount` of the asset against the caller's deposited shares.
-    /// @dev    Reverts unless the caller stays within their collateral cap and
-    ///         the vault holds enough free liquidity.
-    /// @param amount Quantity of the asset to borrow. Must be non-zero.
-    function borrow(uint256 amount) external nonReentrant {
+    /// @notice Borrow `amount` of the debt asset against posted collateral.
+    /// @dev    Marked `virtual` so the INV-07 mutant subclass can swap the
+    ///         ceil-rounded share computation for a floor-rounded one and
+    ///         demonstrate the solvency-monotonicity invariant catches it.
+    /// @param amount Quantity of the debt asset to borrow. Must be non-zero.
+    function borrow(uint256 amount) external virtual nonReentrant {
         accrue();
         if (amount == 0) revert ZeroAmount();
 
         uint256 maxBorrow = (collateralValue(msg.sender) * collateralRatio) / BPS;
         if (userDebt(msg.sender) + amount > maxBorrow) revert CollateralCapExceeded();
 
-        if (token.balanceOf(address(this)) < amount) revert InsufficientLiquidity();
+        if (debtAsset.balanceOf(address(this)) < amount) revert InsufficientLiquidity();
 
         // Ceil division — the borrower's recorded debt is never less than the
         // asset they receive, so a borrow can only grow the solvency margin.
@@ -229,17 +293,17 @@ contract Vault is ReentrancyGuard {
         totalBorrowShares += borrowShares;
         userBorrowShares[msg.sender] += borrowShares;
 
-        token.safeTransfer(msg.sender, amount);
+        debtAsset.safeTransfer(msg.sender, amount);
 
         emit Borrowed(msg.sender, amount, borrowShares);
     }
 
     /// @notice Repay up to the caller's full outstanding debt.
     /// @dev    Offering `amount >= debt` fully closes the position; the amount
-    ///         actually collected is the realised drop in {totalBorrowed}, which
-    ///         equals the debt or, by at most one wei of index rounding, one wei
-    ///         more. Offering less repays exactly `amount`.
-    /// @param amount Quantity of the asset the caller offers to repay.
+    ///         actually collected is the realised drop in {totalBorrowed},
+    ///         which equals the debt or, by at most one wei of index
+    ///         rounding, one wei more. Offering less repays exactly `amount`.
+    /// @param amount Quantity of the debt asset the caller offers to repay.
     function repay(uint256 amount) external nonReentrant {
         accrue();
         if (amount == 0) revert ZeroAmount();
@@ -249,7 +313,7 @@ contract Vault is ReentrancyGuard {
 
         (uint256 pay, uint256 burned) = _burnDebt(msg.sender, amount, debt);
 
-        token.safeTransferFrom(msg.sender, address(this), pay);
+        debtAsset.safeTransferFrom(msg.sender, address(this), pay);
 
         emit Repaid(msg.sender, pay, burned);
     }
@@ -257,12 +321,15 @@ contract Vault is ReentrancyGuard {
     /// @notice Clear an under-water borrower's position: repay part or all of
     ///         their debt and seize their collateral plus a {liquidationBonus}.
     /// @dev    Only callable when the borrower's debt exceeds their collateral
-    ///         cap. If the seizure would consume all of the borrower's
-    ///         collateral, the liquidator must repay the *entire* debt — this is
-    ///         what keeps INV-06 (no uncollateralised debt) true.
+    ///         cap at the current oracle price. If the seizure would consume
+    ///         all of the borrower's collateral, the liquidator must repay the
+    ///         *entire* debt — this is what keeps INV-06 (no uncollateralised
+    ///         debt) true. Marked `virtual` so the INV-08 mutant subclass
+    ///         can overpay the seizeCollateral computation and prove the
+    ///         no-free-lunch invariant catches it.
     /// @param borrower The under-water position to liquidate.
     /// @param amount   Debt the liquidator offers to repay; clamped to the debt.
-    function liquidate(address borrower, uint256 amount) external nonReentrant {
+    function liquidate(address borrower, uint256 amount) external virtual nonReentrant {
         accrue();
 
         uint256 debt = userDebt(borrower);
@@ -275,47 +342,69 @@ contract Vault is ReentrancyGuard {
         uint256 plannedPay = fullClose ? debt : amount;
         if (plannedPay == 0) revert ZeroAmount();
 
-        // Collateral seized = repaid value scaled up by the liquidation bonus.
+        // Seizure value = repaid debt scaled up by the liquidation bonus,
+        // converted into collateral units at the current oracle price.
+        uint256 price = oracle.price();
         uint256 seizeValue = (plannedPay * (BPS + liquidationBonus)) / BPS;
-        uint256 seizeShares = (seizeValue * totalSupplyShares) / totalSupplyAssets;
+        uint256 seizeCollateral = (seizeValue * WAD) / price;
 
-        if (seizeShares >= userSupplyShares[borrower]) {
+        if (seizeCollateral >= userCollateral[borrower]) {
             // Seizing all collateral is only permitted alongside a full close,
-            // otherwise the borrower would be left with debt and no shares.
+            // otherwise the borrower would be left with debt and no collateral.
             if (!fullClose) revert MustClearDebt();
-            seizeShares = userSupplyShares[borrower];
+            seizeCollateral = userCollateral[borrower];
         }
 
         (uint256 pay,) = _burnDebt(borrower, amount, debt);
 
-        userSupplyShares[borrower] -= seizeShares;
-        userSupplyShares[msg.sender] += seizeShares;
+        userCollateral[borrower] -= seizeCollateral;
+        totalCollateral -= seizeCollateral;
 
-        token.safeTransferFrom(msg.sender, address(this), pay);
+        debtAsset.safeTransferFrom(msg.sender, address(this), pay);
+        collateralAsset.safeTransfer(msg.sender, seizeCollateral);
 
-        emit Liquidated(msg.sender, borrower, pay, seizeShares);
+        emit Liquidated(msg.sender, borrower, pay, seizeCollateral);
     }
 
     // --------------------------------------------------------------------- //
     //                                 Views                                 //
     // --------------------------------------------------------------------- //
 
-    /// @notice Total outstanding debt across all borrowers, in asset units.
+    /// @notice Total outstanding debt across all borrowers, in debt-asset units.
     function totalBorrowed() public view returns (uint256) {
         return (totalBorrowShares * borrowIndex) / WAD;
     }
 
-    /// @notice Outstanding debt of a single borrower, in asset units.
+    /// @notice Outstanding debt of a single borrower, in debt-asset units.
+    /// @dev    Floors the division so the sum of `userDebt(a)` across every
+    ///         borrower can never exceed {totalBorrowed} — the rounding
+    ///         direction protected by INV-10. Marked `virtual` so the
+    ///         INV-10 mutant subclass can flip floor to ceil and prove the
+    ///         invariant catches it.
     /// @param user The borrower to value.
-    function userDebt(address user) public view returns (uint256) {
+    function userDebt(address user) public view virtual returns (uint256) {
         return (userBorrowShares[user] * borrowIndex) / WAD;
     }
 
-    /// @notice The asset value of a lender's shares — their collateral.
+    /// @notice The debt-asset value of a borrower's posted collateral, at the
+    ///         current oracle price.
+    /// @dev    Reads price through {_freshPrice}, so a stale oracle
+    ///         propagates the {OraclePriceStale} revert into every caller
+    ///         of {collateralValue} — borrow, withdrawCollateral, liquidate.
     /// @param user The account to value.
     function collateralValue(address user) public view returns (uint256) {
-        if (totalSupplyShares == 0) return 0;
-        return (userSupplyShares[user] * totalSupplyAssets) / totalSupplyShares;
+        return (userCollateral[user] * _freshPrice()) / WAD;
+    }
+
+    /// @notice Read the oracle price after asserting it is fresh.
+    /// @dev    Marked `virtual` so the INV-11 mutant subclass can drop the
+    ///         freshness check and prove the invariant catches an ungated
+    ///         price read.
+    function _freshPrice() internal view virtual returns (uint256) {
+        if (block.timestamp - oracle.lastUpdatedAt() > MAX_STALENESS) {
+            revert OraclePriceStale();
+        }
+        return oracle.price();
     }
 
     /// @notice Lender share-to-asset price, scaled by {WAD}. 1e18 == 1:1.
@@ -324,12 +413,13 @@ contract Vault is ReentrancyGuard {
         return (totalSupplyAssets * WAD) / totalSupplyShares;
     }
 
-    /// @notice The vault's idle (un-borrowed) asset balance.
+    /// @notice The vault's idle (un-borrowed) debt-asset balance.
     function cash() public view returns (uint256) {
-        return token.balanceOf(address(this));
+        return debtAsset.balanceOf(address(this));
     }
 
-    /// @notice Total assets backing lender shares: idle cash plus debt owed.
+    /// @notice Total debt-asset units backing lender shares: idle cash plus
+    ///         debt owed by borrowers.
     function totalAssets() public view returns (uint256) {
         return cash() + totalBorrowed();
     }
@@ -338,19 +428,19 @@ contract Vault is ReentrancyGuard {
     //                               Internal                                //
     // --------------------------------------------------------------------- //
 
-    /// @notice Burn borrow shares for a repayment and return the asset amount
-    ///         that must actually be collected from the payer.
+    /// @notice Burn borrow shares for a repayment and return the debt-asset
+    ///         amount that must actually be collected from the payer.
     /// @dev    A full close (`offered >= debt`) burns the borrower's entire
     ///         share balance and charges the *exact* drop in floored
     ///         {totalBorrowed} — the debt, or by at most one wei of index
-    ///         rounding one wei more. Charging the realised drop is what keeps
-    ///         INV-01 (solvency) exact: cash rises by precisely what debt falls
-    ///         by. A partial repayment floor-divides the burned shares, so the
-    ///         debt falls by no more than the `offered` amount.
+    ///         rounding one wei more. Charging the realised drop is what
+    ///         keeps INV-01 (solvency) exact. A partial repayment
+    ///         floor-divides the burned shares, so debt falls by no more
+    ///         than the `offered` amount.
     /// @param borrower Account whose debt is being reduced.
-    /// @param offered  Asset amount the payer offers.
+    /// @param offered  Debt-asset amount the payer offers.
     /// @param debt     The borrower's current debt, as measured by {userDebt}.
-    /// @return pay     Asset amount to collect from the payer.
+    /// @return pay     Debt-asset amount to collect from the payer.
     /// @return burned  Borrow shares burned.
     function _burnDebt(address borrower, uint256 offered, uint256 debt)
         private

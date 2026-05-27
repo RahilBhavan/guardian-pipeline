@@ -25,20 +25,27 @@ contract AttackableVault is Vault {
     error NotAttacker();
     error MainnetDisabled();
 
-    /// @param _token            ERC-20 asset handled by the vault.
+    /// @param _debtAsset        ERC-20 lenders deposit and borrowers receive.
+    /// @param _collateralAsset  ERC-20 borrowers post as collateral.
+    /// @param _oracle           Price oracle for the collateral asset.
     /// @param _aprBps           Annual borrow rate in basis points.
     /// @param _liquidationBonus Liquidation bonus in basis points (see {Vault}).
     /// @param _attacker         Address allowed to trigger the demo breach.
-    constructor(address _token, uint256 _aprBps, uint256 _liquidationBonus, address _attacker)
-        Vault(_token, _aprBps, _liquidationBonus)
-    {
+    constructor(
+        address _debtAsset,
+        address _collateralAsset,
+        address _oracle,
+        uint256 _aprBps,
+        uint256 _liquidationBonus,
+        address _attacker
+    ) Vault(_debtAsset, _collateralAsset, _oracle, _aprBps, _liquidationBonus) {
         attacker = _attacker;
     }
 
     /// @notice DEMO ONLY — forcibly violates INV-01 (Protocol solvency) by
-    ///         inflating {totalSupplyAssets} so lender claims exceed the assets
-    ///         backing them. Lets the Guardian bot be seen detecting a live
-    ///         invariant breach within one block.
+    ///         inflating {totalSupplyAssets} so lender claims exceed the
+    ///         assets backing them. Lets the Guardian bot be seen detecting a
+    ///         live invariant breach within one block.
     /// @dev    Restricted to {attacker} and permanently disabled on Base
     ///         mainnet. This function is the only difference from {Vault}.
     function attack() external {
