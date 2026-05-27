@@ -79,6 +79,26 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Emit runs.json artifact (AMC input)
+        # AMC consumes runs.json — never foundry.toml — so it reflects the
+        # campaign this job actually ran. `runs`/`depth` are pinned to the
+        # profile.ci.invariant values; if FOUNDRY_PROFILE changes here, those
+        # constants must change with it so the artifact stays truthful.
+        env:
+          FOUNDRY_PROFILE: ci
+        run: |
+          forge test --match-contract InvariantVault --json > forge-invariant.json
+          mkdir -p assurance/data
+          node assurance/bin/forge-invariant-to-runs-json.mjs \
+            forge-invariant.json ci 2000 150 assurance/data/runs.json
+          cat assurance/data/runs.json
+
+      - name: Upload runs.json
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: invariant-runs-json
+          path: assurance/data/runs.json
+
       - name: Corpus-coverage gate — no handler selector may starve
         # Parses the per-selector "Metrics" table emitted by `forge test -vvv`
         # and fails if any handler selector fired fewer than 100 times in the
@@ -129,6 +149,10 @@ jobs:
         # suite already drives src/Vault.sol to 100%, so heavy fuzzing here only
         # adds runtime. The invariant-fuzz job runs the full 2,000-run profile.
         env:
+          # Coverage-budget only — these capped values DO NOT feed the
+          # Assurance Score. AMC consumes runs.json emitted by the
+          # invariant-fuzz job (2000 runs / 150 depth), never foundry.toml or
+          # this job's environment. Changing these caps cannot move the score.
           FOUNDRY_INVARIANT_RUNS: 25
           FOUNDRY_INVARIANT_DEPTH: 50
         run: forge coverage --report lcov --report summary 2>&1 | tee coverage-summary.txt
@@ -190,12 +214,33 @@ jobs:
 
   assurance:
     # Feature layer: exploit-class replays, finding traceability, Assurance Score.
-    needs: build
+    # `invariant-fuzz` is a hard dependency — AMC reads the runs.json artifact
+    # that job emits. `needs:` enforces sequencing; the `if:` below forces this
+    # job to RUN (not skip) when invariant-fuzz fails or is skipped, so the
+    # "Verify runs.json present" step can fail loudly with a clear error rather
+    # than letting the gate disappear silently. AMC never falls back to
+    # foundry.toml — if runs.json is absent, this job exits non-zero.
+    needs: [build, invariant-fuzz]
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           submodules: recursive
+
+      - name: Verify invariant-fuzz produced runs.json
+        # Acceptance gate: when invariant-fuzz did not succeed, fail this job
+        # immediately with "runs.json missing" — never proceed to gatherStatic
+        # where a missing artifact would only cap Static Verification at 60.
+        # We want a loud red ✗ on the assurance job itself, not a downstream
+        # score degradation that a future env tweak could mask.
+        run: |
+          status="${{ needs.invariant-fuzz.result }}"
+          if [ "$status" != "success" ]; then
+            echo "::error::runs.json missing — invariant-fuzz status was '$status'. AMC requires the runs.json artifact from a successful invariant-fuzz run; foundry.toml is never consulted."
+            exit 1
+          fi
+          echo "invariant-fuzz succeeded; proceeding to download runs.json"
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1
@@ -204,6 +249,17 @@ jobs:
 
       - name: Install deps
         run: forge install
+
+      - name: Download runs.json from invariant-fuzz
+        # The heavy fuzz campaign ran in the invariant-fuzz job; this step
+        # places that artifact at assurance/data/runs.json where gatherStatic
+        # expects it.
+        # NOTE: pin to a SHA before merge — every other action in this file is
+        # SHA-pinned. Using the `v4` tag here until the reviewer supplies one.
+        uses: actions/download-artifact@v4
+        with:
+          name: invariant-runs-json
+          path: assurance/data
 
       - name: Replay historical exploit classes
         # Fails the build if any exploit scenario regressed or was MISSED — an
@@ -219,8 +275,10 @@ jobs:
         run: forge script script/ExploitReplay.s.sol
 
       - name: Generate coverage summary
-        # Capped fuzz budget — the assurance score reads only the coverage
-        # percentages; the invariant-fuzz job runs the full campaign.
+        # Capped fuzz budget — AMC reads ONLY the coverage percentages from
+        # this step's output; the runs/depth values here are coverage-budget
+        # only and do not contribute to scoring. The Static Verification
+        # component is driven by runs.json from the invariant-fuzz job.
         env:
           FOUNDRY_INVARIANT_RUNS: 25
           FOUNDRY_INVARIANT_DEPTH: 50
@@ -233,9 +291,22 @@ jobs:
         # The Assurance Score is a pre-deployment metric — three components, all
         # computed from repository evidence (coverage, exploit replays, finding
         # traceability). Fails the build if the composite drops below 80.
+        # `check` also writes TRACEABILITY_SUMMARY.md and verifies the README
+        # block matches the resolver's tier counts (see next step for why
+        # that matters).
         run: |
           npm ci
           npm run check -- --min-score 80
+
+      - name: Verify README traceability sentence matches resolver
+        working-directory: assurance
+        # Hard gate: "every finding bound to ≥1 invariant + harness test +
+        # monitor check" only stays literally true if the README sentence
+        # that asserts so is regenerated from the resolver. `--check-readme`
+        # exits 1 if the sentence drifts from `security-review/findings.json`.
+        # Runs after the `check` step above so TRACEABILITY_SUMMARY.md is
+        # already on disk for the artifact upload.
+        run: npm run trace -- --check-readme
 
       - name: Upload assurance report
         if: always()
@@ -246,6 +317,7 @@ jobs:
             assurance/data/assurance-report.json
             assurance/data/assurance-report.md
             assurance/data/exploit-replays.json
+            assurance/data/TRACEABILITY_SUMMARY.md
             exploit-results.txt
 
   gas-snapshot:
