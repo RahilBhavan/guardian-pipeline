@@ -1,0 +1,325 @@
+{
+  "_meta": {
+    "description": "Differential JSON fixtures for all 12 invariants. Each entry pairs a passing and failing case so the evaluator's per-invariant tension point is exercised in unit isolation. Uint256 values are decimal strings (mirroring the Supabase wire encoding); the loader in test/fixtures.test.ts deserialises into bigint.",
+    "stateShape": "All fields of VaultState (types.ts) as decimal strings except `blockTimestamp` (number) and `users`/`liquidationEvents` (arrays with their own string/number split).",
+    "deltaShape": "For INV-07 and INV-09 the `state` object is { current, prior } - both with the full VaultState shape - so the 2-block delta is asserted faithfully."
+  },
+  "INV-01": {
+    "name": "Protocol solvency",
+    "cases": [
+      {
+        "name": "passes when cash + totalBorrowed >= totalSupplyAssets",
+        "state": { "cash": "600", "totalBorrowed": "500", "totalSupplyAssets": "1000" },
+        "expected": { "passed": true }
+      },
+      {
+        "name": "fails when claims exceed assets by one wei",
+        "state": { "cash": "499", "totalBorrowed": "500", "totalSupplyAssets": "1000" },
+        "expected": { "passed": false }
+      }
+    ]
+  },
+  "INV-02": {
+    "name": "Supply-share integrity",
+    "cases": [
+      {
+        "name": "passes when totalSupplyShares == sum(userSupplyShares)",
+        "state": {
+          "totalSupplyShares": "300",
+          "users": [
+            { "address": "0x0000000000000000000000000000000000000001", "supplyShares": "100", "borrowShares": "0", "collateral": "0" },
+            { "address": "0x0000000000000000000000000000000000000002", "supplyShares": "200", "borrowShares": "0", "collateral": "0" }
+          ]
+        },
+        "expected": { "passed": true }
+      },
+      {
+        "name": "fails when totalSupplyShares exceeds the sum",
+        "state": {
+          "totalSupplyShares": "301",
+          "users": [
+            { "address": "0x0000000000000000000000000000000000000001", "supplyShares": "100", "borrowShares": "0", "collateral": "0" },
+            { "address": "0x0000000000000000000000000000000000000002", "supplyShares": "200", "borrowShares": "0", "collateral": "0" }
+          ]
+        },
+        "expected": { "passed": false }
+      }
+    ]
+  },
+  "INV-03": {
+    "name": "Debt-share integrity",
+    "cases": [
+      {
+        "name": "passes when totalBorrowShares == sum(userBorrowShares)",
+        "state": {
+          "totalBorrowShares": "150",
+          "users": [
+            { "address": "0x0000000000000000000000000000000000000001", "supplyShares": "0", "borrowShares": "50", "collateral": "1000" },
+            { "address": "0x0000000000000000000000000000000000000002", "supplyShares": "0", "borrowShares": "100", "collateral": "1000" }
+          ]
+        },
+        "expected": { "passed": true }
+      },
+      {
+        "name": "fails when totalBorrowShares disagrees with the sum",
+        "state": {
+          "totalBorrowShares": "151",
+          "users": [
+            { "address": "0x0000000000000000000000000000000000000001", "supplyShares": "0", "borrowShares": "50", "collateral": "1000" },
+            { "address": "0x0000000000000000000000000000000000000002", "supplyShares": "0", "borrowShares": "100", "collateral": "1000" }
+          ]
+        },
+        "expected": { "passed": false }
+      }
+    ]
+  },
+  "INV-04": {
+    "name": "Lender-value floor",
+    "cases": [
+      {
+        "name": "passes at the 1:1 peg",
+        "state": { "totalSupplyAssets": "1000", "totalSupplyShares": "1000" },
+        "expected": { "passed": true }
+      },
+      {
+        "name": "fails when shares strictly exceed assets",
+        "state": { "totalSupplyAssets": "999", "totalSupplyShares": "1000" },
+        "expected": { "passed": false }
+      }
+    ]
+  },
+  "INV-05": {
+    "name": "Interest-index floor",
+    "cases": [
+      {
+        "name": "passes at exactly 1e18",
+        "state": { "borrowIndex": "1000000000000000000" },
+        "expected": { "passed": true }
+      },
+      {
+        "name": "fails one wei below 1e18",
+        "state": { "borrowIndex": "999999999999999999" },
+        "expected": { "passed": false }
+      }
+    ]
+  },
+  "INV-06": {
+    "name": "No uncollateralised debt",
+    "cases": [
+      {
+        "name": "passes when every borrower has non-zero collateral",
+        "state": {
+          "users": [
+            { "address": "0x0000000000000000000000000000000000000001", "supplyShares": "0", "borrowShares": "50", "collateral": "1000" }
+          ]
+        },
+        "expected": { "passed": true }
+      },
+      {
+        "name": "fails when a borrower has zero collateral",
+        "state": {
+          "users": [
+            { "address": "0x0000000000000000000000000000000000000001", "supplyShares": "0", "borrowShares": "1", "collateral": "0" }
+          ]
+        },
+        "expected": { "passed": false }
+      }
+    ]
+  },
+  "INV-07": {
+    "name": "Per-observation solvency monotonicity",
+    "cases": [
+      {
+        "name": "passes when current margin >= prior margin (2-block delta)",
+        "state": {
+          "prior": { "cash": "100", "totalBorrowed": "0", "totalSupplyAssets": "100", "blockNumber": "1" },
+          "current": { "cash": "120", "totalBorrowed": "0", "totalSupplyAssets": "100", "blockNumber": "2" }
+        },
+        "expected": { "passed": true }
+      },
+      {
+        "name": "fails when current margin shrinks below prior (2-block delta)",
+        "state": {
+          "prior": { "cash": "100", "totalBorrowed": "50", "totalSupplyAssets": "100", "blockNumber": "1" },
+          "current": { "cash": "80", "totalBorrowed": "50", "totalSupplyAssets": "100", "blockNumber": "2" }
+        },
+        "expected": { "passed": false }
+      },
+      {
+        "name": "passes (no prior) when this is the first observation",
+        "state": {
+          "current": { "cash": "100", "totalBorrowed": "0", "totalSupplyAssets": "100", "blockNumber": "1" }
+        },
+        "expected": { "passed": true }
+      }
+    ]
+  },
+  "INV-08": {
+    "name": "No-free-lunch on liquidation",
+    "cases": [
+      {
+        "name": "passes when seized*price*BPS <= paid*(BPS+bonus)*WAD",
+        "state": {
+          "liquidationBonus": "500",
+          "liquidationEvents": [
+            {
+              "blockNumber": "10",
+              "borrower": "0x0000000000000000000000000000000000000001",
+              "debtRepaid": "100",
+              "collateralSeized": "52",
+              "oraclePrice": "2000000000000000000"
+            }
+          ]
+        },
+        "expected": { "passed": true }
+      },
+      {
+        "name": "fails when one liquidation exceeds the bonus bound",
+        "state": {
+          "liquidationBonus": "500",
+          "liquidationEvents": [
+            {
+              "blockNumber": "10",
+              "borrower": "0x0000000000000000000000000000000000000001",
+              "debtRepaid": "100",
+              "collateralSeized": "53",
+              "oraclePrice": "2000000000000000000"
+            }
+          ]
+        },
+        "expected": { "passed": false }
+      },
+      {
+        "name": "passes when there are no liquidations in the window",
+        "state": { "liquidationBonus": "500", "liquidationEvents": [] },
+        "expected": { "passed": true }
+      }
+    ]
+  },
+  "INV-09": {
+    "name": "Per-position debt monotonicity under accrual",
+    "cases": [
+      {
+        "name": "passes when borrowIndex rises and shares are flat (2-block delta)",
+        "state": {
+          "prior": {
+            "borrowIndex": "1000000000000000000",
+            "users": [
+              { "address": "0x0000000000000000000000000000000000000001", "supplyShares": "0", "borrowShares": "100", "collateral": "1000" }
+            ]
+          },
+          "current": {
+            "borrowIndex": "1100000000000000000",
+            "users": [
+              { "address": "0x0000000000000000000000000000000000000001", "supplyShares": "0", "borrowShares": "100", "collateral": "1000" }
+            ]
+          }
+        },
+        "expected": { "passed": true }
+      },
+      {
+        "name": "fails when borrowIndex falls under flat shares (2-block delta)",
+        "state": {
+          "prior": {
+            "borrowIndex": "1100000000000000000",
+            "users": [
+              { "address": "0x0000000000000000000000000000000000000001", "supplyShares": "0", "borrowShares": "100", "collateral": "1000" }
+            ]
+          },
+          "current": {
+            "borrowIndex": "1000000000000000000",
+            "users": [
+              { "address": "0x0000000000000000000000000000000000000001", "supplyShares": "0", "borrowShares": "100", "collateral": "1000" }
+            ]
+          }
+        },
+        "expected": { "passed": false }
+      },
+      {
+        "name": "passes when actor's shares changed (delta gating absorbs activity)",
+        "state": {
+          "prior": {
+            "borrowIndex": "1100000000000000000",
+            "users": [
+              { "address": "0x0000000000000000000000000000000000000001", "supplyShares": "0", "borrowShares": "100", "collateral": "1000" }
+            ]
+          },
+          "current": {
+            "borrowIndex": "1000000000000000000",
+            "users": [
+              { "address": "0x0000000000000000000000000000000000000001", "supplyShares": "0", "borrowShares": "50", "collateral": "1000" }
+            ]
+          }
+        },
+        "expected": { "passed": true }
+      }
+    ]
+  },
+  "INV-10": {
+    "name": "Debt rounding favours protocol",
+    "cases": [
+      {
+        "name": "passes when sum of floored userDebt is <= totalBorrowed",
+        "state": {
+          "borrowIndex": "1000000000000000000",
+          "totalBorrowed": "300",
+          "users": [
+            { "address": "0x0000000000000000000000000000000000000001", "supplyShares": "0", "borrowShares": "100", "collateral": "1000" },
+            { "address": "0x0000000000000000000000000000000000000002", "supplyShares": "0", "borrowShares": "200", "collateral": "1000" }
+          ]
+        },
+        "expected": { "passed": true }
+      },
+      {
+        "name": "fails when per-actor debt sum exceeds totalBorrowed by one wei",
+        "state": {
+          "borrowIndex": "1000000000000000000",
+          "totalBorrowed": "299",
+          "users": [
+            { "address": "0x0000000000000000000000000000000000000001", "supplyShares": "0", "borrowShares": "100", "collateral": "1000" },
+            { "address": "0x0000000000000000000000000000000000000002", "supplyShares": "0", "borrowShares": "200", "collateral": "1000" }
+          ]
+        },
+        "expected": { "passed": false }
+      }
+    ]
+  },
+  "INV-11": {
+    "name": "Oracle freshness gate",
+    "cases": [
+      {
+        "name": "passes when gap == MAX_STALENESS (boundary)",
+        "state": {
+          "blockTimestamp": 100000,
+          "oracleLastUpdatedAt": "13600",
+          "maxStaleness": "86400"
+        },
+        "expected": { "passed": true }
+      },
+      {
+        "name": "fails when oracle gap exceeds MAX_STALENESS by 1s",
+        "state": {
+          "blockTimestamp": 100000,
+          "oracleLastUpdatedAt": "13599",
+          "maxStaleness": "86400"
+        },
+        "expected": { "passed": false }
+      }
+    ]
+  },
+  "INV-12": {
+    "name": "Accrue idempotence (structural)",
+    "cases": [
+      {
+        "name": "passes when lastAccrualTime == blockTimestamp",
+        "state": { "blockTimestamp": 100000, "lastAccrualTime": "100000" },
+        "expected": { "passed": true }
+      },
+      {
+        "name": "fails when lastAccrualTime lags the block",
+        "state": { "blockTimestamp": 100000, "lastAccrualTime": "99999" },
+        "expected": { "passed": false }
+      }
+    ]
+  }
+}

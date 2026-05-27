@@ -36,7 +36,10 @@ function pick(state: VaultState, id: InvariantId) {
 const bigUint128 = fc.bigInt({ min: 0n, max: MAX_UINT128 });
 
 /** Build a {@link VaultState} from positive bigint terms, leaving INV-05's
- *  borrow index above the floor and INV-06's user set healthy by default. */
+ *  borrow index above the floor and INV-06's user set healthy by default.
+ *  INV-08/10/11/12 default-pass: no liquidation events, zero accrual gap,
+ *  oracle freshness gap of zero. Tests that exercise those invariants
+ *  override the relevant fields. */
 function makeState(overrides: Partial<VaultState> = {}): VaultState {
   return {
     cash: 0n,
@@ -46,7 +49,12 @@ function makeState(overrides: Partial<VaultState> = {}): VaultState {
     totalBorrowShares: 0n,
     borrowIndex: ONE_E18,
     collateralRatio: 8000n,
+    lastAccrualTime: 0n,
+    maxStaleness: 0n,
+    liquidationBonus: 500n,
+    oracleLastUpdatedAt: 0n,
     users: [],
+    liquidationEvents: [],
     blockNumber: 1n,
     blockTimestamp: 0,
     ...overrides,
@@ -289,12 +297,22 @@ describe('INV-06 no uncollateralised debt', () => {
 // ---------------------------------------------------------------------------
 
 describe('evaluateInvariants — contract', () => {
-  it('returns six results in canonical order', () => {
+  it('returns twelve results in canonical INV-01..INV-12 order', () => {
     const results = evaluateInvariants(makeState());
-    assert.equal(results.length, 6);
+    assert.equal(results.length, 12);
     assert.deepEqual(
       results.map((r) => r.id),
-      ['INV-01', 'INV-02', 'INV-03', 'INV-04', 'INV-05', 'INV-06'],
+      [
+        'INV-01', 'INV-02', 'INV-03', 'INV-04', 'INV-05', 'INV-06',
+        'INV-07', 'INV-08', 'INV-09', 'INV-10', 'INV-11', 'INV-12',
+      ],
     );
+  });
+
+  it('all twelve invariants pass on the default healthy state', () => {
+    const results = evaluateInvariants(makeState());
+    for (const r of results) {
+      assert.equal(r.passed, true, `${r.id} should pass on default state, got fail`);
+    }
   });
 });

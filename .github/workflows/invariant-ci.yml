@@ -25,6 +25,27 @@ jobs:
       - name: Build contracts
         run: forge build --sizes
 
+  mirror-parity:
+    # Gates "every fuzz-proven invariant has an exported off-chain port."
+    # The script is text-only — no Foundry, no DB — so it runs as a small
+    # standalone job in parallel with the heavy ones. Failure means a
+    # property was added to the harness without a paired entry in
+    # guardian/src/evaluator.ts (or vice versa).
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: recursive
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+
+      - name: Run mirror parity check
+        run: node guardian/scripts/parity-check.mjs
+
   invariant-fuzz:
     needs: build
     runs-on: ubuntu-latest
