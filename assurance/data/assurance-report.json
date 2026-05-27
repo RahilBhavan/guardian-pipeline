@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-05-24T14:07:48.692Z",
-  "gitSha": "9cc5623",
+  "generatedAt": "2026-05-27T18:07:06.738Z",
+  "gitSha": "6b58700",
   "thesis": "The Assurance Score rolls the repository's pre-deployment evidence into one reproducible number — static verification, exploit-replay resistance, and the traceability of every security-review finding to a re-runnable check. It is a worked demonstration of one design response — recomputing assurance on every commit — to the open empirical question both cited papers raise about audit effectiveness. The \"continuous, multi-layered\" framing is this project's, not a claim of either paper.",
   "research": [
     {
@@ -13,22 +13,23 @@
     }
   ],
   "score": {
-    "overall": 91,
-    "grade": "A-",
+    "overall": 82,
+    "grade": "B-",
     "components": [
       {
         "key": "staticVerification",
         "label": "Static Verification",
-        "score": 82,
+        "score": 60,
         "available": true,
         "weight": 0.45,
-        "detail": "Vault.sol 97.2% line / 78.3% branch; fuzz campaign 2000x150 (intensity 64/100)",
+        "detail": "Vault.sol 100% line / 100% branch; fuzz campaign 0x0 (intensity 0/100); runs.json missing — capped at 60",
         "metrics": {
-          "lineCoverage": 97.2,
-          "branchCoverage": 78.3,
-          "invariantRuns": 2000,
-          "invariantDepth": 150,
-          "fuzzIntensity": 64
+          "lineCoverage": 100,
+          "branchCoverage": 100,
+          "invariantRuns": 0,
+          "invariantDepth": 0,
+          "fuzzIntensity": 0,
+          "invariantArtifactPresent": false
         }
       },
       {
@@ -48,12 +49,12 @@
       {
         "key": "findingTraceability",
         "label": "Finding Traceability",
-        "score": 93.8,
+        "score": 100,
         "available": true,
         "weight": 0.2,
-        "detail": "93.8% weighted coverage of security-relevant findings",
+        "detail": "100% weighted coverage of security-relevant findings",
         "metrics": {
-          "coveragePct": 93.8,
+          "coveragePct": 100,
           "gaps": 0
         }
       }
@@ -96,18 +97,20 @@
         "status": "Resolved",
         "category": "Reentrancy",
         "securityRelevant": true,
-        "tier": "monitored-only",
-        "weight": 0.5,
+        "tier": "fully-assured",
+        "weight": 1,
         "layers": {
           "invariants": 1,
-          "harnessTests": 0,
+          "harnessTests": 1,
           "liveMonitors": 1,
           "exploitReplays": 0
         },
         "invariants": [
           "INV-01"
         ],
-        "harnessTests": [],
+        "harnessTests": [
+          "invariant_reentrancySafe"
+        ],
         "liveMonitors": [
           "INV-01"
         ],
@@ -297,11 +300,11 @@
     "summary": {
       "totalFindings": 8,
       "securityRelevant": 8,
-      "fullyAssured": 7,
-      "monitoredOnly": 1,
+      "fullyAssured": 8,
+      "monitoredOnly": 0,
       "harnessOnly": 0,
       "gaps": 0,
-      "coveragePct": 93.75
+      "coveragePct": 100
     },
     "danglingReferences": []
   },
@@ -498,6 +501,18 @@
       "gitSha": "9cc5623",
       "overall": 91,
       "grade": "A-"
+    },
+    {
+      "at": "2026-05-27T18:01:32.108Z",
+      "gitSha": "6b58700",
+      "overall": 82,
+      "grade": "B-"
+    },
+    {
+      "at": "2026-05-27T18:07:06.738Z",
+      "gitSha": "6b58700",
+      "overall": 82,
+      "grade": "B-"
     }
   ],
   "gate": {

@@ -63,5 +63,24 @@ export const INVARIANTS: readonly InvariantMeta[] = [
 /** The set of valid invariant IDs. */
 export const INVARIANT_IDS: ReadonlySet<string> = new Set(INVARIANTS.map((i) => i.id));
 
-/** The set of harness `invariant_*` function names. */
-export const HARNESS_TESTS: ReadonlySet<string> = new Set(INVARIANTS.map((i) => i.harnessTest));
+/**
+ * Auxiliary harness tests that defend a finding's class but are not one of
+ * the six top-level invariants. Listed explicitly so the traceability
+ * resolver can validate references without inventing a synthetic INV-XX id
+ * for every cross-cutting safety property.
+ *
+ * `invariant_reentrancySafe` lives in {InvariantVault} and exercises the
+ * {Vault.nonReentrant} guard via {ReentrantAttackToken}; it binds to
+ * security-review finding GUA-01 (Reentrancy exposure on state-mutating
+ * functions) — the class INV-01 covers in spirit, but the canonical
+ * {MockERC20} harness could never reach.
+ */
+export const AUXILIARY_HARNESS_TESTS: readonly string[] = [
+  'invariant_reentrancySafe',
+] as const;
+
+/** The set of harness `invariant_*` function names — six core + auxiliary. */
+export const HARNESS_TESTS: ReadonlySet<string> = new Set([
+  ...INVARIANTS.map((i) => i.harnessTest),
+  ...AUXILIARY_HARNESS_TESTS,
+]);

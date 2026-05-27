@@ -66,7 +66,7 @@ liveness and latency log.
 | `checked_at` | `timestamptz` | Insert time, `now()`. |
 | `block_number` | `bigint` | The inspected block. |
 | `vault` | `text` | The monitored vault address. |
-| `all_passed` | `boolean` | `true` if all six invariants held. |
+| `all_passed` | `boolean` | `true` if all 12 invariants held. |
 | `latency_ms` | `integer` | Fetch-to-evaluation latency (nullable). |
 | `violations_count` | `integer` | Number of failed invariants this block (default `0`). |
 

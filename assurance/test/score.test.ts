@@ -51,6 +51,7 @@ test('scoreStatic rewards full coverage and a deep fuzz campaign', () => {
     vaultBranchCoverage: 100,
     invariantRuns: 10_000,
     invariantDepth: 200,
+    invariantArtifactPresent: true,
   });
   assert.equal(c.available, true);
   assert.equal(c.score, 100); // 0.7*100 + 0.3*100
@@ -63,8 +64,25 @@ test('scoreStatic is unavailable when coverage was not gathered', () => {
     vaultBranchCoverage: 0,
     invariantRuns: 2000,
     invariantDepth: 150,
+    invariantArtifactPresent: true,
   });
   assert.equal(c.available, false);
+});
+
+test('scoreStatic caps at 60 when the runs.json artifact is missing', () => {
+  // Same shape as scoreTraceability's gap cap: full coverage + a deep campaign
+  // would normally score 100, but a missing artifact means the heavy CI fuzz
+  // job did not run — the score is forced to <= 60.
+  const c = scoreStatic({
+    available: true,
+    vaultLineCoverage: 100,
+    vaultBranchCoverage: 100,
+    invariantRuns: 10_000,
+    invariantDepth: 200,
+    invariantArtifactPresent: false,
+  });
+  assert.ok(c.score <= 60, `expected <= 60, got ${c.score}`);
+  assert.equal(c.metrics.invariantArtifactPresent, false);
 });
 
 test('scoreExploit is 100 when every exploit class is resisted', () => {
@@ -100,6 +118,7 @@ test('computeScore re-normalises weights when a component is unavailable', () =>
       vaultBranchCoverage: 0,
       invariantRuns: 2000,
       invariantDepth: 150,
+      invariantArtifactPresent: true,
     }),
     scoreExploit({ available: true, total: 4, prevented: 4, detected: 0, missed: 0 }),
     scoreTraceability({ available: true, coveragePct: 100, gaps: 0 }),

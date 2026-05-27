@@ -1,7 +1,7 @@
 # Guardian Pipeline — Assurance Report
 
-> **Assurance Score: 91/100 — grade A-**  
-> Generated 2026-05-24T14:07:48.692Z · commit `9cc5623`
+> **Assurance Score: 82/100 — grade B-**  
+> Generated 2026-05-27T18:07:06.738Z · commit `6b58700`
 
 The Assurance Score rolls the repository's pre-deployment evidence into one reproducible number — static verification, exploit-replay resistance, and the traceability of every security-review finding to a re-runnable check. It is a worked demonstration of one design response — recomputing assurance on every commit — to the open empirical question both cited papers raise about audit effectiveness. The "continuous, multi-layered" framing is this project's, not a claim of either paper.
 
@@ -9,18 +9,18 @@ The Assurance Score rolls the repository's pre-deployment evidence into one repr
 
 | Component | Score | Weight | Detail |
 |---|---|---|---|
-| Static Verification | 82 | 45% | Vault.sol 97.2% line / 78.3% branch; fuzz campaign 2000x150 (intensity 64/100) |
+| Static Verification | 60 | 45% | Vault.sol 100% line / 100% branch; fuzz campaign 0x0 (intensity 0/100); runs.json missing — capped at 60 |
 | Exploit Resistance | 100 | 35% | 7/7 exploit classes resisted (7 prevented, 0 detected, 0 missed) |
-| Finding Traceability | 93.8 | 20% | 93.8% weighted coverage of security-relevant findings |
+| Finding Traceability | 100 | 20% | 100% weighted coverage of security-relevant findings |
 
 ## Finding traceability matrix
 
-7/8 security-relevant findings fully assured · 93.8% weighted coverage.
+8/8 security-relevant findings fully assured · 100.0% weighted coverage.
 
 | Finding | Severity | Coverage | Invariants | Harness | Live | Replays |
 |---|---|---|---|---|---|---|
 | GUA-02 Full-close repayment could erode the solvency margin by one wei | High | fully assured | INV-01 | 1 | INV-01 | — |
-| GUA-01 Reentrancy exposure on state-mutating functions | Medium | monitored only | INV-01 | 0 | INV-01 | — |
+| GUA-01 Reentrancy exposure on state-mutating functions | Medium | fully assured | INV-01 | 1 | INV-01 | — |
 | GUA-03 Liquidation seizing all collateral must clear the full debt | Medium | fully assured | INV-06 | 1 | INV-06 | EXP-05, EXP-07 |
 | GUA-08 Vault trusts the oracle implicitly — no staleness, deviation or circuit-breaker checks | Medium | fully assured | INV-01, INV-06 | 2 | INV-01, INV-06 | EXP-03, EXP-07 |
 | GUA-04 Sustained interest can make a lender redemption exceed idle cash | Low | fully assured | INV-01 | 1 | INV-01 | — |

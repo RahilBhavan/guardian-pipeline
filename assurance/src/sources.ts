@@ -2,13 +2,13 @@
  * sources.ts — gather the real inputs that feed the Assurance Score.
  *
  * Each gatherer degrades gracefully: if a data source cannot be reached it
- * returns `available: false` and the score engine drops that component rather
- * than guessing. The score therefore always reflects only evidence that was
- * actually collected.
+ * returns `available: false` (drops the component) or, for the fuzz artifact,
+ * `invariantArtifactPresent: false` (component is included but capped at 60).
+ * The score therefore always reflects only evidence that was actually
+ * collected — never inferred from local configuration files.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import type { StaticInput } from './score.js';
 
 /** Run a command, returning its stdout, or `null` if it fails. */
@@ -44,19 +44,52 @@ export function parseCoverageSummary(summary: string): { line: number; branch: n
   return { line: pcts[0], branch: pcts[2] };
 }
 
-/** Parse the CI invariant profile's runs/depth from foundry.toml. */
-export function parseFoundryFuzzProfile(toml: string): { runs: number; depth: number } {
-  // Default to the [profile.ci.invariant] values shipped with the repo.
-  const fallback = { runs: 2000, depth: 150 };
-  const section = toml.match(/\[profile\.ci\.invariant\]([\s\S]*?)(?=\n\[|$)/);
-  if (!section) return fallback;
-  const body = section[1];
-  const runs = body.match(/runs\s*=\s*(\d+)/);
-  const depth = body.match(/depth\s*=\s*(\d+)/);
-  return {
-    runs: runs ? Number(runs[1]) : fallback.runs,
-    depth: depth ? Number(depth[1]) : fallback.depth,
-  };
+/**
+ * Schema of the runs.json artifact emitted by the invariant-fuzz CI job.
+ *
+ * `runs` and `depth` are the active Foundry profile values at the time the
+ * heavy fuzz campaign ran in CI. `profile` is the FOUNDRY_PROFILE name the
+ * workflow used. `totalCalls` and `durationSeconds` are summed across the
+ * InvariantVault test suite, parsed from `forge test --json`.
+ *
+ * Why foundry.toml is no longer the source of truth: editing the local
+ * foundry.toml does not change what CI actually ran, so AMC must reflect the
+ * artifact from a real campaign rather than the developer's local config.
+ */
+export interface InvariantRunsArtifact {
+  runs: number;
+  depth: number;
+  profile: string;
+  totalCalls: number;
+  durationSeconds: number;
+}
+
+/**
+ * Parse the runs.json artifact written by the invariant-fuzz CI job. Returns
+ * `null` on any malformed input — callers treat that exactly the same as a
+ * missing file (Static Verification caps at 60).
+ */
+export function parseInvariantRunsArtifact(text: string): InvariantRunsArtifact | null {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!raw || typeof raw !== 'object') return null;
+  const obj = raw as Record<string, unknown>;
+  const { runs, depth, profile, totalCalls, durationSeconds } = obj;
+  if (
+    typeof runs !== 'number' ||
+    typeof depth !== 'number' ||
+    typeof profile !== 'string' ||
+    typeof totalCalls !== 'number' ||
+    typeof durationSeconds !== 'number'
+  ) {
+    return null;
+  }
+  if (runs <= 0 || depth <= 0) return null;
+  return { runs, depth, profile, totalCalls, durationSeconds };
 }
 
 /** Options controlling how Static Verification inputs are gathered. */
@@ -66,18 +99,28 @@ export interface StaticOptions {
   coverageFile: string;
   /** If true and no coverage file exists, run `forge coverage` directly. */
   runForge: boolean;
+  /**
+   * Path to the runs.json artifact emitted by the invariant-fuzz CI job. The
+   * coverage job's capped fuzz (FOUNDRY_INVARIANT_RUNS=25 DEPTH=50) never
+   * contributes to AMC — this artifact is the only source of fuzz inputs.
+   */
+  runsArtifactFile: string;
 }
 
 /**
- * Gather Static Verification inputs: src/Vault.sol coverage plus the CI fuzz
- * profile. Coverage is read from `coverageFile` if present; otherwise, when
- * `runForge` is set, `forge coverage` is invoked with a capped fuzz budget.
+ * Gather Static Verification inputs: src/Vault.sol coverage plus the fuzz
+ * campaign that the invariant-fuzz CI job actually executed. Coverage is read
+ * from `coverageFile` if present; otherwise, when `runForge` is set,
+ * `forge coverage` is invoked with a capped fuzz budget (that budget is for
+ * coverage instrumentation only and is NOT used as a fuzz input to AMC).
  */
 export function gatherStatic(opts: StaticOptions): StaticInput {
-  const tomlPath = join(opts.repoRoot, 'foundry.toml');
-  const fuzz = existsSync(tomlPath)
-    ? parseFoundryFuzzProfile(readFileSync(tomlPath, 'utf8'))
-    : { runs: 2000, depth: 150 };
+  const artifact = existsSync(opts.runsArtifactFile)
+    ? parseInvariantRunsArtifact(readFileSync(opts.runsArtifactFile, 'utf8'))
+    : null;
+  const invariantArtifactPresent = artifact !== null;
+  const invariantRuns = artifact?.runs ?? 0;
+  const invariantDepth = artifact?.depth ?? 0;
 
   let summary: string | null = null;
   if (existsSync(opts.coverageFile)) {
@@ -96,8 +139,9 @@ export function gatherStatic(opts: StaticOptions): StaticInput {
       available: false,
       vaultLineCoverage: 0,
       vaultBranchCoverage: 0,
-      invariantRuns: fuzz.runs,
-      invariantDepth: fuzz.depth,
+      invariantRuns,
+      invariantDepth,
+      invariantArtifactPresent,
     };
   }
 
@@ -105,7 +149,8 @@ export function gatherStatic(opts: StaticOptions): StaticInput {
     available: true,
     vaultLineCoverage: coverage.line,
     vaultBranchCoverage: coverage.branch,
-    invariantRuns: fuzz.runs,
-    invariantDepth: fuzz.depth,
+    invariantRuns,
+    invariantDepth,
+    invariantArtifactPresent,
   };
 }

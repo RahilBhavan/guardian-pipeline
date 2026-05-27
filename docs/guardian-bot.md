@@ -2,7 +2,7 @@
 
 The Guardian bot (`guardian/`) is the runtime half of the pipeline: a
 TypeScript daemon that, when run against a deployed `Vault` on Base L2,
-re-checks all six invariants on every block and persists any violation to
+re-checks all 12 invariants on every block and persists any violation to
 Supabase — typically within one block (~2 s). It is a **runnable reference
 implementation**; this repository does not host it against a live vault.
 

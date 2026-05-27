@@ -12,6 +12,8 @@ import {WarpHandler} from "./handlers/WarpHandler.sol";
 import {LiquidateHandler} from "./handlers/LiquidateHandler.sol";
 import {DonationHandler} from "./handlers/DonationHandler.sol";
 import {OracleHandler} from "./handlers/OracleHandler.sol";
+import {ReentrancyHandler} from "./handlers/ReentrancyHandler.sol";
+import {ReentrantAttackToken} from "../fixtures/ReentrantAttackToken.sol";
 
 /// @title InvariantVault — Foundry invariant fuzz harness
 /// @notice Wires seven handlers — deposit/withdraw, collateral
@@ -73,6 +75,16 @@ contract InvariantVault is Test {
     DonationHandler internal donationHandler;
     OracleHandler internal oracleHandler;
 
+    /// @notice Parallel vault whose debt asset is the {ReentrantAttackToken}.
+    ///         Used by {invariant_reentrancySafe} so the harness — which
+    ///         could not otherwise reach this surface with non-callback
+    ///         {MockERC20}s — actually exercises the {Vault.nonReentrant}
+    ///         guard end-to-end. Closes security-review finding GUA-01's
+    ///         harness gap.
+    Vault internal reentrantVault;
+    ReentrantAttackToken internal reentrantDebt;
+    ReentrancyHandler internal reentrancyHandler;
+
     /// @notice Highest solvency margin observed so far in this run, used to
     ///         assert {invariant_solvencyMonotone}.
     uint256 internal priorSolvencyMargin;
@@ -103,6 +115,18 @@ contract InvariantVault is Test {
         donationHandler = new DonationHandler(vault, debt, collateral);
         oracleHandler = new OracleHandler(oracle);
 
+        // Parallel reentrant-asset harness: a second Vault whose debt asset
+        // is a callback-bearing ERC-20. The hook on the token is wired to
+        // reenter the vault, so every fuzz-driven deposit/withdraw/borrow/
+        // repay exercises the {Vault.nonReentrant} guard. The token's
+        // `active` constructor-style flag stays off until after actor
+        // funding so the funding mints do not fire the hook.
+        reentrantDebt = new ReentrantAttackToken();
+        reentrantVault = new Vault(address(reentrantDebt), address(collateral), address(oracle), 10_00, 5_00);
+        reentrancyHandler = new ReentrancyHandler(reentrantVault, reentrantDebt, collateral);
+        reentrantDebt.setTarget(address(reentrantVault));
+        reentrantDebt.setActive(true);
+
         targetContract(address(depositHandler));
         targetContract(address(collateralHandler));
         targetContract(address(borrowHandler));
@@ -110,6 +134,7 @@ contract InvariantVault is Test {
         targetContract(address(liquidateHandler));
         targetContract(address(donationHandler));
         targetContract(address(oracleHandler));
+        targetContract(address(reentrancyHandler));
 
         // Exclude the vault, tokens and oracle — they are only ever exercised
         // through the bounded handler action space.
@@ -117,6 +142,8 @@ contract InvariantVault is Test {
         excludeContract(address(debt));
         excludeContract(address(collateral));
         excludeContract(address(oracle));
+        excludeContract(address(reentrantVault));
+        excludeContract(address(reentrantDebt));
     }
 
     /// @notice INV-01 Protocol solvency — assets always cover lender claims.
@@ -345,6 +372,37 @@ contract InvariantVault is Test {
             vault.lastAccrualTime(),
             lastAccrualBefore,
             "INV-12: lastAccrualTime moved on no-op accrue"
+        );
+    }
+
+    /// @notice GUA-01 Reentrancy safety — every reentrant call attempted by
+    ///         the callback-bearing debt token during the campaign reverted
+    ///         with OpenZeppelin's {ReentrancyGuard.ReentrancyGuardReentrantCall},
+    ///         and the parallel vault stays solvent.
+    /// @dev    The {ReentrantAttackToken} fires a reentrant `deposit(1)` from
+    ///         inside every vault-initiated transfer and counts only reverts
+    ///         matching the guard's selector — so a code change that
+    ///         dropped `nonReentrant` would either let the inner call
+    ///         succeed (no revert) or revert with a different selector
+    ///         (allowance/balance), both of which leave `reentryAttempts >
+    ///         reentryReverts` and fire this invariant. The solvency floor
+    ///         catches the second-order failure mode where the guard exists
+    ///         but the inner call still managed to corrupt state.
+    ///
+    ///         Bound to security-review finding GUA-01 — the existing
+    ///         {MockERC20}-only harness could not reach this surface, so
+    ///         GUA-01 was previously `monitored-only`. With this invariant
+    ///         the harness covers the reentrancy class end-to-end.
+    function invariant_reentrancySafe() public view {
+        assertEq(
+            reentrantDebt.reentryAttempts(),
+            reentrantDebt.reentryReverts(),
+            "GUA-01: reentry attempted by callback token was NOT blocked by nonReentrant"
+        );
+        assertGe(
+            reentrantVault.totalAssets(),
+            reentrantVault.totalSupplyAssets(),
+            "GUA-01: solvency broken on the reentrant-asset vault"
         );
     }
 }

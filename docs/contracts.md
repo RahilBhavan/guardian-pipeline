@@ -27,7 +27,7 @@ lenders as a rising share price. Positions that drift under-water can be cleared
 by anyone via `liquidate`. The contract follows the Morpho-style dual-tracked
 accounting model — the lender side stores `totalSupplyAssets` directly, the
 borrow side scales an index — so the solvency margin can never erode by
-rounding. Its value is the six invariants it must never violate, enforced
+rounding. Its value is the 12 invariants it must never violate, enforced
 *before* deployment by the Foundry harness and *after* deployment by the
 Guardian bot.
 
@@ -304,9 +304,11 @@ A plain 18-decimal test token, name `Mock USD`, symbol `mUSD`.
 `mint` is intentionally permissionless so handlers and tests can fund actors
 freely. `MockERC20` has **no transfer hooks** (no ERC-777-style callbacks),
 which is deliberate: it keeps the fuzzer from having to model reentrancy
-through the token. That is also why review finding GUA-02 (reentrancy) is
-classified *monitored-only* rather than *fully-assured* — the harness has no
-hook to exercise. See [assurance.md](assurance.md#finding-traceability).
+through the token. The reentrancy review finding (see the generated
+[traceability summary](../assurance/data/TRACEABILITY_SUMMARY.md)) is bound to
+the contract-level `ReentrancyGuard` and the runtime monitor; the finding's
+current tier is whatever the resolver emits, not a hand-pinned value here.
+See [assurance.md](assurance.md#finding-traceability).
 
 > **Never deploy `MockERC20` to mainnet.** Unrestricted `mint` makes it
 > worthless as a real asset. On Base Sepolia the deploy script
@@ -335,7 +337,7 @@ Full broadcast instructions — keystore setup, RPC, `--verify` — are in
 
 ## Related documents
 
-- [invariants.md](invariants.md) — the six invariants the contract must hold.
+- [invariants.md](invariants.md) — the 12 invariants the contract must hold.
 - [guardian-bot.md](guardian-bot.md) — how the off-chain bot reads this contract.
 - [invariants.md#testing-strategy](invariants.md#testing-strategy) — how the harness and exploit replays exercise it.
 - [SECURITY.md](../SECURITY.md) — trust boundaries and the `attack()` demo flag.

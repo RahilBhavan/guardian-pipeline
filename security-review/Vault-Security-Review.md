@@ -279,8 +279,8 @@ four assurance layers:
 | **Exploit replay** | An `EXP-*` scenario in `test/exploit/` | Every push, pre-deployment |
 
 A finding is **fully assured** when it is proven by the harness *and* covered by
-the runtime monitor; **monitored-only** (e.g. GUA-02) when the runtime monitor is
-the only layer covering it; and a **gap** when no layer covers it. The
+the runtime monitor; the *monitored-only* tier names cases where only the runtime
+monitor covers a property; and a **gap** is a finding with no covering layer. The
 `assurance` engine resolves these bindings, scores them, and fails CI if a
 security-relevant finding regresses to a gap. Run `assurance trace` to see the
 traceability matrix, or `assurance report` for the full assurance score.
