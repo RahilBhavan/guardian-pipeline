@@ -19,14 +19,14 @@
       "category": "Reentrancy",
       "location": "src/Vault.sol — deposit / withdraw / depositCollateral / withdrawCollateral / borrow / repay / liquidate",
       "securityRelevant": true,
-      "description": "All seven mutating entrypoints move ERC-20 value across either the debt asset or the collateral asset. A token with transfer hooks (ERC-777-style) would otherwise open a reentrancy surface against the liquidity, collateral-cap and oracle reads. Remediation: the contract inherits OpenZeppelin's ReentrancyGuard and every mutating function is marked nonReentrant.",
-      "recommendation": "Resolved — retain the ReentrancyGuard. The fuzz harness exercises non-callback MockERC20s and cannot reproduce a reentrant sequence, so INV-01 remains the continuous safety net for this class rather than the harness.",
+      "description": "All seven mutating entrypoints move ERC-20 value across either the debt asset or the collateral asset. A token with transfer hooks (ERC-777-style) would otherwise open a reentrancy surface against the liquidity, collateral-cap and oracle reads. Remediation: the contract inherits OpenZeppelin's ReentrancyGuard and every mutating function is marked nonReentrant; the fuzz harness now drives a parallel Vault whose debt asset is a callback-bearing ERC-20 (test/fixtures/ReentrantAttackToken.sol) and the invariant invariant_reentrancySafe asserts every reentrant call attempted during the campaign was rejected by the guard with the canonical OpenZeppelin selector.",
+      "recommendation": "Resolved — retain the ReentrancyGuard. The fuzz harness now exercises the reentrant call sequence end-to-end via ReentrantAttackToken; INV-01 remains the runtime safety net.",
       "continuousAssurance": {
         "invariants": ["INV-01"],
-        "harnessTests": [],
+        "harnessTests": ["invariant_reentrancySafe"],
         "liveMonitors": ["INV-01"],
         "exploitReplays": [],
-        "rationale": "The ReentrancyGuard blocks this class structurally, but the harness exercises non-callback MockERC20s and cannot reproduce a reentrant call sequence — so the finding is not proven absent by the harness. The runtime monitor covers it instead: any reentrancy that drained value would break INV-01, which the monitor re-checks every block when run against a deployment. The traceability map surfaces this as monitored-only — a deliberately partial-coverage finding."
+        "rationale": "Closed by invariant_reentrancySafe: a callback-bearing debt asset (ReentrantAttackToken) reenters the vault on every transfer, and the invariant asserts every attempt reverted with OpenZeppelin's ReentrancyGuardReentrantCall selector plus the parallel vault stays solvent. A mutation that removed nonReentrant from any entrypoint would let the inner call either succeed or revert with a different selector, breaking attempts == reverts. INV-01 stays bound to the runtime monitor as the post-deployment safety net."
       }
     },
     {

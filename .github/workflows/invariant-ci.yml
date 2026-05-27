@@ -308,6 +308,23 @@ jobs:
         # already on disk for the artifact upload.
         run: npm run trace -- --check-readme
 
+      - name: Verify exploit-replay generated blocks match the catalogue
+        working-directory: assurance
+        # The exploit-summary sentence in README.md and the catalogue
+        # table + summary in docs/assurance.md are generated from
+        # `assurance/data/exploit-replays.json` by `assurance trace
+        # --update-exploit-docs`. `--check-exploit-docs` exits 1 if any
+        # block drifts — same shape as the traceability gate above.
+        run: npm run trace -- --check-exploit-docs
+
+      - name: docs-drift-check — fail on known-stale substrings
+        # Greps every committed `.md` outside MEMORY.md / CHANGELOG.md for
+        # substrings the prose sweep declared stale (e.g. "all 6 invariants",
+        # the three deleted ghost-catalogue entries, "monitored-only" applied
+        # to a specific GUA-* finding). Catches drift in pages where no
+        # generator owns the prose.
+        run: node assurance/bin/docs-drift-check.mjs
+
       - name: Upload assurance report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

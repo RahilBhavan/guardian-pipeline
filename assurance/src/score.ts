@@ -58,10 +58,18 @@ export interface StaticInput {
   vaultLineCoverage: number;
   /** src/Vault.sol branch coverage, as a percentage. */
   vaultBranchCoverage: number;
-  /** Foundry invariant `runs` from the CI profile. */
+  /** Foundry invariant `runs` as recorded in the invariant-fuzz CI artifact. */
   invariantRuns: number;
-  /** Foundry invariant `depth` from the CI profile. */
+  /** Foundry invariant `depth` as recorded in the invariant-fuzz CI artifact. */
   invariantDepth: number;
+  /**
+   * True when a runs.json artifact from the invariant-fuzz CI job was located
+   * and successfully parsed. When false, the fuzz campaign cannot be trusted
+   * (the heavy CI job didn't run or its artifact is missing) so the component
+   * score is capped at 60 — symmetric with scoreTraceability's cap when an
+   * uncovered security-relevant finding exists.
+   */
+  invariantArtifactPresent: boolean;
 }
 
 /** Inputs for the Exploit Resistance component. */
@@ -134,7 +142,15 @@ export function scoreStatic(input: StaticInput): ScoreComponent {
   const coverageScore = 0.6 * input.vaultLineCoverage + 0.4 * input.vaultBranchCoverage;
   const product = input.invariantRuns * input.invariantDepth;
   const intensity = fuzzIntensity(product);
-  const score = clamp(0.7 * coverageScore + 0.3 * intensity);
+  let score = clamp(0.7 * coverageScore + 0.3 * intensity);
+  // Same shape as the traceability cap: a missing runs.json means the
+  // invariant-fuzz CI job did not produce evidence of a real campaign.
+  if (!input.invariantArtifactPresent) score = Math.min(score, 60);
+
+  const baseDetail = input.available
+    ? `Vault.sol ${round1(input.vaultLineCoverage)}% line / ${round1(input.vaultBranchCoverage)}% branch; ` +
+      `fuzz campaign ${input.invariantRuns}x${input.invariantDepth} (intensity ${Math.round(intensity)}/100)`
+    : 'forge coverage unavailable — component excluded from the composite';
 
   return {
     key: 'staticVerification',
@@ -142,16 +158,16 @@ export function scoreStatic(input: StaticInput): ScoreComponent {
     score: round1(score),
     available: input.available,
     weight: WEIGHTS.staticVerification,
-    detail: input.available
-      ? `Vault.sol ${round1(input.vaultLineCoverage)}% line / ${round1(input.vaultBranchCoverage)}% branch; ` +
-        `fuzz campaign ${input.invariantRuns}x${input.invariantDepth} (intensity ${Math.round(intensity)}/100)`
-      : 'forge coverage unavailable — component excluded from the composite',
+    detail: input.available && !input.invariantArtifactPresent
+      ? `${baseDetail}; runs.json missing — capped at 60`
+      : baseDetail,
     metrics: {
       lineCoverage: round1(input.vaultLineCoverage),
       branchCoverage: round1(input.vaultBranchCoverage),
       invariantRuns: input.invariantRuns,
       invariantDepth: input.invariantDepth,
       fuzzIntensity: Math.round(intensity),
+      invariantArtifactPresent: input.invariantArtifactPresent,
     },
   };
 }

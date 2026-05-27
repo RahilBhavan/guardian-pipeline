@@ -48,6 +48,14 @@ forge-test: ## Run Foundry tests (unit, invariant fuzz, exploit replays)
 forge-coverage: ## Generate coverage report consumed by the assurance CLI
 	forge coverage --report summary
 
+# --- Exploit-replay catalogue ------------------------------------------------
+
+.PHONY: exploit-summary
+
+exploit-summary: ## Regenerate assurance/data/exploit-replays.json and patch README + docs/assurance.md marker blocks
+	forge script script/ExploitReplay.s.sol
+	cd assurance && npm run trace -- --update-exploit-docs
+
 # --- Guardian bot ------------------------------------------------------------
 
 .PHONY: guardian-install guardian-build guardian-test guardian-typecheck

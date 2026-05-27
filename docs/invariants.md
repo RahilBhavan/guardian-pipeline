@@ -1,6 +1,6 @@
 # Invariant reference
 
-The vault's safety is defined by 6 invariants. Each is asserted by an
+The vault's safety is defined by 12 invariants. Each is asserted by an
 `invariant_*` function in `test/invariant/InvariantVault.t.sol`, mirrored in
 `guardian/src/evaluator.ts` (`inv01`…`inv06`), and re-checked by the
 exploit-replay harness (`test/exploit/`).

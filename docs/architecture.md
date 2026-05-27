@@ -35,7 +35,7 @@ Foundry's invariant fuzzer drives the vault through random call sequences via
 five handler contracts (`DepositHandler`, `BorrowHandler`, `WarpHandler` —
 which advances time and accrues interest — `LiquidateHandler`, and
 `DonationHandler` — which transfers tokens straight to the vault) and asserts
-all 6 invariants after each step.
+all 12 invariants after each step.
 
 | Profile | Runs | Depth | Use |
 |---------|------|-------|-----|
@@ -43,7 +43,7 @@ all 6 invariants after each step.
 | `ci` | 2,000 | 150 | Every push (up to ~300,000 handler calls) |
 | `deep` | 10,000 | 200 | Pre-release |
 
-A green CI badge is a claim: *all 6 invariants held across the campaign — no
+A green CI badge is a claim: *all 12 invariants held across the campaign — no
 `invariant_*` assertion failed.* (Handlers wrap legitimately-reverting calls in
 `try/catch`, so a revert is a valid no-op, not a campaign failure — see
 [invariants.md#testing-strategy](invariants.md#testing-strategy).) The full
@@ -114,7 +114,7 @@ writes to is in [database.md](database.md).
 
 The assurance layer rolls the pre-deployment evidence into a single number — the
 **Assurance Score** (0–100) — recomputed on every commit by the `assurance` CI
-job. It backtests 7 historical exploit classes, traces 8 security-review
+job. It backtests 10 historical exploit classes, traces 8 security-review
 findings to the layers that cover them, and gates CI at a minimum score of 80.
 Full detail in [assurance.md](assurance.md).
 

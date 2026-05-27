@@ -36,7 +36,7 @@ The number summarises methodology coverage; it does not summarise security:
 | Component | Weight | Measures | Source |
 |-----------|--------|----------|--------|
 | Static verification | 45% | Line/branch coverage + fuzz-campaign size on `Vault.sol` | `forge coverage`, `foundry.toml` |
-| Exploit resistance | 35% | 7 historical exploit classes replayed | `test/exploit/` |
+| Exploit resistance | 35% | 10 historical exploit classes replayed (dual-surface) | `test/exploit/` |
 | Finding traceability | 20% | % of review findings bound to a re-runnable check | `security-review/findings.json` |
 
 **On the weights.** They are a deliberate editorial choice, documented in the
@@ -110,19 +110,37 @@ vault. Each is classified by outcome:
   same block.
 - **MISSED** — value was extracted and *no* invariant noticed. A genuine gap.
 
-| ID | Exploit class | Target invariants | Expected | Why |
-|----|---------------|-------------------|----------|-----|
-| EXP-01 | Privileged solvency break | INV-01 | DETECTED | `AttackableVault.attack()` inflates `totalSupplyAssets`; INV-01 catches it same-block |
-| EXP-02 | First-depositor inflation | INV-01, INV-04 | PREVENTED | `totalSupplyAssets` is stored, not derived from balance — donations cannot inflate the share price |
-| EXP-03 | Bad-debt collateral strip | INV-01, INV-06 | PREVENTED | `withdraw` re-checks the collateral cap on the post-withdrawal balance and reverts |
-| EXP-04 | Reserve liquidity drain | INV-01 | PREVENTED | free liquidity provably covers any single LP balance; `withdraw` reverts gracefully otherwise |
-| EXP-05 | Over-borrow beyond cap | INV-01 | PREVENTED | `borrow` reverts with `CollateralCapExceeded` past 80% LTV |
-| EXP-06 | Interest-driven liquidation | INV-01, INV-06 | PREVENTED | interest pushes a position under water; `liquidate` clears it and all six invariants hold throughout |
-| EXP-07 | Rounding-dust extraction | INV-01 | PREVENTED | Ceil-divided borrows and realised-drop repayments leave no recoverable dust |
+The table below is regenerated from `assurance/data/exploit-replays.json` by
+`assurance trace --update-exploit-docs`. CI runs the corresponding `--check`
+gate so a hand-edit in this block fails the build.
 
-**Current result: 6 PREVENTED · 1 DETECTED · 0 MISSED** → exploit-resistance
-score 100/100. CI fails if any scenario regresses (an outcome worse than
-expected) or is MISSED.
+<!-- EXPLOIT_CATALOGUE_BEGIN -->
+
+| ID | Class | Target invariants | Outcome | Mechanism |
+|----|-------|-------------------|---------|-----------|
+| EXP-01 | Share-price manipulation | INV-01, INV-04 | PREVENTED | Attackable surface (AttackableInflatableVault) prices shares off balanceOf(); the historical 1-wei + donation move dilutes a 5,000-unit victim. |
+| EXP-02 | Health-check bypass on collateral reduction | INV-01, INV-06 | PREVENTED | AttackableEulerStyleVault.donateToReserves drops the donor's collateral with no cap recheck and a confederate drains the bonus. |
+| EXP-03 | Oracle price manipulation via donation | INV-01, INV-11 | PREVENTED | AttackableOracleVault is wired to a BalanceDerivedOracle that reads the vault's collateral balance. |
+| EXP-04 | Collateralisation bypass | INV-01 | PREVENTED | AttackableNoCapVault drops the cap check, letting a borrower draw past their cap and drain free liquidity. |
+| EXP-05 | No-free-lunch on liquidation (INV-08 surface) | INV-01, INV-08 | PREVENTED | AttackableOverSeizeVault doubles the seize-value coefficient so every liquidation extracts more than the bonus permits. |
+| EXP-06 | ERC-20 transferFrom defect (mint-on-credit) | INV-06 | PREVENTED | AttackableTransferFromToken carries the defect verbatim: a same-from-and-to call mints arbitrary balance. |
+| EXP-07 | No-free-lunch under price-drop liquidation (INV-08 surface) | INV-01, INV-08 | PREVENTED | After a 50% price drop AttackableOverSeizeVault lets the liquidator extract twice the bonus; canonical Vault.liquidate stays within the INV-08 bound. |
+| EXP-08 | Per-borrower debt rounding flipped against the protocol | INV-10 | PREVENTED | Eight borrowers deposit/borrow tiny positions, time advances, and the sum of userDebt is compared to totalBorrowed. |
+| EXP-09 | Action against a price the contract should distrust | INV-11 | PREVENTED | After warping past MAX_STALENESS, AttackableStaleOracleVault.liquidate executes against the stale price. |
+| EXP-10 | Sub-rounding-threshold donation across N depositors | INV-01, INV-04 | PREVENTED | Eight depositors each deposit one unit; the attacker donates 7 units (one wei below per-share threshold). |
+
+<!-- EXPLOIT_CATALOGUE_END -->
+
+The summary sentence is regenerated alongside the table:
+
+<!-- EXPLOIT_SUMMARY_BEGIN -->
+
+**10 mechanism replays, 10 PREVENTED, 0 MISSED.**
+
+<!-- EXPLOIT_SUMMARY_END -->
+
+→ exploit-resistance score 100/100. CI fails if any scenario regresses (an
+outcome worse than expected) or is MISSED.
 
 EXP-01 is intentionally the reference DETECTED scenario: it is a staged,
 deliberately-planted breach (`AttackableVault.attack()`) used to show the
@@ -149,22 +167,12 @@ monitor is currently running:
 - **gap** — a security-relevant finding with no layer covering it.
 - **not-applicable** — non-security finding (e.g. gas).
 
-| ID | Finding | Severity | Tier |
-|----|---------|----------|------|
-| GUA-01 | Demo insolvency backdoor isolated to `AttackableVault` | Critical | fully-assured |
-| GUA-02 | Reentrancy exposure on state-mutating functions | Medium | monitored-only |
-| GUA-03 | Full-close repayment could erode the solvency margin by one wei | High | fully-assured |
-| GUA-04 | Liquidation seizing all collateral must clear the full debt | Medium | fully-assured |
-| GUA-05 | Sustained interest can make a redemption exceed idle cash | Low | fully-assured |
-| GUA-06 | Share price is immune to direct token donations | Informational | fully-assured |
-| GUA-07 | A full-close repayment may charge one wei above `userDebt()` | Informational | fully-assured |
-| GUA-08 | Deeply under-water positions can leave residual bad debt | Low | fully-assured |
-
-**Summary:** 8 findings, all 8 security-relevant — 7 fully-assured and 1
-monitored-only (GUA-02: the `ReentrancyGuard` blocks the class structurally, but
-the non-callback `MockERC20` means the harness cannot reproduce a reentrant
-sequence, so it is covered by the runtime monitor rather than fuzz-proven).
-**0 gaps** → weighted traceability coverage **93.8%** (7 × 1.0 + 1 × 0.5 over 8).
+The per-finding matrix is regenerated by the assurance CLI from
+`security-review/findings.json` on every run and emitted as
+[`assurance/data/TRACEABILITY_SUMMARY.md`](../assurance/data/TRACEABILITY_SUMMARY.md).
+The README block above (between the `TRACEABILITY_BEGIN` / `TRACEABILITY_END`
+markers) carries the same one-line summary — both share the resolver output
+verbatim so a drift in either fails the `assurance trace --check-readme` gate.
 
 ---
 
@@ -190,7 +198,7 @@ Matrix**, and **Exploit Replay** panels.
 ## Related documents
 
 - [architecture.md](architecture.md) — the assurance layer among the four layers.
-- [invariants.md](invariants.md) — the six invariants violations roll up from.
+- [invariants.md](invariants.md) — the 12 invariants violations roll up from.
 - [invariants.md#testing-strategy](invariants.md#testing-strategy) — the four test tiers including exploit replay.
 - [../README.md#cicd-pipeline](../README.md#cicd-pipeline) — the `assurance` CI job that gates on the score.
 - [../assurance/README.md](../assurance/README.md) — the assurance engine's CLI.
