@@ -1,6 +1,7 @@
 # Guardian Pipeline
 
 [![Invariant CI](https://github.com/rahilbhavan/guardian-pipeline/actions/workflows/invariant-ci.yml/badge.svg)](https://github.com/rahilbhavan/guardian-pipeline/actions/workflows/invariant-ci.yml)
+[![Deep Fuzz](https://github.com/rahilbhavan/guardian-pipeline/actions/workflows/deep-fuzz.yml/badge.svg?event=schedule)](https://github.com/rahilbhavan/guardian-pipeline/actions/workflows/deep-fuzz.yml)
 [![Vault coverage](https://img.shields.io/badge/Vault.sol%20line%20coverage-97%25-brightgreen)](./docs/invariants.md#testing-strategy)
 [![AMC score](https://img.shields.io/badge/AMC%20score-CI--gated%20%E2%89%A580-0052FF)](./docs/assurance.md)
 [![Built for Base](https://img.shields.io/badge/Base_L2-0052FF)](https://base.org)

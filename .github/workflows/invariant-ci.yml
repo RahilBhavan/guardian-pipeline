@@ -53,6 +53,35 @@ jobs:
             exit 1
           fi
 
+      - name: Set up Node (for corpus-coverage parser)
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4
+        with:
+          node-version: '20'
+
+      - name: Corpus-coverage gate — no handler selector may starve
+        # Parses the per-selector "Metrics" table emitted by `forge test -vvv`
+        # and fails if any handler selector fired fewer than 100 times in the
+        # CI profile (2000 runs * 150 depth = 300k calls, ~27k/selector avg).
+        # Catches handler edits that silently inert a selector — the suite
+        # still passes but a whole action class never enters the fuzz space.
+        run: node assurance/bin/corpus-coverage.mjs invariant-results.txt --min-calls 100
+
+      - name: Corpus-coverage self-test — starved fixture must trip the gate
+        # Inverts the previous step: feeds a fixture where LiquidateHandler.
+        # liquidate has 0 calls (intentionally-disabled selector) and asserts
+        # the parser exits 1. Guards against the gate silently becoming a
+        # no-op after a future parser refactor.
+        run: |
+          set +e
+          node assurance/bin/corpus-coverage.mjs assurance/test/fixtures/forge-invariant-starved.txt --min-calls 100
+          rc=$?
+          set -e
+          if [ "$rc" -ne 1 ]; then
+            echo "::error::Corpus-coverage self-test failed: expected exit 1 on starved fixture, got $rc"
+            exit 1
+          fi
+          echo "Self-test OK: starved fixture correctly tripped the gate"
+
       - name: Upload fuzz results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

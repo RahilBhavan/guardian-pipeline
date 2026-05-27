@@ -1,0 +1,101 @@
+name: Deep Fuzz
+
+# Nightly invariant campaign with the `deep` Foundry profile:
+# 10,000 runs * 200 depth = 2,000,000 randomised handler calls against the
+# Vault. Far heavier than the PR-time `ci` profile (300k calls), the deep
+# campaign is the evidence-backed answer to "are the invariants genuinely
+# under tension across the full action space?" The badge on README turns
+# green only after a fresh run passed end-to-end.
+#
+# Scheduled at 02:00 UTC so results are visible at the start of UK morning.
+# `workflow_dispatch` permits manual triggering for validation runs without
+# waiting for the cron tick.
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch: {}
+
+# Cancel any in-flight deep-fuzz when a new one starts — there is no value
+# in two overlapping 2M-call campaigns running against the same SHA.
+concurrency:
+  group: deep-fuzz-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deep-invariant:
+    runs-on: ubuntu-latest
+    # 2M handler calls is empirically ~30-45 minutes on a 2-vCPU runner;
+    # cap at 2h so a runaway invariant can never burn an entire job slot.
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1
+        with:
+          version: stable
+
+      - name: Install deps
+        run: forge install
+
+      - name: Build contracts
+        run: forge build --sizes
+
+      - name: Run deep invariant campaign (10,000 runs * 200 depth)
+        env:
+          FOUNDRY_PROFILE: deep
+        run: |
+          forge test --match-contract InvariantVault -vvv 2>&1 | tee deep-fuzz-results.txt
+          if grep -q "\[FAIL\]" deep-fuzz-results.txt; then
+            echo "::error::Invariant violation detected in the deep campaign"
+            exit 1
+          fi
+
+      - name: Set up Node (for corpus-coverage parser)
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4
+        with:
+          node-version: '20'
+
+      - name: Corpus-coverage gate — every selector must clear 1000 calls
+        # At 2M calls across 11 selectors the average is ~180k each. 1000 is
+        # a generous floor that still catches any selector reduced to a
+        # rounding error of the campaign by a handler edit.
+        run: node assurance/bin/corpus-coverage.mjs deep-fuzz-results.txt --min-calls 1000
+
+      - name: Generate deep-fuzz summary
+        # Pull the [PASS]/[FAIL] header and the per-selector JSON into a
+        # single short markdown summary for the artifact and the job log.
+        run: |
+          {
+            echo "# Deep Fuzz — nightly summary"
+            echo ""
+            echo "**Commit:** \`${GITHUB_SHA}\`  "
+            echo "**Profile:** \`FOUNDRY_PROFILE=deep\` (10,000 runs * 200 depth = 2,000,000 calls)"
+            echo "**Run:** ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo ""
+            echo "## Invariant results"
+            echo ""
+            echo '```'
+            grep -E '^\[(PASS|FAIL)\]' deep-fuzz-results.txt || true
+            echo '```'
+            echo ""
+            echo "## Per-selector corpus coverage"
+            echo ""
+            echo '```json'
+            node assurance/bin/corpus-coverage.mjs deep-fuzz-results.txt --min-calls 1000 --json
+            echo '```'
+          } > deep-fuzz-summary.md
+          cat deep-fuzz-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload deep-fuzz artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: deep-fuzz-results
+          path: |
+            deep-fuzz-results.txt
+            deep-fuzz-summary.md
+          retention-days: 30

@@ -1,0 +1,33 @@
+Compiling 1 files with Solc 0.8.24
+Solc 0.8.24 finished in 1.23s
+Compiler run successful!
+
+Ran 11 tests for test/invariant/InvariantVault.t.sol:InvariantVault
+[PASS] invariant_solvency() (runs: 500, calls: 50000, reverts: 0)
+
+|-------------------+--------------------+-------+---------+----------|
+| Contract          | Selector           | Calls | Reverts | Discards |
++=====================================================================+
+| BorrowHandler     | borrow             | 5089  | 0       | 0        |
+|-------------------+--------------------+-------+---------+----------|
+| BorrowHandler     | repay              | 4972  | 0       | 0        |
+|-------------------+--------------------+-------+---------+----------|
+| CollateralHandler | depositCollateral  | 4960  | 0       | 0        |
+|-------------------+--------------------+-------+---------+----------|
+| CollateralHandler | withdrawCollateral | 4938  | 0       | 0        |
+|-------------------+--------------------+-------+---------+----------|
+| DepositHandler    | deposit            | 4978  | 0       | 0        |
+|-------------------+--------------------+-------+---------+----------|
+| DepositHandler    | withdraw           | 4986  | 0       | 0        |
+|-------------------+--------------------+-------+---------+----------|
+| DonationHandler   | donateCollateral   | 5004  | 0       | 0        |
+|-------------------+--------------------+-------+---------+----------|
+| DonationHandler   | donateDebt         | 5030  | 0       | 0        |
+|-------------------+--------------------+-------+---------+----------|
+| LiquidateHandler  | liquidate          | 0     | 0       | 0        |
+|-------------------+--------------------+-------+---------+----------|
+| OracleHandler     | setPrice           | 5052  | 0       | 0        |
+|-------------------+--------------------+-------+---------+----------|
+| WarpHandler       | warp               | 4991  | 0       | 0        |
+
+Suite result: ok. 11 passed; 0 failed; 0 skipped; finished in 11.07s
