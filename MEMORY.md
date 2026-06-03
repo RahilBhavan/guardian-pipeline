@@ -298,3 +298,35 @@ README/CLAUDE.md as needing verification against the source papers — they were
 load-bearing for the old framing and I cannot confirm they exist as cited.
 Git history can't be un-one-shotted, but this pass is itself a real, incremental
 development increment with honest commits.
+
+## 2026-06-03 — Shipped the stranded 12-invariant catalogue sweep (PR #8)
+What: Resumed after a week away and found 7 uncommitted files sitting directly
+on `main`, dated the evening of 2026-05-27 (after PR #7 merged): the
+`assurance/src/invariants.ts` catalogue extended 6→12, README updates
+(12-invariant table with MutantINV* proofs, badge 97→100%, 52→91 tests, 6→7 CI
+jobs), and regenerated assurance reports (7→10 exploit scenarios). Verified all
+three CI assurance gates + docs-drift-check pass locally, then shipped as
+branch `feat/assurance-12-invariant-catalogue` → PR #8.
+Why: The work was complete but stranded — uncommitted on `main`, against the
+repo's no-direct-commits-to-main convention. Context: the 12-invariant sprint
+itself (PRs #3–#7: mutation-proven INV-07..12, named-CVE exploit replays,
+Echidna harness, differential fuzz, nightly deep-fuzz, mirror-parity CI job)
+merged 2026-05-27 but was never logged here.
+Rejected: Discarding and regenerating the diff from scratch — it was already
+correct and verified.
+
+## 2026-06-03 — assurance `npm test` added to CI + latent test failure fixed
+What: `cd assurance && npm test` failed on a clean `main` checkout (49/50):
+`workflow.test.ts` asserts the CI coverage job's YAML never matches
+`/runs\.json/`, but commit `6b58700` added a YAML *comment* in that job
+explaining that AMC consumes runs.json — the comment tripped the regex. Fix
+(branch `fix/assurance-test-in-ci`): the test now strips full-line YAML
+comments before asserting, and the CI assurance job gained a
+"Run assurance unit tests" step (`npm ci && npm test`) before the score gate.
+Why: CI runs `npm run check` / `npm run trace` but never ran `npm test`, so the
+failing test shipped to `main` unnoticed in PR #7. The behavioural assertion
+(coverage job emits no runs.json) is unchanged; comments documenting the rule
+no longer count as violations.
+Rejected: Deleting the workflow comment instead (it is valuable documentation —
+the test was the over-strict side); leaving `npm test` out of CI (the exact gap
+that let this ship).

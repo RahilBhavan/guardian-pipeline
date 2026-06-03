@@ -76,9 +76,15 @@ test('the coverage job does not feed AMC fuzz inputs', () => {
   // The coverage job caps fuzz at 25/50 for instrumentation speed. That cap
   // must never be the source of truth for AMC — only the invariant-fuzz job's
   // runs.json is. Smoke check: the coverage job must NOT emit runs.json.
+  // YAML comments are allowed to mention runs.json (they document this very
+  // rule) — only non-comment lines count as behaviour.
   const block = extractJob('coverage');
+  const behaviour = block
+    .split('\n')
+    .filter((line) => !line.trimStart().startsWith('#'))
+    .join('\n');
   assert.doesNotMatch(
-    block,
+    behaviour,
     /runs\.json/,
     'coverage job must not emit runs.json — only invariant-fuzz produces the AMC artifact',
   );
