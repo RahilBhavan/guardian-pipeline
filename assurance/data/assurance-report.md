@@ -1,7 +1,7 @@
 # Guardian Pipeline — Assurance Report
 
 > **Assurance Score: 82/100 — grade B-**  
-> Generated 2026-05-27T18:07:06.738Z · commit `6b58700`
+> Generated 2026-06-03T09:16:28.476Z · commit `93262dc`
 
 The Assurance Score rolls the repository's pre-deployment evidence into one reproducible number — static verification, exploit-replay resistance, and the traceability of every security-review finding to a re-runnable check. It is a worked demonstration of one design response — recomputing assurance on every commit — to the open empirical question both cited papers raise about audit effectiveness. The "continuous, multi-layered" framing is this project's, not a claim of either paper.
 
@@ -10,7 +10,7 @@ The Assurance Score rolls the repository's pre-deployment evidence into one repr
 | Component | Score | Weight | Detail |
 |---|---|---|---|
 | Static Verification | 60 | 45% | Vault.sol 100% line / 100% branch; fuzz campaign 0x0 (intensity 0/100); runs.json missing — capped at 60 |
-| Exploit Resistance | 100 | 35% | 7/7 exploit classes resisted (7 prevented, 0 detected, 0 missed) |
+| Exploit Resistance | 100 | 35% | 10/10 exploit classes resisted (10 prevented, 0 detected, 0 missed) |
 | Finding Traceability | 100 | 20% | 100% weighted coverage of security-relevant findings |
 
 ## Finding traceability matrix
@@ -30,17 +30,20 @@ The Assurance Score rolls the repository's pre-deployment evidence into one repr
 
 ## Exploit-replay catalogue
 
-7 prevented · 0 detected · 0 missed — 100.0% resistance.
+10 prevented · 0 detected · 0 missed — 100.0% resistance.
 
 | Scenario | Exploit class | Outcome | Safety-net invariants |
 |---|---|---|---|
 | EXP-01 ERC-4626 first-depositor inflation | Share-price manipulation | PREVENTED | INV-01, INV-04 |
 | EXP-02 Euler 2023 - donateToReserves health bypass | Health-check bypass on collateral reduction | PREVENTED | INV-01, INV-06 |
-| EXP-03 Cream 2021 - oracle staleness defense | Oracle suppression / stale price | PREVENTED | INV-11 |
+| EXP-03 Cream 2021 - donation-inflated balance oracle | Oracle price manipulation via donation | PREVENTED | INV-01, INV-11 |
 | EXP-04 Over-borrow beyond collateral cap | Collateralisation bypass | PREVENTED | INV-01 |
-| EXP-05 Interest-driven liquidation | Under-collateralisation via interest accrual | PREVENTED | INV-01, INV-06 |
-| EXP-06 bZx Sep 2020 - cross-account state mutation | Cross-account access (transferFrom typo) | PREVENTED | INV-06 |
-| EXP-07 Oracle price-drop liquidation | Collateral-value collapse | PREVENTED | INV-01, INV-06 |
+| EXP-05 Interest-driven liquidation | No-free-lunch on liquidation (INV-08 surface) | PREVENTED | INV-01, INV-08 |
+| EXP-06 bZx Sep 2020 - transferFrom typo | ERC-20 transferFrom defect (mint-on-credit) | PREVENTED | INV-06 |
+| EXP-07 Oracle price-drop liquidation | No-free-lunch under price-drop liquidation (INV-08 surface) | PREVENTED | INV-01, INV-08 |
+| EXP-08 Compound-style accrual rounding loop | Per-borrower debt rounding flipped against the protocol | PREVENTED | INV-10 |
+| EXP-09 Beanstalk-style stale-oracle liquidation | Action against a price the contract should distrust | PREVENTED | INV-11 |
+| EXP-10 ERC-4626 per-share rounding (a16z) | Sub-rounding-threshold donation across N depositors | PREVENTED | INV-01, INV-04 |
 
 ## Research grounding
 
