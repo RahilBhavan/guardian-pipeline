@@ -1,8 +1,8 @@
 /**
- * invariants.ts — the canonical catalogue of the six Vault invariants.
+ * invariants.ts — the canonical catalogue of the twelve Vault invariants.
  *
  * This is the single source of truth the assurance engine resolves security-review
- * findings and exploit replays against. The same six properties are asserted
+ * findings and exploit replays against. The same twelve properties are asserted
  * by test/invariant/InvariantVault.t.sol and mirrored live by
  * guardian/src/evaluator.ts; `harnessTest` records the Foundry function name so
  * the traceability resolver can verify a finding's reference is not dangling.
@@ -20,7 +20,7 @@ export interface InvariantMeta {
   harnessTest: string;
 }
 
-/** The six invariants, in canonical INV-01..INV-06 order. */
+/** The twelve invariants, in canonical INV-01..INV-12 order. */
 export const INVARIANTS: readonly InvariantMeta[] = [
   {
     id: 'INV-01',
@@ -58,6 +58,42 @@ export const INVARIANTS: readonly InvariantMeta[] = [
     formula: 'userSupplyShares[u] == 0  =>  userDebt(u) == 0',
     harnessTest: 'invariant_noUncollateralisedDebt',
   },
+  {
+    id: 'INV-07',
+    name: 'Per-block solvency monotonicity',
+    formula: '(totalAssets - totalSupplyAssets)_t >= (totalAssets - totalSupplyAssets)_{t-1}',
+    harnessTest: 'invariant_solvencyMonotone',
+  },
+  {
+    id: 'INV-08',
+    name: 'No-free-lunch on liquidation',
+    formula: 'forall Liquidated: seized * price * BPS <= paid * (BPS + bonus) * WAD',
+    harnessTest: 'invariant_liquidationNoFreeLunch',
+  },
+  {
+    id: 'INV-09',
+    name: 'Per-position debt monotonicity under accrual',
+    formula: 'userBorrowShares[a]_t == userBorrowShares[a]_{t-1}  =>  userDebt(a)_t >= userDebt(a)_{t-1}',
+    harnessTest: 'invariant_debtMonotoneUnderAccrual',
+  },
+  {
+    id: 'INV-10',
+    name: 'Debt rounding favours the protocol',
+    formula: 'sum(userDebt[a]) <= totalBorrowed',
+    harnessTest: 'invariant_debtRoundingFavoursProtocol',
+  },
+  {
+    id: 'INV-11',
+    name: 'Oracle freshness gate',
+    formula: 'block.timestamp - oracle.lastUpdatedAt <= MAX_STALENESS',
+    harnessTest: 'invariant_oracleFreshnessGate',
+  },
+  {
+    id: 'INV-12',
+    name: 'Accrue idempotence',
+    formula: '(borrowIndex, totalSupplyAssets, totalBorrowShares, lastAccrualTime) unchanged by a second accrue() in the same block',
+    harnessTest: 'invariant_accrueIdempotent',
+  },
 ] as const;
 
 /** The set of valid invariant IDs. */
@@ -79,7 +115,7 @@ export const AUXILIARY_HARNESS_TESTS: readonly string[] = [
   'invariant_reentrancySafe',
 ] as const;
 
-/** The set of harness `invariant_*` function names — six core + auxiliary. */
+/** The set of harness `invariant_*` function names — twelve core + auxiliary. */
 export const HARNESS_TESTS: ReadonlySet<string> = new Set([
   ...INVARIANTS.map((i) => i.harnessTest),
   ...AUXILIARY_HARNESS_TESTS,

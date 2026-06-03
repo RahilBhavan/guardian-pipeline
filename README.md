@@ -2,7 +2,7 @@
 
 [![Invariant CI](https://github.com/rahilbhavan/guardian-pipeline/actions/workflows/invariant-ci.yml/badge.svg)](https://github.com/rahilbhavan/guardian-pipeline/actions/workflows/invariant-ci.yml)
 [![Deep Fuzz](https://github.com/rahilbhavan/guardian-pipeline/actions/workflows/deep-fuzz.yml/badge.svg?event=schedule)](https://github.com/rahilbhavan/guardian-pipeline/actions/workflows/deep-fuzz.yml)
-[![Vault coverage](https://img.shields.io/badge/Vault.sol%20line%20coverage-97%25-brightgreen)](./docs/invariants.md#testing-strategy)
+[![Vault coverage](https://img.shields.io/badge/Vault.sol%20line%20coverage-100%25-brightgreen)](./docs/invariants.md#testing-strategy)
 [![AMC score](https://img.shields.io/badge/AMC%20score-CI--gated%20%E2%89%A580-0052FF)](./docs/assurance.md)
 [![Built for Base](https://img.shields.io/badge/Base_L2-0052FF)](https://base.org)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.24-363636)](https://soliditylang.org)
@@ -70,8 +70,8 @@ Four layers — three runtime layers plus an assurance layer that scores them:
    into a single composite **Assurance Score** that CI gates on.
 
 The off-chain evaluator (`guardian/src/evaluator.ts`) is a deliberate **1:1 mirror
-across all 12 invariants** (state-snapshot for 6, state-delta for 2,
-event-reconciliation for 1, stateless-derived for 3) of the Solidity
+across all 12 invariants** (state-snapshot for 9, state-delta for 2,
+event-reconciliation for 1) of the Solidity
 `invariant_*` functions in `test/invariant/InvariantVault.t.sol` — it discovers
 every account from vault events and reads exact per-user state, so the
 off-chain check is the same maths, not a sampled proxy. See
@@ -92,13 +92,22 @@ plainly. The **Class** column is the honest distinction:
 | INV-04 | Lender-value floor | `totalSupplyAssets ≥ totalSupplyShares` | Structural — non-trivial proof, confirmed empirically |
 | INV-05 | Interest-index floor | `borrowIndex ≥ 1e18` | Structural — true by construction; cheap regression check |
 | INV-06 | No uncollateralised debt | `∀u: userSupplyShares[u] == 0 ⇒ userDebt(u) == 0` | **Fuzz-tensioned** — guarded by `withdraw`/`liquidate` logic |
+| INV-07 | Per-block solvency monotonicity | `(totalAssets − totalSupplyAssets)_t ≥ (…)_{t−1}` | **Fuzz-tensioned** — load-bearing per `test/mutant/MutantINV07.t.sol` |
+| INV-08 | No-free-lunch on liquidation | `seized · price · BPS ≤ paid · (BPS + bonus) · WAD` | **Fuzz-tensioned** — load-bearing per `test/mutant/MutantINV08.t.sol` |
+| INV-09 | Per-position debt monotonicity under accrual | `userBorrowShares[a]_t = userBorrowShares[a]_{t−1} ⇒ userDebt(a)_t ≥ userDebt(a)_{t−1}` | **Fuzz-tensioned** — load-bearing per `test/mutant/MutantINV09.t.sol` |
+| INV-10 | Debt rounding favours the protocol | `Σ userDebt[a] ≤ totalBorrowed` | **Fuzz-tensioned** — load-bearing per `test/mutant/MutantINV10.t.sol` |
+| INV-11 | Oracle freshness gate | `block.timestamp − oracle.lastUpdatedAt ≤ MAX_STALENESS` | **Fuzz-tensioned** — load-bearing per `test/mutant/MutantINV11.t.sol` |
+| INV-12 | Accrue idempotence | A second `accrue()` in the same block leaves `(borrowIndex, totalSupplyAssets, totalBorrowShares, lastAccrualTime)` unchanged | **Fuzz-tensioned** — load-bearing per `test/mutant/MutantINV12.t.sol` |
 
-INV-01 and INV-06 are the properties the fuzz campaign genuinely *attacks*;
-INV-01 caught a real one-wei solvency leak during development (review finding
-GUA-03). INV-04/05 are structural and the harness keeps them as regression
-checks. The harness also runs a `DonationHandler` so the donation/inflation
-attack class is actually exercised, not just asserted. Full reference, including
-what breaks each invariant: **[docs/invariants.md](docs/invariants.md)**.
+INV-01, INV-06, and INV-07…INV-12 are the properties the fuzz campaign
+genuinely *attacks* — each one is paired with a `test/mutant/MutantINV*.t.sol`
+mutation test that breaks the Vault on purpose and asserts the matching
+`invariant_*` catches it. INV-01 caught a real one-wei solvency leak during
+development (review finding GUA-02). INV-02/03 are accounting identities;
+INV-04/05 are structural and the harness keeps them as regression checks. The
+harness also runs a `DonationHandler` so the donation/inflation attack class is
+actually exercised, not just asserted. Full reference, including what breaks
+each invariant: **[docs/invariants.md](docs/invariants.md)**.
 
 ---
 
@@ -156,7 +165,7 @@ git clone https://github.com/rahilbhavan/guardian-pipeline
 cd guardian-pipeline
 forge install                        # forge-std + openzeppelin-contracts
 
-forge test                           # 52 tests: unit + parameterized fuzz + invariant + exploit replay
+forge test                           # 91 tests: unit + parameterized fuzz + invariant + exploit replay + mutant
 cd assurance && npm install && npm test && cd ..
 ```
 
@@ -187,11 +196,12 @@ evaluate → alert — works; it does not claim the monitor catches novel exploi
 
 ## CI/CD pipeline
 
-`.github/workflows/invariant-ci.yml` runs **6 jobs** on every push/PR to `main`:
+`.github/workflows/invariant-ci.yml` runs **7 jobs** on every push/PR to `main`:
 
 | Job | What it does | Feeds AMC? |
 |-----|--------------|------------|
 | `build` | `forge build --sizes`; gates all other jobs | no |
+| `mirror-parity` | Asserts every harness `invariant_*` has a paired entry in `guardian/src/evaluator.ts` | no |
 | `invariant-fuzz` | 2,000-run invariant campaign; fails on any `[FAIL]` | yes — emits `runs.json` artifact AMC consumes |
 | `coverage` | LCOV report; gates `src/Vault.sol` at ≥ 85% line coverage | no — capped runs/depth are coverage-budget only |
 | `static-analysis` | Slither + Aderyn, uploaded as artifacts (non-gating) | no |
@@ -213,7 +223,7 @@ guardian-pipeline/
 ├── security-review/      # Self-conducted security review + machine-readable findings
 ├── assurance/            # Assurance-Score tooling (Node)
 ├── supabase/migrations/  # Database schema + RLS policies
-├── .github/workflows/    # CI/CD pipeline (6 jobs)
+├── .github/workflows/    # CI/CD pipeline (7 jobs)
 ├── guardian/             # TypeScript runtime monitor (viem)
 ├── dashboard/            # React + Vite monitoring dashboard
 └── docs/                 # Architecture, invariants, setup, assurance
@@ -227,7 +237,7 @@ guardian-pipeline/
 |-------|-------|
 | Smart contracts | Solidity 0.8.24 · OpenZeppelin v5 · Foundry / Forge · Anvil · Cast |
 | Static analysis | Slither · Aderyn |
-| CI/CD | GitHub Actions (6 jobs) |
+| CI/CD | GitHub Actions (7 jobs) |
 | Runtime monitor | TypeScript (strict) · viem · Alchemy WebSocket · pino |
 | Persistence | Supabase (Postgres + real-time) |
 | Dashboard | React 18 · Vite |
