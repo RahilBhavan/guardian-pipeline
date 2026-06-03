@@ -286,6 +286,16 @@ jobs:
           forge coverage --report summary --no-match-coverage "(script|test)" 2>&1 \
             | tee assurance/data/coverage-summary.txt
 
+      - name: Run assurance unit tests
+        working-directory: assurance
+        # The node:test suite covers the resolver, the score engine, and the
+        # workflow-wiring asserts in workflow.test.ts. The check/trace gates
+        # below do not run it, so without this step a failing test can ship
+        # on main unnoticed.
+        run: |
+          npm ci
+          npm test
+
       - name: Compute Assurance Score and enforce the gate
         working-directory: assurance
         # The Assurance Score is a pre-deployment metric — three components, all
@@ -294,9 +304,7 @@ jobs:
         # `check` also writes TRACEABILITY_SUMMARY.md and verifies the README
         # block matches the resolver's tier counts (see next step for why
         # that matters).
-        run: |
-          npm ci
-          npm run check -- --min-score 80
+        run: npm run check -- --min-score 80
 
       - name: Verify README traceability sentence matches resolver
         working-directory: assurance
