@@ -31,7 +31,7 @@ function backoffMsFor(attempt: number): number {
   return INITIAL_LOAD_BACKOFF_MS[Math.max(0, idx)] ?? 30000;
 }
 
-/** All six invariants set to a single status value. */
+/** All twelve invariants set to a single status value. */
 function allInvariants(value: boolean | null): Record<string, boolean | null> {
   return Object.fromEntries(INVARIANTS.map((i) => [i.id, value]));
 }

@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-06-03T09:16:28.476Z",
-  "gitSha": "93262dc",
+  "generatedAt": "2026-06-10T09:23:48.059Z",
+  "gitSha": "b349ec8",
   "thesis": "The Assurance Score rolls the repository's pre-deployment evidence into one reproducible number — static verification, exploit-replay resistance, and the traceability of every security-review finding to a re-runnable check. It is a worked demonstration of one design response — recomputing assurance on every commit — to the open empirical question both cited papers raise about audit effectiveness. The \"continuous, multi-layered\" framing is this project's, not a claim of either paper.",
   "research": [
     {
@@ -13,23 +13,23 @@
     }
   ],
   "score": {
-    "overall": 82,
-    "grade": "B-",
+    "overall": 94,
+    "grade": "A",
     "components": [
       {
         "key": "staticVerification",
         "label": "Static Verification",
-        "score": 60,
+        "score": 86.1,
         "available": true,
         "weight": 0.45,
-        "detail": "Vault.sol 100% line / 100% branch; fuzz campaign 0x0 (intensity 0/100); runs.json missing — capped at 60",
+        "detail": "Vault.sol 100% line / 88.9% branch; fuzz campaign 2000x150 (intensity 64/100)",
         "metrics": {
           "lineCoverage": 100,
-          "branchCoverage": 100,
-          "invariantRuns": 0,
-          "invariantDepth": 0,
-          "fuzzIntensity": 0,
-          "invariantArtifactPresent": false
+          "branchCoverage": 88.9,
+          "invariantRuns": 2000,
+          "invariantDepth": 150,
+          "fuzzIntensity": 64,
+          "invariantArtifactPresent": true
         }
       },
       {
@@ -598,6 +598,18 @@
       "gitSha": "93262dc",
       "overall": 82,
       "grade": "B-"
+    },
+    {
+      "at": "2026-06-10T09:21:22.759Z",
+      "gitSha": "b9100eb",
+      "overall": 94,
+      "grade": "A"
+    },
+    {
+      "at": "2026-06-10T09:23:48.059Z",
+      "gitSha": "b349ec8",
+      "overall": 94,
+      "grade": "A"
     }
   ],
   "gate": {

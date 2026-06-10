@@ -150,7 +150,7 @@ the build if it drifts (`assurance trace --check-exploit-docs`).
 
 CI fails the build if the composite score drops below **80**. (An earlier
 design had a fourth "Continuous Monitoring" component scored from a live
-deployment — it was removed, since there is no hosted deployment to score.)
+deployment — it was removed, since there is no hosted Guardian bot service to score.)
 See **[docs/assurance.md](docs/assurance.md)**.
 
 ---
@@ -173,6 +173,20 @@ Running the **runtime monitor** and **dashboard** additionally needs an Alchemy
 key and a Supabase project (both free tiers); full instructions — keystore
 setup, Base Sepolia deployment, starting the bot — are in
 **[docs/setup.md](docs/setup.md)**.
+
+---
+
+## Live dashboard
+
+The monitoring dashboard is deployed on Vercel (static build; reads Supabase via
+the anon key). It shows all **12 invariants**, the AMC panels, and realtime
+alerts when the Guardian bot is running against a vault.
+
+**Dashboard:** https://guardian.rahilbhavan.com
+
+Set `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_VAULT_ADDRESS` in
+the Vercel project settings (see `dashboard/.env.example`). Without those env
+vars the UI loads but shows no live data.
 
 ---
 
@@ -253,8 +267,9 @@ front:
 - **Not production code.** `Vault.sol` is a teaching example — single asset, no
   price oracle, no bad-debt reserve. Do not custody real value with it. See
   [SECURITY.md](SECURITY.md).
-- **Nothing is hosted — no live URL.** The runtime monitor and dashboard are
-  runnable reference implementations; this repo does not point at a live
+- **No hosted monitor service.** The Guardian bot is a runnable reference
+  implementation you operate locally; the **dashboard** is deployed on Vercel but
+  requires your Supabase + vault env vars for live data. this repo does not point at a live
   deployment, has never been adversarially tested against a real attacker, and
   has no incident-replay history against this specific vault. The "continuous"
   in "continuous monitoring" refers to the design pattern the bot implements,
