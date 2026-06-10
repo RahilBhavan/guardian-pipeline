@@ -26,3 +26,5 @@ dashboard/.env
 # Editor / OS
 .DS_Store
 *.log
+.vercel
+assurance/data/runs.json

@@ -1,7 +1,7 @@
 # Guardian Pipeline — Assurance Report
 
-> **Assurance Score: 82/100 — grade B-**  
-> Generated 2026-06-03T09:16:28.476Z · commit `93262dc`
+> **Assurance Score: 94/100 — grade A**  
+> Generated 2026-06-10T09:23:48.059Z · commit `b349ec8`
 
 The Assurance Score rolls the repository's pre-deployment evidence into one reproducible number — static verification, exploit-replay resistance, and the traceability of every security-review finding to a re-runnable check. It is a worked demonstration of one design response — recomputing assurance on every commit — to the open empirical question both cited papers raise about audit effectiveness. The "continuous, multi-layered" framing is this project's, not a claim of either paper.
 
@@ -9,7 +9,7 @@ The Assurance Score rolls the repository's pre-deployment evidence into one repr
 
 | Component | Score | Weight | Detail |
 |---|---|---|---|
-| Static Verification | 60 | 45% | Vault.sol 100% line / 100% branch; fuzz campaign 0x0 (intensity 0/100); runs.json missing — capped at 60 |
+| Static Verification | 86.1 | 45% | Vault.sol 100% line / 88.9% branch; fuzz campaign 2000x150 (intensity 64/100) |
 | Exploit Resistance | 100 | 35% | 10/10 exploit classes resisted (10 prevented, 0 detected, 0 missed) |
 | Finding Traceability | 100 | 20% | 100% weighted coverage of security-relevant findings |
 

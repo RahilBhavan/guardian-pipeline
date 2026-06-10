@@ -8,7 +8,7 @@
  * the traceability resolver can verify a finding's reference is not dangling.
  */
 
-/** Static metadata for one of the six monitored invariants. */
+/** Static metadata for one monitored invariant. */
 export interface InvariantMeta {
   /** Canonical identifier, e.g. "INV-01". */
   id: string;
@@ -101,15 +101,7 @@ export const INVARIANT_IDS: ReadonlySet<string> = new Set(INVARIANTS.map((i) => 
 
 /**
  * Auxiliary harness tests that defend a finding's class but are not one of
- * the six top-level invariants. Listed explicitly so the traceability
- * resolver can validate references without inventing a synthetic INV-XX id
- * for every cross-cutting safety property.
- *
- * `invariant_reentrancySafe` lives in {InvariantVault} and exercises the
- * {Vault.nonReentrant} guard via {ReentrantAttackToken}; it binds to
- * security-review finding GUA-01 (Reentrancy exposure on state-mutating
- * functions) — the class INV-01 covers in spirit, but the canonical
- * {MockERC20} harness could never reach.
+ * the twelve top-level invariants.
  */
 export const AUXILIARY_HARNESS_TESTS: readonly string[] = [
   'invariant_reentrancySafe',

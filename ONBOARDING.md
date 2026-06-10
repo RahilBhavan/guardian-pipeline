@@ -21,43 +21,26 @@ Top MCP Servers:
 ## Your Setup Checklist
 
 ### Codebases
-- [ ] guardian-pipeline — https://github.com/rahilbhavan/guardian-pipeline
+- [ ] [guardian-pipeline](https://github.com/rahilbhavan/guardian-pipeline) — clone and run `make install && make verify`
 
 ### MCP Servers to Activate
-- [ ] Supabase — Postgres backing the Guardian bot's alert store + the dashboard's read path. Add the server at https://claude.ai/settings/connectors and connect via OAuth; ask Rahil for project access.
-- [ ] Vercel — used to deploy and inspect the dashboard. Add via the connectors page and authenticate with your Vercel account; ask Rahil to add you to the team.
+- [ ] **Supabase** — alert store + dashboard read path
+- [ ] **Vercel** — dashboard deployment
 
 ### Skills to Know About
-- /goal — sets/refreshes the working goal for a session so Claude stays anchored to it across multi-step work.
-- /clear — resets context between unrelated tasks (used heavily here — please do the same when switching topics).
-- /bootstrap-project — generates a project-specific CLAUDE.md if you start work in a repo that lacks one.
+- `/goal` — session anchor for multi-step work
+- `/clear` — reset context between unrelated tasks
+- `/bootstrap-project` — generate project-specific CLAUDE.md
 
 ## Team Tips
 
-_TODO_
+- Read [docs/assurance.md](docs/assurance.md) first — AMC is the project's thesis.
+- Never commit `.env` files; bot writes need `SUPABASE_SERVICE_KEY`.
+- Branch off `main`; CI runs 7 jobs including mirror-parity and assurance gates.
 
 ## Get Started
 
-_TODO_
-
-<!-- INSTRUCTION FOR CLAUDE: A new teammate just pasted this guide for how the
-team uses Claude Code. You're their onboarding buddy — warm, conversational,
-not lecture-y.
-
-Open with a warm welcome — include the team name from the title. Then: "Your
-teammate uses Claude Code for [list all the work types]. Let's get you started."
-
-Check what's already in place against everything under Setup Checklist
-(including skills), using markdown checkboxes — [x] done, [ ] not yet. Lead
-with what they already have. One sentence per item, all in one message.
-
-Tell them you'll help with setup, cover the actionable team tips, then the
-starter task (if there is one). Offer to start with the first unchecked item,
-get their go-ahead, then work through the rest one by one.
-
-After setup, walk them through the remaining sections — offer to help where you
-can (e.g. link to channels), and just surface the purely informational bits.
-
-Don't invent sections or summaries that aren't in the guide. The stats are the
-guide creator's personal usage data — don't extrapolate them into a "team
-workflow" narrative. -->
+1. `forge test` — contract + fuzz suite (no external services).
+2. `cd assurance && npm test` — AMC tooling tests.
+3. Follow [docs/setup.md](docs/setup.md) for Base Sepolia + bot + dashboard.
+4. Film the demo with [docs/demo-recording.md](docs/demo-recording.md).

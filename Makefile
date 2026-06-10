@@ -106,7 +106,11 @@ dashboard-build: ## Type-check and bundle the dashboard for production
 .PHONY: halmos echidna slither aderyn
 
 halmos: ## [sprint 3] Symbolic proofs for INV-01, INV-06, INV-10
-	@echo "[halmos] not yet wired — sprint 3 adds symbolic proofs as a CI gate"
+	@if command -v halmos >/dev/null 2>&1; then \
+		forge test --match-contract Halmos --ffi ; \
+	else \
+		echo "[halmos] not yet wired — install halmos (sprint 3)"; \
+	fi
 
 echidna: ## Independent fuzz campaign cross-checking Foundry
 	@if command -v echidna >/dev/null 2>&1; then \
@@ -118,8 +122,16 @@ echidna: ## Independent fuzz campaign cross-checking Foundry
 		echo "  CI uses the Trail of Bits docker image."; \
 	fi
 
-slither: ## [sprint 3] Static analysis feeding the AMC score
-	@echo "[slither] not yet wired — sprint 3 adds slither output to the AMC score"
+slither: ## Static analysis (non-gating; artifacts uploaded in CI)
+	@if command -v slither >/dev/null 2>&1; then \
+		slither . --config-file slither.config.json --fail-none ; \
+	else \
+		echo "[slither] binary not installed — CI uploads artifacts from invariant-ci"; \
+	fi
 
-aderyn: ## [sprint 3] Static analysis feeding the AMC score
-	@echo "[aderyn] not yet wired — sprint 3 adds aderyn output to the AMC score"
+aderyn: ## Static analysis (non-gating; artifacts uploaded in CI)
+	@if command -v aderyn >/dev/null 2>&1; then \
+		aderyn ; \
+	else \
+		echo "[aderyn] binary not installed — CI uploads artifacts from invariant-ci"; \
+	fi

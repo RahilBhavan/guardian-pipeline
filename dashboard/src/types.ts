@@ -32,14 +32,14 @@ export interface LatencyPoint {
   checkedAt: Date;
 }
 
-/** Static metadata for one of the six monitored invariants. */
+/** Static metadata for one monitored invariant. */
 export interface InvariantMeta {
   id: string;
   name: string;
   description: string;
 }
 
-/** The six invariants, in canonical order — matches the Solidity harness. */
+/** All 12 invariants, in canonical order — matches the Solidity harness and guardian evaluator. */
 export const INVARIANTS: readonly InvariantMeta[] = [
   { id: 'INV-01', name: 'Protocol solvency', description: 'cash + totalBorrowed ≥ totalSupplyAssets' },
   { id: 'INV-02', name: 'Supply-share integrity', description: 'totalSupplyShares = Σ userSupplyShares' },
@@ -47,4 +47,10 @@ export const INVARIANTS: readonly InvariantMeta[] = [
   { id: 'INV-04', name: 'Lender-value floor', description: 'totalSupplyAssets ≥ totalSupplyShares' },
   { id: 'INV-05', name: 'Interest-index floor', description: 'borrowIndex ≥ 1e18' },
   { id: 'INV-06', name: 'No uncollateralised debt', description: 'zero collateral ⇒ zero debt' },
+  { id: 'INV-07', name: 'Solvency monotonicity', description: 'solvency margin never shrinks between observations' },
+  { id: 'INV-08', name: 'Liquidation no-free-lunch', description: 'seized collateral ≤ paid × (1 + bonus)' },
+  { id: 'INV-09', name: 'Debt monotonicity', description: 'flat borrow shares ⇒ debt does not decrease' },
+  { id: 'INV-10', name: 'Debt rounding', description: 'Σ userDebt ≤ totalBorrowed' },
+  { id: 'INV-11', name: 'Oracle freshness', description: 'oracle age ≤ MAX_STALENESS' },
+  { id: 'INV-12', name: 'Accrue idempotence', description: 'second accrue() in same block is a no-op' },
 ] as const;
