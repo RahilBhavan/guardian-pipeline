@@ -63,6 +63,17 @@ For multi-step work, plan up front:
 
 Loop locally until each `verify` passes. Paste the green output. No "should work."
 
+## 5. Build up to the claim
+
+A hard goal is met by building the missing artifact — never by weakening the claim.
+
+- No relabeling, softened prose, or dropped verify targets to make reality fit.
+- Documenting partial coverage as "done" is a violation.
+- If the full claim is genuinely out of scope → stop and say so. Do not silently narrow it.
+
+✅ Write the missing test/code so coverage actually hits the target.
+❌ Edit the README/labels/verify list down to what already passes.
+
 ---
 
 ## Failure modes — these are violations
@@ -76,3 +87,4 @@ Loop locally until each `verify` passes. Paste the green output. No "should work
 | Picked one of two interpretations silently | Surface both, let the user pick |
 | Deleted "obviously dead" adjacent code | Mention it in the summary, leave it |
 | Wrote 200 lines | Throw out, write 50 |
+| Weakened a claim/label/README to match what already passes | Build the missing artifact, or stop and say the claim is out of scope |
