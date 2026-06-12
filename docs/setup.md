@@ -161,6 +161,28 @@ A healthy start logs `RPC connection OK`, `Vault contract verified on-chain`,
 > If `npm start` fails with a stale-config error, `dist/` is out of date — run
 > `npm run build` first, or use `npm run dev`.
 
+### Hosting the bot for free (Koyeb)
+
+The bot is an always-on worker, so it needs a host that does not sleep. Koyeb's
+free tier runs one container (0.1 vCPU / 512 MB) indefinitely with no credit
+card. `guardian/Dockerfile` deploys unchanged; the bot's health server doubles
+as the required HTTP port.
+
+1. Push this repo to GitHub, then sign in to [Koyeb](https://www.koyeb.com)
+   with GitHub.
+2. **Create Web Service → GitHub** → this repo. Set **builder = Dockerfile**,
+   **work directory = `guardian`**, **Dockerfile path = `guardian/Dockerfile`**.
+3. **Exposed port = `9090`**, **health check path = `/healthz`** (the bot's
+   liveness endpoint; returns 503 if blocks stop, so Koyeb restarts it).
+4. Add the same variables as the table above. Mark `ALCHEMY_KEY` and
+   `SUPABASE_SERVICE_KEY` as **secrets**; the rest are plain env vars. Set
+   `HEALTH_PORT=9090`.
+5. **Deploy.** When `blocks_checked` in Supabase starts advancing again, the
+   live dashboard is backed by a running monitor.
+
+> `guardian/fly.toml` is kept as an alternative for Fly.io, which now requires
+> billing (~$2/mo for one machine). Same Dockerfile either way.
+
 ## 7. Run the dashboard
 
 ```bash

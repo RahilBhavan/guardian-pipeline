@@ -9,7 +9,7 @@
 # Non-secret config lives in [env] below. The two secrets are set with
 # `fly secrets set` and never committed.
 
-app = "guardian-bot"
+app = "guardian-pipeline-bot"
 primary_region = "iad"
 
 [build]
