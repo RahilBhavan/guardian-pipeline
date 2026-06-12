@@ -27,4 +27,5 @@ dashboard/.env
 .DS_Store
 *.log
 .vercel
+.cursor/hooks/
 assurance/data/runs.json

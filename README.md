@@ -184,6 +184,10 @@ alerts when the Guardian bot is running against a vault.
 
 **Dashboard:** https://guardian.rahilbhavan.com
 
+**Public demo addresses** (Base Sepolia vault + tokens, no deploy required):
+[`demo/README.md`](demo/README.md) · `make demo-addresses` · Cursor subagent
+`guardian-demo`
+
 Set `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_VAULT_ADDRESS` in
 the Vercel project settings (see `dashboard/.env.example`). Without those env
 vars the UI loads but shows no live data.
@@ -240,6 +244,7 @@ guardian-pipeline/
 ├── .github/workflows/    # CI/CD pipeline (7 jobs)
 ├── guardian/             # TypeScript runtime monitor (viem)
 ├── dashboard/            # React + Vite monitoring dashboard
+├── demo/                 # Public testnet addresses + demo/README.md
 └── docs/                 # Architecture, invariants, setup, assurance
 ```
 
@@ -307,6 +312,7 @@ front:
 | [docs/guardian-bot.md](docs/guardian-bot.md) | The runtime monitor, module by module |
 | [docs/database.md](docs/database.md) | The Supabase schema, RLS model, and migrations |
 | [docs/setup.md](docs/setup.md) | Local setup, deployment, and the staged demo |
+| [demo/README.md](demo/README.md) | Public Base Sepolia demo addresses (no deploy) |
 | [docs/glossary.md](docs/glossary.md) | Every project identifier and term, defined |
 | [SECURITY.md](SECURITY.md) | Threat model, trust boundaries, responsible disclosure |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow and conventions |

@@ -5,6 +5,29 @@ Base Sepolia. Budget ~15 minutes.
 
 ---
 
+## Public demo (no deploy)
+
+A shared **AttackableVault** is already deployed on Base Sepolia. Use it to try
+the dashboard or bot without running `DeployVault` yourself.
+
+```bash
+node scripts/lookup-demo-addresses.mjs --verify
+# or: make demo-addresses
+```
+
+Registry and explorer links: **[demo/README.md](../demo/README.md)**.
+
+| What | Value |
+|------|-------|
+| Live dashboard | https://guardian.rahilbhavan.com |
+| Vault | `0x718C5A3cf2E75A0011118949C9401511ebF3cf1F` |
+| Debt asset | `0xd56e5BfFea640868cd421Ac43dec37c5c8c062f2` |
+| Deploy block | `41858023` |
+
+In Cursor, ask: **Use the guardian-demo subagent** for addresses and setup steps.
+
+---
+
 ## Prerequisites
 
 | Tool | Version | Notes |
@@ -96,6 +119,11 @@ Run the files in `supabase/migrations/` **in order** in the Supabase SQL editor
   publication.
 - `0002_lockdown_insert_rls.sql` — removes any public insert policy, so writes
   require the service-role key.
+- `0003_alerts_unique.sql` — dedups and adds unique constraints on `alerts`
+  (vault, block_number, invariant_id) and `blocks_checked` (vault,
+  block_number) so a bot restart can't inflate the feed with duplicate rows.
+- `0004_state_history.sql` — creates `vault_state_previous` (one RLS-locked row
+  per vault) so the delta invariants INV-07/INV-09 survive a bot restart.
 
 RLS is **public read, no public write**: the dashboard reads with the anon key,
 but inserts are denied to it. The Guardian bot must run with the service-role
@@ -132,6 +160,29 @@ A healthy start logs `RPC connection OK`, `Vault contract verified on-chain`,
 
 > If `npm start` fails with a stale-config error, `dist/` is out of date — run
 > `npm run build` first, or use `npm run dev`.
+
+### Hosting the bot for free (GitHub Actions)
+
+Free always-on PaaS has largely disappeared (Fly and Koyeb now require billing;
+Railway is ~$5/mo). The zero-cost option for a public repo is a **scheduled
+GitHub Actions job** that runs the bot in single-pass mode — see
+[`.github/workflows/guardian-monitor.yml`](../.github/workflows/guardian-monitor.yml).
+
+Each run executes `guardian/src/once.ts`: it seeds the user set from the
+persisted prior state, scans only the gap since the last run, evaluates all 12
+invariants against the latest block, and writes the result to Supabase. The
+`vault_state_previous` table (migration `0004`) carries delta-invariant state
+between runs, so no daemon is needed.
+
+To enable it, add two **repository secrets** (Settings → Secrets and variables →
+Actions): `ALCHEMY_KEY` and `SUPABASE_SERVICE_KEY`. The public values (vault
+address, Supabase URL) are inlined in the workflow. The schedule runs every
+~5 minutes; trigger a run immediately from the Actions tab via **Run workflow**.
+
+> **Trade-off:** cadence is ~5 min (GitHub may delay scheduled runs), not the
+> daemon's per-block ~2s — so a triggered `attack()` surfaces within minutes.
+> For real-time, run `guardian/Dockerfile` on a paid host: `guardian/fly.toml`
+> is kept for Fly.io (~$2/mo), and the same image works on Koyeb or Railway.
 
 ## 7. Run the dashboard
 

@@ -1,0 +1,51 @@
+# Free always-on hosting for the Guardian bot via a scheduled single-pass check.
+#
+# GitHub Actions is free on public repos, so this replaces a paid always-on host
+# (Fly/Koyeb/Railway). Each run executes guardian/src/once.ts — one invariant
+# check against the latest block, persisted to Supabase — then exits.
+#
+# Trade-off vs the daemon: cadence is ~5 min (GitHub may delay scheduled runs
+# under load), not per-block ~2s. A triggered violation (attack()) surfaces on
+# the next run, within minutes.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   ALCHEMY_KEY           — Alchemy Base Sepolia API key
+#   SUPABASE_SERVICE_KEY  — Supabase service-role key (bypasses RLS to write)
+name: Guardian Monitor
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'   # every 5 minutes (best-effort; GitHub may delay)
+  workflow_dispatch: {}     # allow manual runs from the Actions tab
+
+permissions:
+  contents: read
+
+# Never let a slow run overlap the next scheduled one.
+concurrency:
+  group: guardian-monitor
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install bot dependencies
+        working-directory: guardian
+        run: npm ci
+      - name: Single-pass invariant check
+        working-directory: guardian
+        env:
+          ALCHEMY_KEY: ${{ secrets.ALCHEMY_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_URL: https://klbqkgyyqkmqoebxbawy.supabase.co
+          VAULT_ADDRESS: '0x718C5A3cf2E75A0011118949C9401511ebF3cf1F'
+          DEBT_ASSET: '0xd56e5BfFea640868cd421Ac43dec37c5c8c062f2'
+          VAULT_DEPLOY_BLOCK: '41858023'
+          CHAIN: base-sepolia
+        run: npx tsx src/once.ts

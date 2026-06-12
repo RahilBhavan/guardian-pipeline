@@ -16,7 +16,10 @@ SHELL := /bin/bash
 
 # --- top-level orchestration -------------------------------------------------
 
-.PHONY: help install verify build test clean
+.PHONY: help install verify build test clean demo-addresses
+
+demo-addresses: ## Print public Base Sepolia demo contract addresses (--verify checks chain)
+	node scripts/lookup-demo-addresses.mjs --verify
 
 help: ## Show available targets
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z0-9_.-]+:.*?## / {printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
