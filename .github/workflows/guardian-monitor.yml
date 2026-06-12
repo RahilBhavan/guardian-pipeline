@@ -34,7 +34,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22   # 22+ has a global WebSocket, which @supabase/supabase-js requires
       - name: Install bot dependencies
         working-directory: guardian
         run: npm ci
