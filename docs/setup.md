@@ -5,6 +5,29 @@ Base Sepolia. Budget ~15 minutes.
 
 ---
 
+## Public demo (no deploy)
+
+A shared **AttackableVault** is already deployed on Base Sepolia. Use it to try
+the dashboard or bot without running `DeployVault` yourself.
+
+```bash
+node scripts/lookup-demo-addresses.mjs --verify
+# or: make demo-addresses
+```
+
+Registry and explorer links: **[demo/README.md](../demo/README.md)**.
+
+| What | Value |
+|------|-------|
+| Live dashboard | https://guardian.rahilbhavan.com |
+| Vault | `0x718C5A3cf2E75A0011118949C9401511ebF3cf1F` |
+| Debt asset | `0xd56e5BfFea640868cd421Ac43dec37c5c8c062f2` |
+| Deploy block | `41858023` |
+
+In Cursor, ask: **Use the guardian-demo subagent** for addresses and setup steps.
+
+---
+
 ## Prerequisites
 
 | Tool | Version | Notes |
@@ -96,6 +119,11 @@ Run the files in `supabase/migrations/` **in order** in the Supabase SQL editor
   publication.
 - `0002_lockdown_insert_rls.sql` — removes any public insert policy, so writes
   require the service-role key.
+- `0003_alerts_unique.sql` — dedups and adds unique constraints on `alerts`
+  (vault, block_number, invariant_id) and `blocks_checked` (vault,
+  block_number) so a bot restart can't inflate the feed with duplicate rows.
+- `0004_state_history.sql` — creates `vault_state_previous` (one RLS-locked row
+  per vault) so the delta invariants INV-07/INV-09 survive a bot restart.
 
 RLS is **public read, no public write**: the dashboard reads with the anon key,
 but inserts are denied to it. The Guardian bot must run with the service-role

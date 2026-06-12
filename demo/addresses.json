@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "updated": "2026-06-10",
+  "network": {
+    "name": "base-sepolia",
+    "chainId": 84532,
+    "rpcPublic": "https://sepolia.base.org",
+    "explorer": "https://sepolia.basescan.org"
+  },
+  "deployment": {
+    "label": "guardian-pipeline-demo",
+    "description": "AttackableVault lending demo on Base Sepolia. Redeploy with script/DeployVault.s.sol after calling attack().",
+    "deployBlock": 41858023,
+    "contracts": {
+      "vault": "0x718C5A3cf2E75A0011118949C9401511ebF3cf1F",
+      "debtAsset": "0xd56e5BfFea640868cd421Ac43dec37c5c8c062f2",
+      "collateralAsset": null,
+      "oracle": null,
+      "attacker": "0x2497c84b19676b71a1A730A06c4dFac728094D16"
+    }
+  },
+  "services": {
+    "dashboard": "https://guardian.rahilbhavan.com",
+    "supabase": {
+      "url": "https://klbqkgyyqkmqoebxbawy.supabase.co",
+      "anonKeyPublic": false,
+      "note": "The hosted dashboard already has VITE_SUPABASE_* configured. To run the dashboard locally, copy the anon key from Supabase Settings → API (read-only; safe in the browser bundle)."
+    }
+  },
+  "commands": {
+    "viewOnExplorer": "open https://sepolia.basescan.org/address/0x718C5A3cf2E75A0011118949C9401511ebF3cf1F",
+    "enrichFromChain": "node scripts/lookup-demo-addresses.mjs --verify",
+    "stagedViolation": "./scripts/staged-detection-demo.sh"
+  }
+}

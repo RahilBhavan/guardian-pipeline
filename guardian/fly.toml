@@ -1,0 +1,46 @@
+# Fly.io — Guardian bot (always-on Base L2 invariant monitor).
+#
+# First-time setup:
+#   cd guardian
+#   fly launch --copy-config --no-deploy        # creates the app, keeps this file
+#   fly secrets set ALCHEMY_KEY=... SUPABASE_SERVICE_KEY=...
+#   fly deploy
+#
+# Non-secret config lives in [env] below. The two secrets are set with
+# `fly secrets set` and never committed.
+
+app = "guardian-bot"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  CHAIN = "base-sepolia"
+  VAULT_ADDRESS = "0x718C5A3cf2E75A0011118949C9401511ebF3cf1F"
+  DEBT_ASSET = "0xd56e5BfFea640868cd421Ac43dec37c5c8c062f2"
+  VAULT_DEPLOY_BLOCK = "41858023"
+  BLOCK_POLL_INTERVAL_MS = "2000"
+  HEALTH_PORT = "9090"
+  SUPABASE_URL = "https://klbqkgyyqkmqoebxbawy.supabase.co"
+
+# Secrets (set out-of-band, NOT in this file):
+#   ALCHEMY_KEY           — Alchemy Base Sepolia API key
+#   SUPABASE_SERVICE_KEY  — Supabase service-role key (bypasses RLS to write alerts)
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
+  cpus = 1
+
+# Internal liveness check against the bot's health server. /healthz returns 503
+# if no block has been checked recently, so a stalled bot fails the check and
+# Fly restarts the machine. The port is internal-only — not publicly exposed.
+[checks]
+  [checks.health]
+    type = "http"
+    port = 9090
+    path = "/healthz"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "30s"
