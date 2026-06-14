@@ -10,6 +10,11 @@ if (!url || !anonKey) {
 
 export const supabase = createClient(url, anonKey);
 
-/** The monitored vault address, surfaced in the header. */
-export const VAULT_ADDRESS =
-  import.meta.env.VITE_VAULT_ADDRESS ?? '0x0000000000000000000000000000000000000000';
+/**
+ * The monitored vault address, surfaced in the header and used to scope the
+ * Supabase queries. Pinned to the committed demo vault (source of truth:
+ * demo/addresses.json) rather than a Vercel env var, so the hosted dashboard
+ * tracks redeploys via a normal git push to main — no Vercel env change needed.
+ * Self-hosting a different vault: change this constant.
+ */
+export const VAULT_ADDRESS = '0xfF9D77D1EC64C212D0552aEf587fa12125f803AF';
