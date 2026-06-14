@@ -20,9 +20,9 @@ Registry and explorer links: **[demo/README.md](../demo/README.md)**.
 | What | Value |
 |------|-------|
 | Live dashboard | https://guardian.rahilbhavan.com |
-| Vault | `0x718C5A3cf2E75A0011118949C9401511ebF3cf1F` |
-| Debt asset | `0xd56e5BfFea640868cd421Ac43dec37c5c8c062f2` |
-| Deploy block | `41858023` |
+| Vault | `0xfF9D77D1EC64C212D0552aEf587fa12125f803AF` |
+| Debt asset | `0x5E4FFa88822890f52002195D6DD45205B29D20Eb` |
+| Deploy block | `42751398` |
 
 In Cursor, ask: **Use the guardian-demo subagent** for addresses and setup steps.
 

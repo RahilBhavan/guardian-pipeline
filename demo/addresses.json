@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-06-10",
+  "updated": "2026-06-14",
   "network": {
     "name": "base-sepolia",
     "chainId": 84532,
@@ -10,12 +10,12 @@
   "deployment": {
     "label": "guardian-pipeline-demo",
     "description": "AttackableVault lending demo on Base Sepolia. Redeploy with script/DeployVault.s.sol after calling attack().",
-    "deployBlock": 41858023,
+    "deployBlock": 42751398,
     "contracts": {
-      "vault": "0x718C5A3cf2E75A0011118949C9401511ebF3cf1F",
-      "debtAsset": "0xd56e5BfFea640868cd421Ac43dec37c5c8c062f2",
-      "collateralAsset": null,
-      "oracle": null,
+      "vault": "0xfF9D77D1EC64C212D0552aEf587fa12125f803AF",
+      "debtAsset": "0x5E4FFa88822890f52002195D6DD45205B29D20Eb",
+      "collateralAsset": "0x1cB1146dfcB702aD96c87F440037bfE72D7B58b2",
+      "oracle": "0x536FC8d9c872c374EED9b69CB26666eB23fF2331",
       "attacker": "0x2497c84b19676b71a1A730A06c4dFac728094D16"
     }
   },
@@ -28,7 +28,7 @@
     }
   },
   "commands": {
-    "viewOnExplorer": "open https://sepolia.basescan.org/address/0x718C5A3cf2E75A0011118949C9401511ebF3cf1F",
+    "viewOnExplorer": "open https://sepolia.basescan.org/address/0xfF9D77D1EC64C212D0552aEf587fa12125f803AF",
     "enrichFromChain": "node scripts/lookup-demo-addresses.mjs --verify",
     "stagedViolation": "./scripts/staged-detection-demo.sh"
   }
