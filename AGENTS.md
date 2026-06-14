@@ -14,7 +14,7 @@
 - Local workspace is `Guard`; GitHub repo is `RahilBhavan/guardian-pipeline`.
 - Canonical demo registry: `demo/addresses.json`; lookup via `scripts/lookup-demo-addresses.mjs` or `make demo-addresses`.
 - Cursor subagent `guardian-demo` (`.cursor/agents/guardian-demo.md`) answers demo address and setup questions.
-- Shared Base Sepolia demo vault: `0x718C5A3cf2E75A0011118949C9401511ebF3cf1F` (deploy block `41858023`).
+- Shared Base Sepolia demo vault: `0xfF9D77D1EC64C212D0552aEf587fa12125f803AF` (deploy block `42751398`).
 - Dashboard is a static Vite build on Vercel; reliable URL is `https://guardian-pipeline.vercel.app`.
 - Guardian bot is a long-running Node/WebSocket process and cannot run on Vercel; use Railway, Fly.io, or local for live monitoring.
 - Supabase backs alerts and `blocks_checked`; free-tier projects auto-pause after inactivity and must be restored for live dashboard data.

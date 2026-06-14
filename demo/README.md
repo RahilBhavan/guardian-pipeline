@@ -17,14 +17,14 @@ Machine-readable source of truth: [`addresses.json`](./addresses.json).
 | Field | Value |
 |-------|-------|
 | Network | Base Sepolia (84532) |
-| Vault (`AttackableVault`) | `0x718C5A3cf2E75A0011118949C9401511ebF3cf1F` |
-| Debt asset (`MockERC20`) | `0xd56e5BfFea640868cd421Ac43dec37c5c8c062f2` |
-| Deploy block | `41858023` |
+| Vault (`AttackableVault`) | `0xfF9D77D1EC64C212D0552aEf587fa12125f803AF` |
+| Debt asset (`MockERC20`) | `0x5E4FFa88822890f52002195D6DD45205B29D20Eb` |
+| Deploy block | `42751398` |
 | Demo attacker | `0x2497c84b19676b71a1A730A06c4dFac728094D16` |
 | Live dashboard | https://guardian.rahilbhavan.com |
 | Supabase (read) | https://klbqkgyyqkmqoebxbawy.supabase.co |
 
-Explorer: [vault on BaseScan](https://sepolia.basescan.org/address/0x718C5A3cf2E75A0011118949C9401511ebF3cf1F).
+Explorer: [vault on BaseScan](https://sepolia.basescan.org/address/0xfF9D77D1EC64C212D0552aEf587fa12125f803AF).
 
 ## What you can do with these
 
