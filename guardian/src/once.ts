@@ -43,7 +43,7 @@ const logger = pino({
  * accounts that appeared since the last run; a larger gap is clamped and
  * logged rather than scanned in full.
  */
-const LOOKBACK = 5_000n;
+const LOOKBACK = 300n;
 
 const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
 
@@ -68,7 +68,12 @@ async function run(): Promise<void> {
   const deployBlock = BigInt(process.env.VAULT_DEPLOY_BLOCK ?? '0');
 
   const chain: Chain = chainName === 'base' ? base : baseSepolia;
-  const client: PublicClient = createPublicClient({ chain, transport: http(rpcUrl) });
+  // Retry/backoff so a transient free-tier rate limit (Alchemy CU/s) on the
+  // paginated getLogs scan is absorbed rather than failing the whole run.
+  const client: PublicClient = createPublicClient({
+    chain,
+    transport: http(rpcUrl, { retryCount: 6, retryDelay: 300 }),
+  });
   const supabase = createClient(requireEnv('SUPABASE_URL'), requireEnv('SUPABASE_SERVICE_KEY'));
 
   // logBlockCheck / logAlertToSupabase mutate a GuardianState; create one without
