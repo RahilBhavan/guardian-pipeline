@@ -33,7 +33,7 @@ In Cursor, ask: **Use the guardian-demo subagent** for addresses and setup steps
 | Tool | Version | Notes |
 |------|---------|-------|
 | [Foundry](https://getfoundry.sh/) | latest stable | `forge`, `cast`, `anvil` |
-| Node.js | ≥ 20 | for the bot and dashboard |
+| Node.js | ≥ 20 (bot needs ≥ 22) | tests/dashboard run on ≥ 20; the Guardian bot needs Node ≥ 22 — `@supabase/supabase-js` requires a global `WebSocket` |
 | Alchemy API key | — | free tier; Base Sepolia RPC |
 | Supabase project | — | free tier; Postgres + real-time |
 | Base Sepolia ETH | ~0.01 | from a [Base Sepolia faucet](https://www.alchemy.com/faucets/base-sepolia) |
@@ -92,11 +92,14 @@ cast balance <ADDRESS> --rpc-url https://base-sepolia.g.alchemy.com/v2/$ALCHEMY_
 
 ## 4. Deploy to Base Sepolia
 
-`DeployVault.s.sol` reads `ATTACKER_ADDRESS` from the environment and deploys a
-`MockERC20` plus an `AttackableVault` — the demo-only `Vault` subclass that
-adds the `attack()` backdoor used in step 8. `src/Vault.sol` itself carries no
-backdoor; `AttackableVault.attack()` reverts on Base mainnet, so it is safe to
-deploy only on the testnet. Broadcast with the keystore account:
+`DeployVault.s.sol` reads `ATTACKER_ADDRESS` from the environment and, when the
+optional `DEBT_ASSET` / `COLLATERAL_ASSET` / `ORACLE_ADDRESS` are omitted,
+deploys two fresh `MockERC20`s (debt + collateral) and a `MockOracle`, then an
+`AttackableVault` — the demo-only `Vault` subclass that adds the `attack()`
+backdoor used in step 8. (Optional overrides: `INITIAL_PRICE_WAD`, `APR_BPS`,
+`LIQ_BONUS_BPS`.) `src/Vault.sol` itself carries no backdoor;
+`AttackableVault.attack()` reverts on Base mainnet, so it is safe to deploy only
+on the testnet. Broadcast with the keystore account:
 
 ```bash
 ATTACKER_ADDRESS=<your-attacker-address> \
@@ -142,7 +145,7 @@ Fill in `guardian/.env`:
 |----------|-------|
 | `ALCHEMY_KEY` | your Alchemy API key |
 | `VAULT_ADDRESS` | the vault address from step 4 |
-| `TOKEN_ADDRESS` | the token address from step 4 |
+| `DEBT_ASSET` | the debt-asset address from step 4 (the collateral asset and oracle are read from the vault, not configured) |
 | `SUPABASE_URL` | your Supabase project URL |
 | `SUPABASE_SERVICE_KEY` | the **service-role** key (Settings → API) |
 | `VAULT_DEPLOY_BLOCK` | the deployment block from step 4 — the start of the event scan that seeds the user set (defaults to `0`) |
@@ -183,6 +186,20 @@ address, Supabase URL) are inlined in the workflow. The schedule runs every
 > daemon's per-block ~2s — so a triggered `attack()` surfaces within minutes.
 > For real-time, run `guardian/Dockerfile` on a paid host: `guardian/fly.toml`
 > is kept for Fly.io (~$2/mo), and the same image works on Koyeb or Railway.
+
+### Keeping the demo oracle fresh (INV-11)
+
+INV-11 (oracle freshness gate) reverts price-dependent paths once the oracle is
+older than `MAX_STALENESS` (1 day). The demo `MockOracle` is permissionless but
+nobody updates it, so on an idle demo it goes stale and the monitor flags INV-11.
+[`.github/workflows/oracle-keeper.yml`](../.github/workflows/oracle-keeper.yml)
+re-stamps it every 6 hours by calling `setPrice(currentPrice)` (which writes
+`block.timestamp` exactly — never ahead of chain time). To enable it, add one
+repository secret, `ORACLE_KEEPER_KEY` (the raw key of any funded Base Sepolia
+wallet — `setPrice` is permissionless, the key only pays gas), and trigger the
+workflow once from the Actions tab. Until the secret is set the job logs a
+warning and skips. A real deployment would point `IPriceOracle` at an
+authenticated feed (Chainlink/Pyth) that refreshes itself.
 
 ## 7. Run the dashboard
 

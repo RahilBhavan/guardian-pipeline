@@ -22,7 +22,7 @@ enforces the identical definition in two places:
 
 `guardian/src/evaluator.ts` is a deliberate 1:1 mirror of
 `test/invariant/InvariantVault.t.sol`. If the two ever diverge, the project has
-failed its own thesis — so the 6 invariant IDs (`INV-01`…`INV-06`) are shared
+failed its own thesis — so the 12 invariant IDs (`INV-01`…`INV-12`) are shared
 verbatim across both.
 
 ---
@@ -32,10 +32,11 @@ verbatim across both.
 **Trigger:** every `push` and `pull_request` to `main`.
 
 Foundry's invariant fuzzer drives the vault through random call sequences via
-five handler contracts (`DepositHandler`, `BorrowHandler`, `WarpHandler` —
-which advances time and accrues interest — `LiquidateHandler`, and
-`DonationHandler` — which transfers tokens straight to the vault) and asserts
-all 12 invariants after each step.
+eight handler contracts (`DepositHandler`, `CollateralHandler`, `BorrowHandler`,
+`WarpHandler` — which advances time and accrues interest — `LiquidateHandler`,
+`DonationHandler` — which transfers tokens straight to the vault — `OracleHandler`
+— which moves the collateral price — and `ReentrancyHandler`) and asserts all 12
+invariants after each step.
 
 | Profile | Runs | Depth | Use |
 |---------|------|-------|-----|
@@ -51,19 +52,23 @@ job summary is in the [root README](../README.md#cicd-pipeline).
 
 ## Layer 2 — Smart contract
 
-`src/Vault.sol` — an interest-bearing, over-collateralised lending vault.
-Lenders deposit a single ERC-20 and receive shares whose value rises as
-borrowers pay interest; borrowers post those shares as collateral and may borrow
-up to 80% of their value. The accounting is Morpho-style dual-tracked — the
-lender side stores assets directly, the borrow side scales an index.
+`src/Vault.sol` — an interest-bearing, over-collateralised, **two-asset** lending
+vault. Lenders deposit the **debt asset** and receive shares whose value rises as
+borrowers pay interest; borrowers post a separate **collateral asset** — priced by
+an `IPriceOracle` — and may borrow the debt asset up to 80% of their collateral
+value. The accounting is Morpho-style dual-tracked — the lender side stores assets
+directly, the borrow side scales an index.
 
-- **State:** `totalSupplyAssets` / `totalSupplyShares` / `userSupplyShares` on
-  the lender side; `totalBorrowShares` / `userBorrowShares` / `borrowIndex` on
-  the borrow side; plus `lastAccrualTime`. `collateralRatio` (`80_00` bps) and
-  `liquidationBonus` (`5_00` bps) are immutable.
-- **Mutating functions:** `deposit`, `withdraw`, `borrow`, `repay`,
-  `liquidate`, and `accrue` — all `nonReentrant`. Interest accrues at the start
-  of every call; under-water positions are cleared via `liquidate`.
+- **State:** `totalSupplyAssets` / `totalSupplyShares` / `userSupplyShares` on the
+  lender side; `totalCollateral` / `userCollateral` for posted collateral;
+  `totalBorrowShares` / `userBorrowShares` / `borrowIndex` on the borrow side; plus
+  `lastAccrualTime`. The two asset addresses, the `oracle`, `collateralRatio`
+  (`80_00` bps) and `liquidationBonus` are immutable; `MAX_STALENESS` (1 day)
+  gates every oracle price read (INV-11).
+- **Mutating functions:** `deposit`, `withdraw`, `depositCollateral`,
+  `withdrawCollateral`, `borrow`, `repay`, `liquidate`, and `accrue` — all
+  `nonReentrant`. Interest accrues at the start of every call; under-water
+  positions are cleared via `liquidate`, which seizes oracle-priced collateral.
 - **`attack()`** lives only on `src/AttackableVault.sol`, a demo-only subclass.
   It is a deliberate one-line flag — not an exploit — that inflates
   `totalSupplyAssets` past the assets backing it, breaking INV-01 so the runtime
@@ -80,13 +85,16 @@ The full contract API — every function, event, error, and storage slot — is 
 
 ## Layer 3 — Runtime monitor
 
-`guardian/` — a TypeScript daemon that monitors a deployed vault on Base L2.
-It is a **runnable reference implementation**: the code below is complete and
-documented, but this repository does not point it at a hosted deployment.
+`guardian/` — a TypeScript monitor for a deployed vault on Base L2. It runs two
+ways from the same fetch → evaluate → route core: as a per-block daemon
+(`bot.ts`, ~2 s cadence) for a real host, and as a single-pass check (`once.ts`)
+driven by a free, best-effort **scheduled GitHub Actions** job (~5-min cadence)
+against the public demo vault. It is a reference implementation, not a hardened
+production service.
 
 ```
 watchBlockNumber ─▶ fetchVaultState ─▶ evaluateInvariants ─▶ router
-   (viem, ~2s)        (1 multicall)        (6 checks)         │
+   (viem, ~2s)        (1 multicall)        (12 checks)        │
                                                               ├─▶ blocks_checked  (every block)
                                                               └─▶ alerts          (on violation)
 ```
@@ -98,8 +106,10 @@ watchBlockNumber ─▶ fetchVaultState ─▶ evaluateInvariants ─▶ router
    account's per-user position in a single `multicall`. The account set is
    seeded from `Deposited` / `Borrowed` / `Liquidated` events and kept current
    by an incremental scan each block.
-3. **Evaluate** — `evaluator.ts` runs the 6 invariant checks against the
-   snapshot. Detection latency is `Date.now()` before fetch vs. after evaluate.
+3. **Evaluate** — `evaluator.ts` runs the 12 invariant checks against the
+   snapshot — nine from the block snapshot, two (INV-07, INV-09) from a delta
+   against the prior observation, one (INV-08) from event reconciliation.
+   Detection latency is `Date.now()` before fetch vs. after evaluate.
 4. **Route** — `router.ts` writes one `blocks_checked` row per block (liveness
    + latency history) and one `alerts` row per violation. Database failures are
    logged and swallowed — a monitor must never crash on its own alert path.
@@ -141,12 +151,12 @@ git push ──▶ GitHub Actions ──▶ Forge fuzz + Slither/Aderyn + Assura
 
 ## Related documents
 
-- [invariants.md](invariants.md) — the 6 invariants in full
+- [invariants.md](invariants.md) — the 12 invariants in full
 - [contracts.md](contracts.md) — the `Vault` / `AttackableVault` / `MockERC20` API reference
 - [guardian-bot.md](guardian-bot.md) — the off-chain bot, module by module
 - [database.md](database.md) — the Supabase schema and RLS model
-- [invariants.md#testing-strategy](invariants.md#testing-strategy) — the four test tiers
-- [../README.md#cicd-pipeline](../README.md#cicd-pipeline) — the six-job CI/CD pipeline summary
+- [invariants.md#testing-strategy](invariants.md#testing-strategy) — the six test tiers
+- [../README.md#cicd-pipeline](../README.md#cicd-pipeline) — the seven-job CI/CD pipeline summary
 - [assurance.md](assurance.md) — the Assurance Score and exploit replays
 - [setup.md](setup.md) — running every layer locally
 - [glossary.md](glossary.md) — terminology

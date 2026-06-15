@@ -31,10 +31,10 @@
   <text x="123" y="147" class="sub" text-anchor="middle">main / PR</text>
   <rect class="box" x="238" y="104" width="170" height="58" rx="8"/>
   <text x="323" y="129" class="label" text-anchor="middle">GitHub Actions</text>
-  <text x="323" y="147" class="sub" text-anchor="middle">6 jobs · &lt;4 min</text>
+  <text x="323" y="147" class="sub" text-anchor="middle">7 jobs · &lt;4 min</text>
   <rect class="box" x="448" y="104" width="190" height="58" rx="8"/>
   <text x="543" y="129" class="label" text-anchor="middle">Forge invariant fuzz</text>
-  <text x="543" y="147" class="sub" text-anchor="middle">2,000+ runs · 6 invariants</text>
+  <text x="543" y="147" class="sub" text-anchor="middle">2,000+ runs · 12 invariants</text>
   <rect class="box" x="678" y="104" width="174" height="58" rx="8"/>
   <text x="765" y="129" class="label" text-anchor="middle">Slither · Aderyn</text>
   <text x="765" y="147" class="sub" text-anchor="middle">static analysis</text>
@@ -47,7 +47,7 @@
   <rect class="panel" x="32" y="232" width="836" height="84" rx="10"/>
   <rect class="box" x="48" y="252" width="804" height="48" rx="8"/>
   <text x="450" y="272" class="label" text-anchor="middle">Vault.sol — interest-bearing lending vault</text>
-  <text x="450" y="290" class="sub" text-anchor="middle">deposit · withdraw · borrow · repay · liquidate  ·  6 invariants</text>
+  <text x="450" y="290" class="sub" text-anchor="middle">deposit · withdraw · borrow · repay · liquidate  ·  12 invariants</text>
 
   <!-- Layer 3: Runtime guardian -->
   <text x="32" y="358" class="layer">LAYER 3 · RUNTIME (BASE L2)</text>
@@ -60,7 +60,7 @@
   <text x="318" y="435" class="sub" text-anchor="middle">viem · per block</text>
   <rect class="box" x="438" y="392" width="170" height="58" rx="8"/>
   <text x="523" y="417" class="label" text-anchor="middle">Eval engine</text>
-  <text x="523" y="435" class="sub" text-anchor="middle">6 invariants (mirror)</text>
+  <text x="523" y="435" class="sub" text-anchor="middle">12 invariants (mirror)</text>
   <rect class="box" x="648" y="392" width="204" height="58" rx="8"/>
   <text x="750" y="417" class="label" text-anchor="middle">Supabase</text>
   <text x="750" y="435" class="sub" text-anchor="middle">real-time → dashboard</text>

@@ -1,0 +1,67 @@
+# Keeps the demo MockOracle fresh so INV-11 (oracle freshness gate) stays green.
+#
+# The vault's `_freshPrice` reverts, and the monitor flags INV-11, once
+# `block.timestamp - oracle.lastUpdatedAt() > MAX_STALENESS` (1 day). The demo
+# oracle is a permissionless MockOracle that nobody otherwise updates, so it
+# goes stale after a day of inactivity. This job re-stamps it every 6 hours.
+#
+# It calls `setPrice(currentPrice)` (not `setLastUpdatedAt`): setPrice writes
+# `storedTimestamp = block.timestamp` exactly, so the freshness stamp can never
+# land ahead of chain time. Re-using the *current* price means freshness is
+# refreshed with zero price movement.
+#
+# Required repo secret (Settings -> Secrets and variables -> Actions):
+#   ORACLE_KEEPER_KEY  — raw private key of any funded Base Sepolia wallet
+#                        (the guardian-demo testnet wallet works). setPrice is
+#                        permissionless; the key only pays gas.
+#   ALCHEMY_KEY        — already used by guardian-monitor.yml.
+name: Oracle Keeper
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'   # every 6 hours — well inside MAX_STALENESS (1 day)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oracle-keeper
+  cancel-in-progress: false
+
+env:
+  ORACLE: '0x536FC8d9c872c374EED9b69CB26666eB23fF2331'
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Skip if no keeper key is configured
+        id: guard
+        env:
+          ORACLE_KEEPER_KEY: ${{ secrets.ORACLE_KEEPER_KEY }}
+        run: |
+          if [ -z "$ORACLE_KEEPER_KEY" ]; then
+            echo "::warning::ORACLE_KEEPER_KEY is not set — skipping oracle refresh."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install Foundry
+        if: steps.guard.outputs.skip == 'false'
+        uses: foundry-rs/foundry-toolchain@v1
+      - name: Re-stamp the oracle (setPrice = current price)
+        if: steps.guard.outputs.skip == 'false'
+        env:
+          ALCHEMY_KEY: ${{ secrets.ALCHEMY_KEY }}
+          ORACLE_KEEPER_KEY: ${{ secrets.ORACLE_KEEPER_KEY }}
+        run: |
+          set -euo pipefail
+          RPC="https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}"
+          PRICE=$(cast call "$ORACLE" "price()(uint256)" --rpc-url "$RPC")
+          echo "Current oracle price: $PRICE (re-setting to refresh freshness)"
+          cast send "$ORACLE" "setPrice(uint256)" "$PRICE" \
+            --rpc-url "$RPC" \
+            --private-key "$ORACLE_KEEPER_KEY"
+          echo "Oracle re-stamped at block timestamp."

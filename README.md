@@ -13,8 +13,9 @@
 > deployment, and by a runtime monitor that mirrors that campaign *after* it.
 
 This is a portfolio / research-demonstration project. It is **not** production
-infrastructure, it does **not** custody real value, and nothing here is
-currently running as a hosted service — see [Scope & honesty](#scope--honesty).
+infrastructure and does **not** custody real value. The runtime monitor runs as
+a free, best-effort scheduled GitHub Actions check against a public Base Sepolia
+demo vault — not as a production service — see [Scope & honesty](#scope--honesty).
 
 > **The single most important read in this repo is
 > [`docs/assurance.md`](docs/assurance.md).** It explains the **Assurance
@@ -56,15 +57,18 @@ Four layers — three runtime layers plus an assurance layer that scores them:
 1. **Pre-deployment (CI/CD)** — Foundry invariant fuzzing runs on every push. A
    green badge means all 12 invariants held across a 2,000-run campaign (up to
    ~300,000 handler calls) without an invariant failing.
-2. **Smart contract** — an interest-bearing, over-collateralised lending vault
-   (`deposit` · `withdraw` · `borrow` · `repay` · `liquidate` · `accrue`).
-   Borrowers pay interest through a borrow index, lenders earn it as a rising
-   share price, and under-water positions are liquidated.
-3. **Runtime monitor** — a TypeScript daemon (`guardian/`) that, on every block,
-   fetches vault state, evaluates the same 12 invariants, and persists any
-   violation to Supabase. It is provided as a **runnable reference
-   implementation** with full setup instructions; it is not currently deployed
-   against a live vault.
+2. **Smart contract** — an interest-bearing, over-collateralised, two-asset
+   lending vault (`deposit` · `withdraw` · `depositCollateral` ·
+   `withdrawCollateral` · `borrow` · `repay` · `liquidate` · `accrue`). Lenders
+   supply the debt asset; borrowers post a separate collateral asset priced by an
+   oracle. Borrowers pay interest through a borrow index, lenders earn it as a
+   rising share price, and under-water positions are liquidated.
+3. **Runtime monitor** — a TypeScript monitor (`guardian/`) that fetches vault
+   state, evaluates the same 12 invariants, and persists any violation to
+   Supabase. It runs two ways: as a per-block daemon (`bot.ts`, ~2 s cadence)
+   for a real host, and as a single-pass check (`once.ts`) driven by a free,
+   best-effort **scheduled GitHub Actions** job against the public demo vault
+   (~5-min cadence; see [Scope & honesty](#scope--honesty)).
 4. **Assurance layer** — backtests 10 historical exploit classes (dual-surface), traces every
    security-review finding to the layers that cover it, and rolls the result
    into a single composite **Assurance Score** that CI gates on.
@@ -148,17 +152,19 @@ the build if it drifts (`assurance trace --check-exploit-docs`).
 
 <!-- EXPLOIT_SUMMARY_END -->
 
-CI fails the build if the composite score drops below **80**. (An earlier
-design had a fourth "Continuous Monitoring" component scored from a live
-deployment — it was removed, since there is no hosted Guardian bot service to score.)
+CI fails the build if the composite score drops below **80**. (An earlier design
+had a fourth "Continuous Monitoring" component scored from a live deployment — it
+was removed; AMC is deliberately pre-deployment-only and excludes runtime signal,
+even though a best-effort scheduled monitor now runs against the demo vault.)
 See **[docs/assurance.md](docs/assurance.md)**.
 
 ---
 
 ## Quickstart
 
-**Prerequisites:** [Foundry](https://getfoundry.sh/) and Node.js ≥ 20. The
-contract layer and both test suites run with no external services.
+**Prerequisites:** [Foundry](https://getfoundry.sh/) and Node.js ≥ 20 (the
+runtime monitor needs ≥ 22). The contract layer and both test suites run with no
+external services.
 
 ```bash
 git clone https://github.com/rahilbhavan/guardian-pipeline
@@ -232,7 +238,7 @@ evaluate → alert — works; it does not claim the monitor catches novel exploi
 
 ```
 guardian-pipeline/
-├── src/                  # Solidity contracts (Vault, AttackableVault, MockERC20)
+├── src/                  # Solidity (Vault, AttackableVault, IPriceOracle, MockOracle, MockERC20, attackable/)
 ├── test/
 │   ├── invariant/        # Foundry fuzz harness + handlers
 │   ├── unit/             # Deterministic unit coverage
@@ -269,16 +275,21 @@ guardian-pipeline/
 This project is built to be read by an engineer, so it states its limits up
 front:
 
-- **Not production code.** `Vault.sol` is a teaching example — single asset, no
-  price oracle, no bad-debt reserve. Do not custody real value with it. See
-  [SECURITY.md](SECURITY.md).
-- **No hosted monitor service.** The Guardian bot is a runnable reference
-  implementation you operate locally; the **dashboard** is deployed on Vercel but
-  requires your Supabase + vault env vars for live data. this repo does not point at a live
-  deployment, has never been adversarially tested against a real attacker, and
-  has no incident-replay history against this specific vault. The "continuous"
-  in "continuous monitoring" refers to the design pattern the bot implements,
-  not to any service this project is operating.
+- **Not production code.** `Vault.sol` is a teaching example — a two-asset,
+  oracle-priced vault wired to a permissionless `MockOracle` (no real price
+  feed), with no bad-debt reserve and no governance. Do not custody real value
+  with it. See [SECURITY.md](SECURITY.md).
+- **Best-effort hosted monitor, not a production service.** The Guardian bot is
+  a runnable reference implementation. A free, **scheduled GitHub Actions** job
+  (`guardian-monitor.yml`) runs it in single-pass mode against the public demo
+  vault and writes to Supabase, and the **dashboard** is deployed on Vercel — but
+  this is convenience hosting, not an SLA. The cadence is best-effort (~5 min, and
+  GitHub may delay or skip scheduled runs; free-tier RPC rate limits can fail an
+  individual run), so the dashboard's liveness indicator can legitimately read
+  "down" between successful runs. The monitor has never been adversarially tested
+  against a real attacker and has no incident-replay history against this specific
+  vault. The "continuous" in "continuous monitoring" refers to the design pattern
+  the bot implements, not to a hardened service this project operates.
 - **The "audit" is a self-review.** [`security-review/`](security-review/) is a
   point-in-time review written by the repository author — not an independent
   third-party audit. Commission one separately before any real deployment.
@@ -287,11 +298,9 @@ front:
   grades the result. AMC explicitly measures *methodology coverage* —
   reproducible, not externally validated. Read "A− / 91" as "this codebase
   grades itself A− against the rubric the codebase ships" — not as a
-  third-party certification. (The rebuild plan addresses this by adding
-  external-signal components — Slither/Aderyn, Halmos, Echidna, live monitor
-  uptime, paid micro-audit — in later sprints so external signals total ≥50%
-  of weight.) The [docs/assurance.md](docs/assurance.md#what-this-score-is-not)
-  page spells out what the score is and is not in more detail.
+  third-party certification. The
+  [docs/assurance.md](docs/assurance.md#what-this-score-is-not) page spells out
+  what the score is and is not in more detail.
 - **The detection demo is staged.** `AttackableVault.attack()` is a planted flag
   for filming the monitor, not a real exploit.
 - **No formal verification.** The invariant proofs are empirical (Foundry fuzz
@@ -307,7 +316,7 @@ front:
 |-----|----------|
 | [docs/assurance.md](docs/assurance.md) | **Start here.** Assurance Score, exploit replays, finding traceability |
 | [docs/architecture.md](docs/architecture.md) | The four layers and how state flows between them |
-| [docs/invariants.md](docs/invariants.md) | All 12 invariants — formulas, classes, failure modes, the four test tiers |
+| [docs/invariants.md](docs/invariants.md) | All 12 invariants — formulas, classes, failure modes, the six test tiers |
 | [docs/contracts.md](docs/contracts.md) | `Vault`, `AttackableVault`, `MockERC20` API |
 | [docs/guardian-bot.md](docs/guardian-bot.md) | The runtime monitor, module by module |
 | [docs/database.md](docs/database.md) | The Supabase schema, RLS model, and migrations |
@@ -318,7 +327,7 @@ front:
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow and conventions |
 
 The CI/CD pipeline reference lives in the [CI/CD pipeline](#cicd-pipeline)
-section above — there is no separate `ci.md`. The four test tiers are
+section above — there is no separate `ci.md`. The six test tiers are
 documented in [invariants.md#testing-strategy](docs/invariants.md#testing-strategy).
 
 ---

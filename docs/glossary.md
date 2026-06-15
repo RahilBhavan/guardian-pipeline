@@ -10,8 +10,8 @@ tooling terms follow.
 
 | Term | Meaning |
 |------|---------|
-| **`INV-01` … `INV-06`** | The six **invariants** — mathematical properties the vault must hold in every reachable state. Defined identically in the Foundry harness, the Guardian evaluator, and the exploit replays. Full reference: [invariants.md](invariants.md). |
-| **`EXP-01` … `EXP-07`** | The seven **exploit-replay scenarios** — classes of real-world DeFi attack replayed against the vault. Each is classified PREVENTED / DETECTED / MISSED. Catalogue: [assurance.md](assurance.md#exploit-replays). |
+| **`INV-01` … `INV-12`** | The twelve **invariants** — mathematical properties the vault must hold in every reachable state. Defined identically in the Foundry harness, the Guardian evaluator, and the exploit replays. Full reference: [invariants.md](invariants.md). |
+| **`EXP-01` … `EXP-10`** | The ten **exploit-replay scenarios** — classes of real-world DeFi attack replayed against the vault. Each is classified PREVENTED / DETECTED / MISSED. Catalogue: [assurance.md](assurance.md#exploit-replays). |
 | **`GUA-01` … `GUA-08`** | The eight findings in the self-conducted security review (`security-review/`), each traced to the layers that cover it. See [assurance.md](assurance.md#finding-traceability). |
 | **Assurance Methodology Coverage (AMC)** | A composite 0–100 metric, recomputed every commit, weighting three pre-deployment components (static verification 45%, exploit resistance 35%, finding traceability 20%). Measures methodology rigor — *not* code security. CI gates at ≥ 80. Earlier revisions called this the "Assurance Score"; the JSON and CLI field names still read `score`. |
 | **Guardian bot** | The off-chain TypeScript daemon (`guardian/`) — a runnable reference runtime monitor that, when run against a deployed vault, checks the invariants block by block. |
@@ -26,7 +26,7 @@ tooling terms follow.
 | **PREVENTED** | An exploit replay where the contract's own code blocked the attack — no state corruption. |
 | **DETECTED** | An exploit replay where state *was* corrupted, but an invariant caught it the same block. The runtime layer's reason to exist. |
 | **MISSED** | An exploit replay where value was extracted and no invariant noticed — a genuine coverage gap. Fails the CI build. |
-| **Detection latency** | Wall-clock milliseconds from fetching vault state to finishing the six-invariant evaluation. Logged per block, charted on the dashboard. |
+| **Detection latency** | Wall-clock milliseconds from fetching vault state to finishing the twelve-invariant evaluation. Logged per block, charted on the dashboard. |
 
 ---
 
@@ -36,7 +36,7 @@ tooling terms follow.
 |------|---------|
 | **Invariant** | A property that must hold in *every* reachable state, as opposed to a single-input unit assertion. |
 | **Invariant fuzzing** | A testing technique (here, Foundry's) that drives a contract through random call sequences and asserts the invariants after every call. |
-| **Handler** | A wrapper contract that exposes a *bounded* action space to the fuzzer, so it explores meaningful states. Guardian uses `DepositHandler`, `BorrowHandler`, `WarpHandler`, `LiquidateHandler`. |
+| **Handler** | A wrapper contract that exposes a *bounded* action space to the fuzzer, so it explores meaningful states. Guardian uses eight: `DepositHandler`, `CollateralHandler`, `BorrowHandler`, `WarpHandler`, `LiquidateHandler`, `DonationHandler`, `OracleHandler`, `ReentrancyHandler`. |
 | **Counterexample** | The minimal failing call sequence Forge prints (after *shrinking*) when an invariant breaks. |
 | **Shrinking** | Forge's reduction of a failing fuzz sequence to the smallest sequence that still reproduces the failure. |
 | **Over-collateralised** | A loan backed by collateral worth more than the debt. Guardian's vault caps borrowing at 80% of collateral value. |
@@ -45,6 +45,9 @@ tooling terms follow.
 | **Borrow share / `userBorrowShares` / `borrowIndex`** | A borrower's debt is held as borrow shares; the asset value of one share is `borrowIndex`-scaled. `borrowIndex` starts at `1e18` and rises monotonically as `accrue` charges interest, so `userDebt = userBorrowShares * borrowIndex / 1e18`. |
 | **`accrue`** | Charges borrower interest since the last call by raising `borrowIndex`, then credits the same realised amount to `totalSupplyAssets`. Called at the start of every state-mutating function; idempotent within a block. |
 | **`liquidate`** | Clears an under-water borrower's position: repays part or all of their debt and seizes their collateral plus a 5% liquidation bonus. |
+| **Collateral asset** | The ERC-20 a borrower posts (`userCollateral`) to back a loan — a *separate* token from the debt asset they borrow. Valued in debt-asset units by the oracle. |
+| **Oracle / `IPriceOracle`** | The price feed giving one collateral unit's value in debt-asset units (WAD-scaled). The vault reads it through a freshness gate; `MockOracle` is the settable test implementation. |
+| **`MAX_STALENESS`** | The 1-day cap on `block.timestamp − oracle.lastUpdatedAt`; a staler price reverts `OraclePriceStale` on every price-dependent path — the gate INV-11 enforces. |
 | **WAD** | A fixed-point unit of `1e18`. All share and index maths is WAD-scaled. |
 | **BPS** | Basis points; `100_00` bps = 100%. The collateral ratio is `80_00` bps, the liquidation bonus `5_00` bps. |
 | **`nonReentrant`** | An OpenZeppelin modifier that blocks a function from being re-entered mid-execution. |

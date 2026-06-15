@@ -126,6 +126,10 @@ export const ERC20_ABI = [
  */
 const MAX_LOG_RANGE = 10n;
 
+/** Resolve after `ms` milliseconds — used to throttle the paginated getLogs
+ *  sweep so a single-pass run on a free RPC tier stays under its CU/s cap. */
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
 /**
  * Maximum number of users per per-position multicall batch. Each user
  * contributes three calls (`userSupplyShares`, `userBorrowShares`,
@@ -147,16 +151,21 @@ const CALLS_PER_USER = 3;
  * seed scan (deploy block → head, unbounded as the vault ages) stays within
  * the free-tier `eth_getLogs` limit. Windows run sequentially to avoid
  * bursting the RPC; the four event queries within a window run in parallel.
+ * Pass `interWindowDelayMs` to pause between windows — the single-pass runner
+ * uses this to stay under a free RPC tier's compute-units-per-second cap; the
+ * daemon leaves it at `0`.
  */
 export async function discoverUsers(
   client: PublicClient,
   vaultAddress: `0x${string}`,
   fromBlock: bigint,
   toBlock: bigint,
+  interWindowDelayMs = 0,
 ): Promise<`0x${string}`[]> {
   const found = new Set<`0x${string}`>();
 
   for (let from = fromBlock; from <= toBlock; from += MAX_LOG_RANGE) {
+    if (interWindowDelayMs > 0 && from > fromBlock) await sleep(interWindowDelayMs);
     const to = from + MAX_LOG_RANGE - 1n < toBlock ? from + MAX_LOG_RANGE - 1n : toBlock;
 
     const [deposits, collateralDeposits, borrows, liquidations] = await Promise.all([
@@ -314,11 +323,13 @@ export async function fetchLiquidationsInRange(
   oracleAddress: `0x${string}`,
   fromBlock: bigint,
   toBlock: bigint,
+  interWindowDelayMs = 0,
 ): Promise<LiquidationEvent[]> {
   if (toBlock < fromBlock) return [];
 
   const out: LiquidationEvent[] = [];
   for (let from = fromBlock; from <= toBlock; from += MAX_LOG_RANGE) {
+    if (interWindowDelayMs > 0 && from > fromBlock) await sleep(interWindowDelayMs);
     const to = from + MAX_LOG_RANGE - 1n < toBlock ? from + MAX_LOG_RANGE - 1n : toBlock;
     const logs = await client.getLogs({
       address: vaultAddress,

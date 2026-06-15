@@ -1,10 +1,15 @@
 # Guardian bot reference
 
 The Guardian bot (`guardian/`) is the runtime half of the pipeline: a
-TypeScript daemon that, when run against a deployed `Vault` on Base L2,
-re-checks all 12 invariants on every block and persists any violation to
-Supabase — typically within one block (~2 s). It is a **runnable reference
-implementation**; this repository does not host it against a live vault.
+TypeScript monitor that, when run against a deployed `Vault` on Base L2,
+re-checks all 12 invariants and persists any violation to Supabase. It runs two
+ways from one shared core (`fetcher` → `evaluator` → `router`): as a per-block
+daemon (`bot.ts`, ~2 s cadence), and as a single-pass check (`once.ts`) for
+hosts that cannot keep a process alive — notably the free, best-effort
+**scheduled GitHub Actions** job in
+[`.github/workflows/guardian-monitor.yml`](../.github/workflows/guardian-monitor.yml)
+(~5-min cadence) against the public demo vault. It is a reference
+implementation, not a hardened production service.
 
 This document is the module-by-module reference. For the bigger picture see
 [architecture.md](architecture.md#layer-3--runtime-guardian); for running it
@@ -21,15 +26,15 @@ see [setup.md](setup.md#6-configure-and-start-the-guardian-bot).
 | **RPC** | Alchemy WebSocket (`wss://…g.alchemy.com/v2/<key>`) |
 | **Persistence** | Supabase (`@supabase/supabase-js`), service-role key |
 | **Logging** | `pino` + `pino-pretty` — structured, never `console.log` |
-| **Runtime** | Node ≥ 20. `npm run dev` (tsx) or `npm run build && npm start` (tsup → ESM) |
-| **Entry point** | `guardian/src/bot.ts` |
+| **Runtime** | Node ≥ 22 (`@supabase/supabase-js` needs a global `WebSocket`). `npm run dev` (tsx) or `npm run build && npm start` (tsup → ESM); single-pass via `npx tsx src/once.ts` |
+| **Entry point** | `guardian/src/bot.ts` (daemon) · `guardian/src/once.ts` (single-pass) |
 
 ### Module map
 
 ```
 bot.ts        orchestration — config, clients, block loop, lifecycle
   ├─ fetcher.ts     event scan + one multicall → a VaultState snapshot
-  ├─ evaluator.ts   VaultState → 6 InvariantResults  (1:1 mirror of the harness)
+  ├─ evaluator.ts   VaultState → 12 InvariantResults (1:1 mirror of the harness)
   ├─ router.ts      InvariantResults → Supabase rows  (alerts + blocks_checked)
   └─ types.ts       shared interfaces — no logic
 ```
@@ -47,7 +52,7 @@ block runs `onBlock`:
 
 ```
 new block ─▶ re-entrancy guard ─▶ incremental user scan ─▶ fetchVaultState ─▶ evaluateInvariants ─▶ split
-              (skip if busy)       (new event addresses)    (1 multicall)        (6 checks)          │
+              (skip if busy)       (new event addresses)    (1 multicall)        (12 checks)         │
                                                                                                      ├─▶ logBlockCheck   (always)
                                                                                                      └─▶ logAlertToSupabase (if violations)
 ```
@@ -59,7 +64,7 @@ new block ─▶ re-entrancy guard ─▶ incremental user scan ─▶ fetchVaul
    `Borrowed` or `Liquidated` events since the last checked block are added to
    the known-user set, so the per-user invariants see the exact current actors.
 3. **Fetch.** `fetchVaultState` reads the snapshot (one multicall — see below).
-4. **Evaluate.** `evaluateInvariants` runs the six checks. Detection latency
+4. **Evaluate.** `evaluateInvariants` runs the twelve checks. Detection latency
    is measured as `Date.now()` before the fetch versus after evaluation.
 5. **Route.** `logBlockCheck` writes one `blocks_checked` row for *every*
    block (liveness + latency history). If any invariant failed,
@@ -84,7 +89,7 @@ partially configured.
 |----------|----------|---------|
 | `ALCHEMY_KEY` | yes | Alchemy API key; interpolated into the WebSocket URL. |
 | `VAULT_ADDRESS` | yes | Deployed vault. Validated against `/^0x[0-9a-fA-F]{40}$/`. |
-| `TOKEN_ADDRESS` | yes | The vault's ERC-20 asset. Same address validation. |
+| `DEBT_ASSET` | yes | The vault's debt ERC-20 (lent and borrowed). Same address validation. The collateral asset and oracle are read from the vault on-chain, not configured. |
 | `SUPABASE_URL` | yes | Supabase project URL. |
 | `SUPABASE_SERVICE_KEY` | yes | **Service-role** key — bypasses RLS so the bot can insert. |
 | `VAULT_DEPLOY_BLOCK` | no | Block the vault was deployed at — the start of the event scan that seeds the user set. Defaults to `0`. |
@@ -141,19 +146,20 @@ the users that snapshot must cover.
   every address that has ever held a position — depositors, borrowers, and
   liquidation beneficiaries. The bot seeds this set from full history at
   startup and tops it up incrementally each block.
-- **One RPC round-trip per block.** The six aggregate vault reads
+- **One RPC round-trip per block.** The aggregate vault reads
   (`totalSupplyAssets`, `totalSupplyShares`, `totalBorrowShares`,
-  `totalBorrowed`, `borrowIndex`, `collateralRatio`) plus the vault's ERC-20
-  `balanceOf`, plus two reads (`userSupplyShares`, `userBorrowShares`) per
-  discovered user, are batched into a single `client.multicall({ allowFailure:
-  false, blockNumber, contracts: [...] })`. `allowFailure: false` means any
-  failed sub-call rejects the whole call — a partial snapshot is never
-  evaluated.
+  `totalBorrowed`, `borrowIndex`, `collateralRatio`, `lastAccrualTime`,
+  `liquidationBonus`, `MAX_STALENESS`), the oracle's freshness (`lastUpdatedAt`)
+  and `price` (for INV-08 / INV-11), the debt asset's `balanceOf`, plus three
+  reads (`userSupplyShares`, `userBorrowShares`, `userCollateral`) per discovered
+  user, are batched into a single `client.multicall({ allowFailure: false,
+  blockNumber, contracts: [...] })`. `allowFailure: false` means any failed
+  sub-call rejects the whole call — a partial snapshot is never evaluated.
 - **Pinned to `blockNumber`.** Every read is taken at the exact block the
   subscription delivered, so the snapshot is internally consistent.
 - **Minimal ABIs.** `VAULT_ABI` declares only the view getters and events the
-  bot reads; `ERC20_ABI` declares only `balanceOf`. Smaller ABIs, smaller
-  surface.
+  bot reads; `ERC20_ABI` declares only `balanceOf`; `ORACLE_ABI` declares only
+  `price` / `lastUpdatedAt`. Smaller ABIs, smaller surface.
 - `blockTimestamp` is the block's own timestamp, fetched alongside the
   multicall — used for the `alerts.block_ts` column.
 
@@ -165,12 +171,15 @@ The heart of the project's thesis: a **1:1 mirror** of the Solidity
 `invariant_*` functions in `test/invariant/InvariantVault.t.sol`. The property
 fuzzed before deployment is the same property monitored after it — and because
 the fetcher reads the *exact* per-user positions discovered from vault events,
-the share-sum and uncollateralised-debt checks are genuine 1:1 mirrors, not
-sampled approximations.
+the share-sum, collateral and uncollateralised-debt checks are genuine 1:1
+mirrors, not sampled approximations.
 
-`evaluateInvariants(state)` returns six [`InvariantResult`](#typests) objects
-in `INV-01`…`INV-06` order. Each `inv0N` function is pure — same state in, same
-result out.
+`evaluateInvariants(state, prior)` returns twelve [`InvariantResult`](#typests)
+objects in `INV-01`…`INV-12` order. Most `invNN` functions are pure snapshot
+checks; the two delta invariants (INV-07, INV-09) also read `prior` — the
+previous observation, persisted between runs in `vault_state_previous` — and
+short-circuit to PASS when no prior exists. INV-08 reconciles each `Liquidated`
+event against the oracle price.
 
 | Fn | Invariant | Check |
 |----|-----------|-------|
@@ -179,7 +188,13 @@ result out.
 | `inv03` | Debt-share integrity | `totalBorrowShares === Σ userBorrowShares` |
 | `inv04` | Lender-value floor | `totalSupplyAssets >= totalSupplyShares` |
 | `inv05` | Interest-index floor | `borrowIndex >= 1e18` |
-| `inv06` | No uncollateralised debt | no account with `supplyShares === 0` holds `borrowShares > 0` |
+| `inv06` | No uncollateralised debt | no account with `userCollateral === 0` holds `borrowShares > 0` |
+| `inv07` | Solvency monotonicity (delta) | solvency margin `totalAssets − totalSupplyAssets` never drops vs `prior` |
+| `inv08` | No-free-lunch on liquidation | each `Liquidated`: `seized · price · BPS ≤ paid · (BPS + bonus) · WAD` |
+| `inv09` | Per-position debt monotonicity (delta) | unchanged `userBorrowShares` ⇒ `userDebt` never drops vs `prior` |
+| `inv10` | Debt rounding favours protocol | `Σ userDebt[a] ≤ totalBorrowed` |
+| `inv11` | Oracle freshness gate | `blockTimestamp − oracleLastUpdatedAt ≤ MAX_STALENESS` |
+| `inv12` | Accrue idempotence (structural) | `lastAccrualTime ≤ blockTimestamp` — a passive structural sanity check; the full "a second same-block `accrue()` is a no-op" guarantee is proven by the harness + `MutantINV12`, not this read |
 
 How the per-user checks work:
 
@@ -188,9 +203,11 @@ How the per-user checks work:
   aggregate. The user array is the exact set the fetcher discovered from
   `Deposited` / `Borrowed` / `Liquidated` events, so the sum identity is
   evaluated against the real population, not a proxy.
-- **INV-06** filters the same user array for any account holding zero supply
-  shares yet non-zero borrow shares; `actualValue` reports the count of
+- **INV-06** filters the same user array for any account holding zero posted
+  collateral yet non-zero borrow shares; `actualValue` reports the count of
   offending accounts, which must be `0`.
+- **INV-09 / INV-10** are likewise evaluated per account over the same real
+  user set, so they are exact rather than sampled.
 
 All arithmetic uses native `bigint` (`1_000_000_000_000_000_000n`) — no
 floating point, so the maths matches the EVM's exactly.
@@ -231,9 +248,10 @@ Shared interfaces only — no logic.
 
 | Type | Purpose |
 |------|---------|
-| `InvariantId` | String-literal union `'INV-01'`…`'INV-06'`. |
-| `UserPosition` | One account's per-user position: `address`, `supplyShares`, `borrowShares`. |
-| `VaultState` | One block's snapshot: the six aggregate vault reads, `cash`, the `users` array, `blockNumber`, `blockTimestamp`. |
+| `InvariantId` | String-literal union `'INV-01'`…`'INV-12'`. |
+| `UserPosition` | One account's per-user position: `address`, `supplyShares`, `borrowShares`, `collateral`. |
+| `VaultState` | One block's snapshot: the aggregate vault reads, oracle freshness/price, `cash`, the `users` array, `blockNumber`, `blockTimestamp`. |
+| `PriorVaultState` | The previous observation the delta invariants (INV-07, INV-09) compare against — persisted in `vault_state_previous`; `null` on a first run. |
 | `InvariantResult` | One invariant's outcome: `id`, `name`, `passed`, `actualValue`, `boundValue`, `description`. |
 | `AlertPayload` | A bundle of violations plus `blockNumber`, `timestamp`, `detectedAt`, `detectionLatencyMs`, ready to persist. |
 | `BotConfig` | Fully-resolved, validated runtime config returned by `loadConfig()`. |
@@ -339,7 +357,7 @@ natural next steps for anyone deploying it for real:
 
 - [architecture.md](architecture.md) — where the bot sits among the four layers.
 - [contracts.md](contracts.md) — the `Vault` state the bot reads.
-- [invariants.md](invariants.md) — the six invariants and which layer enforces each.
+- [invariants.md](invariants.md) — the twelve invariants and which layer enforces each.
 - [database.md](database.md) — the Supabase tables the bot writes.
 - [setup.md](setup.md) — configuring and running the bot.
 </content>
