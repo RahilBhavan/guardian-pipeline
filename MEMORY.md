@@ -330,3 +330,85 @@ no longer count as violations.
 Rejected: Deleting the workflow comment instead (it is valuable documentation —
 the test was the over-strict side); leaving `npm test` out of CI (the exact gap
 that let this ship).
+
+## 2026-06-12 — Live deploy: bot hosting pivot Fly → Koyeb
+What: Built `guardian/Dockerfile` (+`.dockerignore`, `fly.toml`) for the
+always-on bot. Applied the missing live Supabase migrations 0003
+(alerts/blocks unique) and 0004 (`vault_state_previous`) — both verified
+present. Committed previously-uncommitted demo tooling (demo/, lookup script,
+AGENTS.md, .cursor/agents) so clone-and-run works. Pushed `feat/live-deploy-fly`,
+opened PR #11.
+Why: Live dashboard showed data frozen at 2026-05-22 because the bot (the only
+always-on layer) was never hosted.
+Rejected: Fly.io — image built & secrets staged, but it now requires billing
+(~$2/mo) before launching any machine, so the empty app was destroyed. Render
+(free web services sleep) and Railway (trial-then-paid) rejected too. Chose
+Koyeb free tier (0.1 vCPU/512MB, no sleep, no card); the bot's /healthz on
+port 9090 satisfies Koyeb's web-service HTTP-port requirement. Same Dockerfile.
+Next: create the Koyeb web service from the repo, then confirm `blocks_checked`
+advances again.
+
+## 2026-06-14 — Documentation reconciliation (docs were stuck at the old 6-invariant single-asset design)
+What: Swept README + all of docs/ to match the current code. The docs had drifted
+badly: they described a SIX-invariant, SINGLE-ASSET vault while the code is a
+TWELVE-invariant, TWO-ASSET oracle-priced vault. Fixes:
+- **contracts.md** rewritten for the two-asset model (separate `debtAsset` +
+  `collateralAsset`, `IPriceOracle`/`MockOracle`, `MAX_STALENESS`,
+  `depositCollateral`/`withdrawCollateral`, `userCollateral`, new constructor
+  (5 params, `_liquidationBonus` validated), new events/errors, oracle-priced
+  `liquidate`, an Attackable-family table). Key correction: `withdraw` is NO
+  LONGER collateral-gated (lender shares aren't collateral now).
+- **invariants.md** expanded 6→12 (added INV-07..12 sections + enforcement table).
+- **architecture.md / guardian-bot.md / glossary.md / database.md / setup.md /
+  architecture.svg**: 6→12 invariant counts, 7→10 exploit scenarios, five→eight
+  handlers, four→six test tiers, six→seven CI jobs.
+- **Correctness bugs fixed in docs:** bot/deploy env var is `DEBT_ASSET`, not
+  `TOKEN_ADDRESS` (setup would have failed); the bot needs **Node ≥ 22**
+  (`@supabase/supabase-js` needs a global `WebSocket`); `evaluateInvariants(state,
+  prior)` signature; INV-06 is now collateral-based not supply-share-based;
+  database.md was missing migrations 0003/0004 + the `vault_state_previous` table.
+- **Hosting framing** (user chose "describe mechanism, hedge cadence"): README +
+  architecture + guardian-bot + assurance now say the monitor runs as a free,
+  best-effort scheduled GitHub Actions job (`guardian-monitor.yml`, ~5-min,
+  single-pass `once.ts`) — replacing the old "no hosted service" lines — while
+  keeping the honest limits (not adversarially tested, no incident history; AMC
+  stays a pre-deployment-only metric).
+Why: User asked to complete + clean the docs. The 6→12/two-asset redesign
+(logged 2026-05-22) never propagated into docs/; only the README had been
+partly updated, leaving internal contradictions.
+Note (NEEDS ATTENTION, not done — out of stated docs scope):
+- `src/Vault.sol`'s own NatSpec header (lines ~24-36) still says "six
+  mathematical invariants" and lists only INV-01..06 — source comment, left for
+  a code change. Same for any 6-invariant NatSpec in other src files.
+- `architecture.svg` had its counts fixed (12 invariants / 7 jobs) but its
+  Layer-2 box still depicts the single-asset function list and no oracle/
+  collateral node — a full diagram redraw was out of proportion for this pass.
+
+## 2026-06-14 — Diagnosed "guardian down" on the dashboard
+What: The hosted `guardian-monitor.yml` cron fails on nearly every run with
+Alchemy 429 ("compute units per second exceeded") during the `eth_getLogs`
+discovery scan, so no fresh `blocks_checked` row is written and the dashboard
+liveness flag flips to down. Root cause: each run dies at the scan (once.ts
+~line 108, `Promise.all` of two paginated 10-block getLogs loops, LOOKBACK=300 →
+~60 getLogs in a burst) BEFORE reaching `savePreviousState` (line 143), so the
+prior-state cursor is never persisted; the next run restarts from the deploy
+block and hits the identical burst — a stuck loop. GitHub's schedule is also
+lagging (last run 14:55 UTC, manual). FIXED 2026-06-15 (user: "do what you deem
+necessary"): `once.ts` now runs the two scans serially (was Promise.all) and
+throttles each getLogs window via a new opt-in `interWindowDelayMs` in
+`fetcher.ts` (default 0 → daemon unchanged), set to 1100ms so the sweep stays
+under the free tier's ~330 CU/s cap. Kept LOOKBACK=300. Verified by a real local
+single-pass run vs the demo vault: completed ~74s, NO 429, wrote a fresh
+blocks_checked row AND persisted the cursor (breaks the loop). Guardian typecheck
++ 64 tests green.
+Two real issues that run surfaced (independent of the rate-limit fix):
+- INV-11 (oracle freshness) fires LEGITIMATELY — the demo MockOracle hasn't been
+  refreshed in >1 day (MAX_STALENESS=1d). A green demo needs an oracle keeper
+  (periodic MockOracle.setPrice/setLastUpdatedAt) or a longer MAX_STALENESS
+  (immutable → redeploy). NOT fixed — needs an on-chain tx / keystore.
+- INV-12 was a FALSE-POSITIVE bug in the off-chain port: `inv12` required
+  `lastAccrualTime === blockTimestamp`, true only on a block where a mutating tx
+  ran, so it flagged every idle block → dashboard permanently red on INV-12.
+  Relaxed to `lastAccrualTime <= blockTimestamp` (passive structural sanity
+  check; the strong second-`accrue()`-no-op guarantee stays in the harness +
+  MutantINV12). Updated evaluator.ts + the test fixture + guardian-bot.md.

@@ -264,23 +264,28 @@ export function inv11(state: VaultState): InvariantResult {
 }
 
 /**
- * INV-12 Accrue idempotence (structural port) — the harness calls
- * `accrue()` twice and asserts byte-identical state. The off-chain
- * monitor cannot transact, but `lastAccrualTime == blockTimestamp` is
- * sufficient: it proves the `if (dt == 0) return;` guard inside accrue()
- * would fire on a second call within this block, making it a no-op. A
- * source mutation that removed the guard would let `lastAccrualTime`
- * lag behind the block, and this snapshot check fires immediately.
+ * INV-12 Accrue idempotence (structural port) — the on-chain harness calls
+ * `accrue()` twice and asserts byte-identical state. A passive monitor cannot
+ * transact, so it asserts the observable structural precondition instead:
+ * `lastAccrualTime <= blockTimestamp`. Accrual always stamps
+ * `lastAccrualTime = block.timestamp`, so it can never run ahead of the block;
+ * an idle vault (lastAccrualTime behind the head) is perfectly healthy — the
+ * earlier `=== blockTimestamp` port wrongly flagged every block without a
+ * same-block transaction. Only a malformed snapshot or a clock/source bug can
+ * put accrual in the future, which this fires on. The *strong* idempotence
+ * guarantee is proven pre-deployment by the harness and
+ * `test/mutant/MutantINV12.t.sol`, not by this passive read — see
+ * docs/guardian-bot.md.
  */
 export function inv12(state: VaultState): InvariantResult {
   const blockTs = BigInt(state.blockTimestamp);
   return {
     id: 'INV-12',
     name: 'Accrue idempotence (structural)',
-    passed: state.lastAccrualTime === blockTs,
+    passed: state.lastAccrualTime <= blockTs,
     actualValue: state.lastAccrualTime,
     boundValue: blockTs,
-    description: 'lastAccrualTime must equal block.timestamp so a re-entrant accrue() is a no-op',
+    description: 'lastAccrualTime must never exceed block.timestamp (accrual cannot run in the future)',
   };
 }
 

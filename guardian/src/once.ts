@@ -45,6 +45,16 @@ const logger = pino({
  */
 const LOOKBACK = 300n;
 
+/**
+ * Pause between each paginated getLogs window during discovery. `discoverUsers`
+ * issues four `eth_getLogs` per window; at ~75 CU each that is 300 CU, so a
+ * ~1.1 s gap keeps the sweep under a free RPC tier's ~330 CU/s cap. Without it
+ * the catch-up scan bursts well past the cap and 429s the whole run *before* it
+ * can persist its cursor — leaving the next run to rescan from scratch and fail
+ * the same way (the failure that kept the hosted monitor permanently "down").
+ */
+const SCAN_THROTTLE_MS = 1100;
+
 const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
 
 function requireEnv(key: string): string {
@@ -105,12 +115,19 @@ async function run(): Promise<void> {
 
   let blockLiquidations: Awaited<ReturnType<typeof fetchLiquidationsInRange>> = [];
   if (headBlock >= scanFrom) {
-    const [fresh, liquidations] = await Promise.all([
-      discoverUsers(client, vaultAddress, scanFrom, headBlock),
-      fetchLiquidationsInRange(client, vaultAddress, oracleAddress, scanFrom, headBlock),
-    ]);
+    // Run the two scans serially (not Promise.all) and throttle each window:
+    // both share the free RPC tier's CU/s budget, so overlapping them or
+    // sweeping at full speed bursts past the rate limit. See SCAN_THROTTLE_MS.
+    const fresh = await discoverUsers(client, vaultAddress, scanFrom, headBlock, SCAN_THROTTLE_MS);
     for (const u of fresh) knownUsers.add(u);
-    blockLiquidations = liquidations;
+    blockLiquidations = await fetchLiquidationsInRange(
+      client,
+      vaultAddress,
+      oracleAddress,
+      scanFrom,
+      headBlock,
+      SCAN_THROTTLE_MS,
+    );
   }
 
   const vaultState = await fetchVaultState(

@@ -311,13 +311,18 @@
     "name": "Accrue idempotence (structural)",
     "cases": [
       {
-        "name": "passes when lastAccrualTime == blockTimestamp",
+        "name": "passes when lastAccrualTime equals the block",
         "state": { "blockTimestamp": 100000, "lastAccrualTime": "100000" },
         "expected": { "passed": true }
       },
       {
-        "name": "fails when lastAccrualTime lags the block",
+        "name": "passes when lastAccrualTime lags the block (idle vault)",
         "state": { "blockTimestamp": 100000, "lastAccrualTime": "99999" },
+        "expected": { "passed": true }
+      },
+      {
+        "name": "fails when lastAccrualTime exceeds the block (impossible/future)",
+        "state": { "blockTimestamp": 100000, "lastAccrualTime": "100001" },
         "expected": { "passed": false }
       }
     ]
