@@ -263,7 +263,7 @@ Repays the caller's debt. Offering `amount >= debt` fully closes the position.
   and collects exactly `amount`.
 - A full close burns the caller's entire borrow-share balance and collects the
   *realised* drop in `totalBorrowed()` — the debt, or by at most one wei of
-  index rounding one wei more (review finding GUA-07). Charging the realised
+  index rounding one wei more (review finding GUA-06). Charging the realised
   drop is what keeps INV-01 exact.
 - **State:** `userBorrowShares` and `totalBorrowShares` decrease by the burned
   shares.

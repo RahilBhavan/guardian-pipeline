@@ -57,10 +57,12 @@ Four layers — three runtime layers plus an assurance layer that scores them:
 1. **Pre-deployment (CI/CD)** — Foundry invariant fuzzing runs on every push. A
    green badge means all 12 invariants held across a 2,000-run campaign (up to
    ~300,000 handler calls) without an invariant failing.
-2. **Smart contract** — an interest-bearing, over-collateralised lending vault
-   (`deposit` · `withdraw` · `borrow` · `repay` · `liquidate` · `accrue`).
-   Borrowers pay interest through a borrow index, lenders earn it as a rising
-   share price, and under-water positions are liquidated.
+2. **Smart contract** — an interest-bearing, over-collateralised, two-asset
+   lending vault (`deposit` · `withdraw` · `depositCollateral` ·
+   `withdrawCollateral` · `borrow` · `repay` · `liquidate` · `accrue`). Lenders
+   supply the debt asset; borrowers post a separate collateral asset priced by an
+   oracle. Borrowers pay interest through a borrow index, lenders earn it as a
+   rising share price, and under-water positions are liquidated.
 3. **Runtime monitor** — a TypeScript monitor (`guardian/`) that fetches vault
    state, evaluates the same 12 invariants, and persists any violation to
    Supabase. It runs two ways: as a per-block daemon (`bot.ts`, ~2 s cadence)
@@ -150,17 +152,19 @@ the build if it drifts (`assurance trace --check-exploit-docs`).
 
 <!-- EXPLOIT_SUMMARY_END -->
 
-CI fails the build if the composite score drops below **80**. (An earlier
-design had a fourth "Continuous Monitoring" component scored from a live
-deployment — it was removed, since there is no hosted Guardian bot service to score.)
+CI fails the build if the composite score drops below **80**. (An earlier design
+had a fourth "Continuous Monitoring" component scored from a live deployment — it
+was removed; AMC is deliberately pre-deployment-only and excludes runtime signal,
+even though a best-effort scheduled monitor now runs against the demo vault.)
 See **[docs/assurance.md](docs/assurance.md)**.
 
 ---
 
 ## Quickstart
 
-**Prerequisites:** [Foundry](https://getfoundry.sh/) and Node.js ≥ 20. The
-contract layer and both test suites run with no external services.
+**Prerequisites:** [Foundry](https://getfoundry.sh/) and Node.js ≥ 20 (the
+runtime monitor needs ≥ 22). The contract layer and both test suites run with no
+external services.
 
 ```bash
 git clone https://github.com/rahilbhavan/guardian-pipeline
@@ -234,7 +238,7 @@ evaluate → alert — works; it does not claim the monitor catches novel exploi
 
 ```
 guardian-pipeline/
-├── src/                  # Solidity contracts (Vault, AttackableVault, MockERC20)
+├── src/                  # Solidity (Vault, AttackableVault, IPriceOracle, MockOracle, MockERC20, attackable/)
 ├── test/
 │   ├── invariant/        # Foundry fuzz harness + handlers
 │   ├── unit/             # Deterministic unit coverage
@@ -271,9 +275,10 @@ guardian-pipeline/
 This project is built to be read by an engineer, so it states its limits up
 front:
 
-- **Not production code.** `Vault.sol` is a teaching example — single asset, no
-  price oracle, no bad-debt reserve. Do not custody real value with it. See
-  [SECURITY.md](SECURITY.md).
+- **Not production code.** `Vault.sol` is a teaching example — a two-asset,
+  oracle-priced vault wired to a permissionless `MockOracle` (no real price
+  feed), with no bad-debt reserve and no governance. Do not custody real value
+  with it. See [SECURITY.md](SECURITY.md).
 - **Best-effort hosted monitor, not a production service.** The Guardian bot is
   a runnable reference implementation. A free, **scheduled GitHub Actions** job
   (`guardian-monitor.yml`) runs it in single-pass mode against the public demo
@@ -293,11 +298,9 @@ front:
   grades the result. AMC explicitly measures *methodology coverage* —
   reproducible, not externally validated. Read "A− / 91" as "this codebase
   grades itself A− against the rubric the codebase ships" — not as a
-  third-party certification. (The rebuild plan addresses this by adding
-  external-signal components — Slither/Aderyn, Halmos, Echidna, live monitor
-  uptime, paid micro-audit — in later sprints so external signals total ≥50%
-  of weight.) The [docs/assurance.md](docs/assurance.md#what-this-score-is-not)
-  page spells out what the score is and is not in more detail.
+  third-party certification. The
+  [docs/assurance.md](docs/assurance.md#what-this-score-is-not) page spells out
+  what the score is and is not in more detail.
 - **The detection demo is staged.** `AttackableVault.attack()` is a planted flag
   for filming the monitor, not a real exploit.
 - **No formal verification.** The invariant proofs are empirical (Foundry fuzz

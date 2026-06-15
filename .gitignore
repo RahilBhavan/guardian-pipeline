@@ -23,6 +23,9 @@ dist/
 guardian/.env
 dashboard/.env
 
+# Private — author-only notes, never published to the public repo
+private/
+
 # Editor / OS
 .DS_Store
 *.log

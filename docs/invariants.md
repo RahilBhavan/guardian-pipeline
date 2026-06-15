@@ -15,7 +15,7 @@ pretend they are. Each invariant below carries a **class**:
 
 - **Fuzz-tensioned** (INV-01, INV-06, INV-07..INV-12) — properties the fuzz
   campaign genuinely attacks: a wrong rounding direction, call ordering, or
-  missing guard breaks them. INV-01 already caught a real bug (GUA-03).
+  missing guard breaks them. INV-01 already caught a real bug (GUA-02).
   INV-07..INV-12 are each paired with a `test/mutant/MutantINV*.t.sol`
   mutation test that breaks the Vault on purpose and asserts the matching
   `invariant_*` catches it.
@@ -82,7 +82,7 @@ the claims of its lenders. This is the master safety property.
 - **Breaks when:** accrual credits lenders more than borrowers are charged, a
   repayment collects less than debt actually falls, or shares are minted with
   no backing assets. The fuzz harness found exactly the first class during
-  development — a one-wei full-repay leak, now fixed (review finding GUA-03).
+  development — a one-wei full-repay leak, now fixed (review finding GUA-02).
 - **Caught by:** `invariant_solvency()` · `inv01()` · replay EXP-01.
 
 ## INV-02 · Supply-share integrity · *Critical*
