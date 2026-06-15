@@ -64,6 +64,7 @@ export const VAULT_ABI = [
   { name: 'totalBorrowShares', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { name: 'totalBorrowed', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { name: 'borrowIndex', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { name: 'borrowRatePerSecond', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { name: 'collateralRatio', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { name: 'lastAccrualTime', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { name: 'liquidationBonus', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
@@ -228,7 +229,7 @@ export async function fetchVaultState(
   users: `0x${string}`[],
   liquidationEvents: LiquidationEvent[] = [],
 ): Promise<VaultState> {
-  // The aggregate state is a fixed 12-call multicall: 10 vault views
+  // The aggregate state is a fixed 13-call multicall: 10 vault views
   // (six original + lastAccrualTime/liquidationBonus/MAX_STALENESS for
   // INV-08/11/12) + 2 oracle views (price/lastUpdatedAt for INV-08/11) +
   // the debt-asset balance that backs INV-01's `cash` term. Per-user
@@ -243,6 +244,7 @@ export async function fetchVaultState(
     { address: vaultAddress, abi: VAULT_ABI, functionName: 'totalBorrowShares', args: [] },
     { address: vaultAddress, abi: VAULT_ABI, functionName: 'totalBorrowed', args: [] },
     { address: vaultAddress, abi: VAULT_ABI, functionName: 'borrowIndex', args: [] },
+    { address: vaultAddress, abi: VAULT_ABI, functionName: 'borrowRatePerSecond', args: [] },
     { address: vaultAddress, abi: VAULT_ABI, functionName: 'collateralRatio', args: [] },
     { address: vaultAddress, abi: VAULT_ABI, functionName: 'lastAccrualTime', args: [] },
     { address: vaultAddress, abi: VAULT_ABI, functionName: 'liquidationBonus', args: [] },
@@ -296,12 +298,13 @@ export async function fetchVaultState(
     totalBorrowShares: aggCell(2),
     totalBorrowed: aggCell(3),
     borrowIndex: aggCell(4),
-    collateralRatio: aggCell(5),
-    lastAccrualTime: aggCell(6),
-    liquidationBonus: aggCell(7),
-    maxStaleness: aggCell(8),
-    oracleLastUpdatedAt: aggCell(9),
-    cash: aggCell(10),
+    borrowRatePerSecond: aggCell(5),
+    collateralRatio: aggCell(6),
+    lastAccrualTime: aggCell(7),
+    liquidationBonus: aggCell(8),
+    maxStaleness: aggCell(9),
+    oracleLastUpdatedAt: aggCell(10),
+    cash: aggCell(11),
     users: positions,
     liquidationEvents,
     blockNumber,

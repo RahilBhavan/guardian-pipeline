@@ -33,7 +33,7 @@ Explorer: [vault on BaseScan](https://sepolia.basescan.org/address/0xfF9D77D1EC6
 3. **Point your own dashboard clone** — set `VITE_VAULT_ADDRESS` and Supabase vars per [`dashboard/.env.example`](../dashboard/.env.example).
 4. **Run the Guardian bot locally** — set `VAULT_ADDRESS`, `DEBT_ASSET`, and `VAULT_DEPLOY_BLOCK` in `guardian/.env` (see [`docs/setup.md`](../docs/setup.md)).
 
-Calling `attack()` on the demo vault is **one-way** — it permanently violates INV-01. Only the demo attacker wallet can call it; redeploy for a fresh vault.
+Calling `attack()` (STAGED-01 detection demo) on the demo vault is **one-way** — it permanently violates INV-01. Only the demo attacker wallet can call it; redeploy for a fresh vault.
 
 ## Cursor subagent
 

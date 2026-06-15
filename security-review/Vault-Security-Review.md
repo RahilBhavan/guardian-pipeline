@@ -59,16 +59,19 @@ limitation the Guardian Pipeline is built to close.
 
 ## 4. Findings summary
 
+> **Canonical IDs:** [`findings.json`](./findings.json) is the machine-readable source of truth for GUA IDs and continuous-assurance bindings. The demo backdoor lives on `AttackableVault`, not as a separate GUA finding.
+
+
 | ID | Severity | Title | Status |
 |---|---|---|---|
-| [GUA-01](#gua-01--critical) | Critical | Demo insolvency backdoor isolated to a separate contract | Resolved |
-| [GUA-02](#gua-02--medium) | Medium | Reentrancy exposure on state-mutating functions | Resolved |
-| [GUA-03](#gua-03--high) | High | Full-close repayment could erode the solvency margin by one wei | Resolved |
-| [GUA-04](#gua-04--medium) | Medium | Liquidation seizing all collateral must clear the full debt | Resolved |
-| [GUA-05](#gua-05--low) | Low | Sustained interest can make a lender redemption exceed idle cash | Acknowledged |
-| [GUA-06](#gua-06--informational) | Informational | Share price is immune to direct token donations | Acknowledged |
-| [GUA-07](#gua-07--informational) | Informational | A full-close repayment may charge up to one wei above `userDebt()` | Acknowledged |
-| [GUA-08](#gua-08--low) | Low | Deeply under-water positions can leave residual bad debt | Acknowledged |
+| [GUA-01](#gua-01) | Medium | Reentrancy exposure on state-mutating functions | Resolved |
+| [GUA-02](#gua-02) | High | Full-close repayment could erode the solvency margin by one wei | Resolved |
+| [GUA-03](#gua-03) | Medium | Liquidation seizing all collateral must clear the full debt | Resolved |
+| [GUA-04](#gua-04) | Low | Sustained interest can make a lender redemption exceed idle cash | Acknowledged |
+| [GUA-05](#gua-05) | Informational | Share price and collateral accounting are immune to direct token donations | Acknowledged |
+| [GUA-06](#gua-06) | Informational | A full-close repayment may charge up to one wei above userDebt() | Acknowledged |
+| [GUA-07](#gua-07) | Low | Deeply under-water positions can leave residual bad debt | Acknowledged |
+| [GUA-08](#gua-08) | Medium | Oracle adapter must enforce deviation and circuit-breaker beyond vault staleness gate | Acknowledged |
 
 **Distribution:** 1 Critical · 1 High · 2 Medium · 2 Low · 2 Informational.
 

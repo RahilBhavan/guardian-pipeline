@@ -95,6 +95,7 @@ describe('stateHistory wire round-trip', () => {
       totalSupplyShares: original.totalSupplyShares,
       totalBorrowShares: original.totalBorrowShares,
       borrowIndex: original.borrowIndex,
+      borrowRatePerSecond: 0n,
       collateralRatio: original.collateralRatio,
       lastAccrualTime: original.lastAccrualTime,
       maxStaleness: original.maxStaleness,

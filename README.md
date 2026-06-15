@@ -209,7 +209,7 @@ that forces an INV-01 violation. It is not an exploit, and the production
 `Vault` has no such function.
 
 ```bash
-cast send $VAULT_ADDRESS "attack()" --account guardian-demo --rpc-url $BASE_SEPOLIA_RPC
+cast send $VAULT_ADDRESS "attack()"  # STAGED-01 detection demo --account guardian-demo --rpc-url $BASE_SEPOLIA_RPC
 ```
 
 With the monitor running, it detects the resulting INV-01 violation on the next
@@ -296,7 +296,7 @@ front:
 - **The AMC score is self-graded.** The same author writes the invariants,
   picks the exploit set, tags the findings against those invariants, *and*
   grades the result. AMC explicitly measures *methodology coverage* —
-  reproducible, not externally validated. Read "A− / 91" as "this codebase
+  reproducible, not externally validated. Read "A / 94" as "this codebase
   grades itself A− against the rubric the codebase ships" — not as a
   third-party certification. The
   [docs/assurance.md](docs/assurance.md#what-this-score-is-not) page spells out

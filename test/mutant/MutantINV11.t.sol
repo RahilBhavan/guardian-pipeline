@@ -32,7 +32,18 @@ contract MutantINV11Test is Test {
         v.borrow(1_000e18);
     }
 
-    function test_mutantVault_acceptsStaleBorrow() public {
+    function test_realVault_revertsOnStaleWithdrawCollateral() public {
+        (Vault v, MockERC20 d, MockERC20 c,) = _deploy(false);
+        address borrower = _seedAndCollateralise(v, d, c);
+
+        vm.warp(block.timestamp + v.MAX_STALENESS() + 1);
+
+        vm.prank(borrower);
+        vm.expectRevert(Vault.OraclePriceStale.selector);
+        v.withdrawCollateral(1e18);
+    }
+
+        function test_mutantVault_acceptsStaleBorrow() public {
         (Vault v, MockERC20 d, MockERC20 c,) = _deploy(true);
         address borrower = _seedAndCollateralise(v, d, c);
 

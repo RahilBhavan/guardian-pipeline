@@ -256,7 +256,7 @@ contract Vault is ReentrancyGuard {
         if (amount > userCollateral[msg.sender]) revert InsufficientCollateral();
 
         uint256 remainingCollateral = userCollateral[msg.sender] - amount;
-        uint256 remainingValue = (remainingCollateral * oracle.price()) / WAD;
+        uint256 remainingValue = (remainingCollateral * _freshPrice()) / WAD;
         uint256 maxBorrow = (remainingValue * collateralRatio) / BPS;
         if (userDebt(msg.sender) > maxBorrow) revert CollateralCapExceeded();
 

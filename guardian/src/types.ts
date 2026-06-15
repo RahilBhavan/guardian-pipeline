@@ -56,6 +56,8 @@ export interface VaultState {
   totalBorrowed: bigint;
   /** Debt-scaling index, scaled by 1e18. */
   borrowIndex: bigint;
+  /** Per-second borrow rate (WAD-scaled), from vault.borrowRatePerSecond(). */
+  borrowRatePerSecond: bigint;
   /** Maximum borrow as a fraction of collateral value, in basis points. */
   collateralRatio: bigint;
   /** The vault's own debt-asset balance — idle cash. */

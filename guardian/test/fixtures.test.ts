@@ -64,6 +64,7 @@ interface RawPartialState {
   totalSupplyShares?: string;
   totalBorrowShares?: string;
   borrowIndex?: string;
+  borrowRatePerSecond?: string;
   collateralRatio?: string;
   lastAccrualTime?: string;
   liquidationBonus?: string;
@@ -102,6 +103,7 @@ function makeStateDefaults(): VaultState {
     totalSupplyShares: 0n,
     totalBorrowShares: 0n,
     borrowIndex: ONE_E18,
+    borrowRatePerSecond: 0n,
     collateralRatio: 8000n,
     lastAccrualTime: 0n,
     maxStaleness: 0n,
@@ -142,6 +144,7 @@ function hydrate(part: RawPartialState): VaultState {
   if (part.totalSupplyShares !== undefined) base.totalSupplyShares = BigInt(part.totalSupplyShares);
   if (part.totalBorrowShares !== undefined) base.totalBorrowShares = BigInt(part.totalBorrowShares);
   if (part.borrowIndex !== undefined) base.borrowIndex = BigInt(part.borrowIndex);
+  if (part.borrowRatePerSecond !== undefined) base.borrowRatePerSecond = BigInt(part.borrowRatePerSecond);
   if (part.collateralRatio !== undefined) base.collateralRatio = BigInt(part.collateralRatio);
   if (part.lastAccrualTime !== undefined) base.lastAccrualTime = BigInt(part.lastAccrualTime);
   if (part.liquidationBonus !== undefined) base.liquidationBonus = BigInt(part.liquidationBonus);

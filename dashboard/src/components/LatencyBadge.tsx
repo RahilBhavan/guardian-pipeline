@@ -8,7 +8,7 @@ interface Props {
   lastChecked: Date | null;
 }
 
-/** Liveness threshold — the bot is "down" if no check landed within this window. */
+/** Liveness threshold — hosted demo uses ~5 min GHA cron; 7 min window avoids false DOWN. */
 const LIVE_WINDOW_MS = 10_000;
 
 export function LatencyBadge({ latencyMs, blockNumber, lastChecked }: Props) {

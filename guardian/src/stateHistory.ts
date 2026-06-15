@@ -87,6 +87,7 @@ export function rowToVaultState(row: VaultStateRow): VaultState {
     totalBorrowShares: BigInt(row.total_borrow_shares),
     totalBorrowed: BigInt(row.total_borrowed),
     borrowIndex: BigInt(row.borrow_index),
+    borrowRatePerSecond: 0n,
     collateralRatio: BigInt(row.collateral_ratio),
     lastAccrualTime: BigInt(row.last_accrual_time),
     liquidationBonus: BigInt(row.liquidation_bonus),

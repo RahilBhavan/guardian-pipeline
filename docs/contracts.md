@@ -355,7 +355,7 @@ the real user set rather than a proxy. See
 | `PositionHealthy` | `liquidate` targets a position still within its collateral cap. |
 | `MustClearDebt` | `liquidate` would seize all of a borrower's collateral without closing the full debt. |
 | `InvalidLiquidationBonus` | Constructor called with `_liquidationBonus == 0` or `_liquidationBonus > 50_00`. |
-| `OraclePriceStale` | A price-dependent path (`collateralValue` → `_freshPrice`, and thus `borrow`, `liquidate`) detects that `block.timestamp - oracle.lastUpdatedAt() > MAX_STALENESS`. |
+| `OraclePriceStale` | A price-dependent path (`borrow`, `withdrawCollateral`, `liquidate` health check via `_freshPrice`) detects that `block.timestamp - oracle.lastUpdatedAt() > MAX_STALENESS`. |
 
 Custom errors are used throughout instead of `require` strings — they are
 cheaper and give each exploit replay a precise selector to assert against.
@@ -424,8 +424,8 @@ for production use — a real deployment must wrap an authenticated feed behind
 | `constructor(address _debtAsset, address _collateralAsset, address _oracle, uint256 _aprBps, uint256 _liquidationBonus, address _attacker)` | As `Vault`, plus the demo `attacker` address. |
 | `attack()` | Sets `totalSupplyAssets = totalSupplyAssets * 1_000 + 1_000e18`, inflating the lender-side claim far beyond the assets backing it — a direct **INV-01** (solvency) violation. Reverts `NotAttacker` unless called by `attacker`; reverts `MainnetDisabled` when `block.chainid == BASE_MAINNET`. |
 
-`attack()` is the **only** difference from `Vault`. It is replayed as exploit
-scenario **EXP-01**, where the expected outcome is **DETECTED** — a staged
+`attack()` is the **only** difference from `Vault`. It is replayed as staged demo
+scenario **STAGED-01**, where the expected outcome is **DETECTED** — a staged
 breach used to show the runtime monitor catching an insolvency the contract code
 itself permitted. It demonstrates the detection plumbing; it is not a novel
 exploit.

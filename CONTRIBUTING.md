@@ -29,7 +29,7 @@ forge test --match-contract InvariantVault -vvv
 
 ## The one rule that matters most
 
-**The invariants must stay mirrored.** The 6 invariant IDs (`INV-01`…`INV-06`)
+**The invariants must stay mirrored.** The 12 invariant IDs (`INV-01`…`INV-12`)
 are defined identically in three places:
 
 - `test/invariant/InvariantVault.t.sol` — the Foundry harness

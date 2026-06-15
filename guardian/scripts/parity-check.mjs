@@ -74,3 +74,18 @@ if (!ok) {
 
 const sorted = [...harnessIds].sort();
 console.log(`PARITY OK — ${sorted.length}-of-${sorted.length} mirror: ${sorted.join(', ')}`);
+
+
+const mirrorPath = resolve(repoRoot, 'test/fixtures/mirror-states.json');
+try {
+  const mirror = JSON.parse(readFileSync(mirrorPath, 'utf8'));
+  const mirrorIds = new Set(Object.keys(mirror).filter((k) => /^INV-\d{2}$/.test(k)));
+  const missingMirror = [...harnessIds].filter((id) => !mirrorIds.has(id));
+  if (missingMirror.length) {
+    console.error('mirror-states.json missing fixture keys:', missingMirror.join(', '));
+    process.exit(1);
+  }
+} catch (err) {
+  console.error('mirror-states.json missing or invalid:', err.message);
+  process.exit(1);
+}

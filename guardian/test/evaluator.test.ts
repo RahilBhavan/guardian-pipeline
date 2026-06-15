@@ -48,6 +48,7 @@ function makeState(overrides: Partial<VaultState> = {}): VaultState {
     totalSupplyShares: 0n,
     totalBorrowShares: 0n,
     borrowIndex: ONE_E18,
+    borrowRatePerSecond: 0n,
     collateralRatio: 8000n,
     lastAccrualTime: 0n,
     maxStaleness: 0n,

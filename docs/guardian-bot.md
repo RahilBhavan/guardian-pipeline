@@ -194,7 +194,7 @@ event against the oracle price.
 | `inv09` | Per-position debt monotonicity (delta) | unchanged `userBorrowShares` ⇒ `userDebt` never drops vs `prior` |
 | `inv10` | Debt rounding favours protocol | `Σ userDebt[a] ≤ totalBorrowed` |
 | `inv11` | Oracle freshness gate | `blockTimestamp − oracleLastUpdatedAt ≤ MAX_STALENESS` |
-| `inv12` | Accrue idempotence (structural) | `lastAccrualTime ≤ blockTimestamp` — a passive structural sanity check; the full "a second same-block `accrue()` is a no-op" guarantee is proven by the harness + `MutantINV12`, not this read |
+| `inv12` | Accrue idempotence | Simulates `accrue()` twice at `blockTimestamp` via `accrue-sim.ts` (Vault.accrue port); second call must be a no-op on `(borrowIndex, totalSupplyAssets, totalBorrowShares, lastAccrualTime)` |
 
 How the per-user checks work:
 

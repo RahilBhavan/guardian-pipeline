@@ -11,6 +11,7 @@ tooling terms follow.
 | Term | Meaning |
 |------|---------|
 | **`INV-01` … `INV-12`** | The twelve **invariants** — mathematical properties the vault must hold in every reachable state. Defined identically in the Foundry harness, the Guardian evaluator, and the exploit replays. Full reference: [invariants.md](invariants.md). |
+| **`STAGED-01`** | The staged **detection demo** — `AttackableVault.attack()` permanently violates INV-01 so the runtime monitor can surface an alert. Not part of the EXP catalogue. |
 | **`EXP-01` … `EXP-10`** | The ten **exploit-replay scenarios** — classes of real-world DeFi attack replayed against the vault. Each is classified PREVENTED / DETECTED / MISSED. Catalogue: [assurance.md](assurance.md#exploit-replays). |
 | **`GUA-01` … `GUA-08`** | The eight findings in the self-conducted security review (`security-review/`), each traced to the layers that cover it. See [assurance.md](assurance.md#finding-traceability). |
 | **Assurance Methodology Coverage (AMC)** | A composite 0–100 metric, recomputed every commit, weighting three pre-deployment components (static verification 45%, exploit resistance 35%, finding traceability 20%). Measures methodology rigor — *not* code security. CI gates at ≥ 80. Earlier revisions called this the "Assurance Score"; the JSON and CLI field names still read `score`. |

@@ -16,13 +16,13 @@
  *     block; see {@link ./stateHistory.ts}.
  *   - **Event reconciliation (INV-08)** — reads each `Liquidated` log
  *     harvested from the polled range against the on-block oracle price
- *     and the vault's immutable bonus. INV-12's structural port asserts
- *     `lastAccrualTime == blockTimestamp` so a second accrue() would
- *     trivially no-op.
+ *     and the vault's immutable bonus. INV-12 simulates double `accrue()` via `accrue-sim.ts` to mirror
+ *     `invariant_accrueIdempotent()`.
  *
  * Unlike a sampled proxy, INV-02/03/06/09/10 are evaluated against the
  * *actual* per-user positions the fetcher discovers from vault events.
  */
+import { accrueFieldsFromState, accrueTwiceIdempotent } from './accrue-sim.js';
 import type {
   InvariantResult,
   LiquidationEvent,
@@ -246,7 +246,7 @@ export function inv10(state: VaultState): InvariantResult {
 /**
  * INV-11 Oracle freshness gate — `blockTimestamp - oracleLastUpdatedAt`
  * must not exceed `MAX_STALENESS`. Mirrors the on-chain `_freshPrice`
- * guard that gates every price-dependent path.
+ * guard on borrow, withdrawCollateral, and liquidate health paths.
  */
 export function inv11(state: VaultState): InvariantResult {
   const blockTs = BigInt(state.blockTimestamp);
@@ -264,28 +264,24 @@ export function inv11(state: VaultState): InvariantResult {
 }
 
 /**
- * INV-12 Accrue idempotence (structural port) — the on-chain harness calls
- * `accrue()` twice and asserts byte-identical state. A passive monitor cannot
- * transact, so it asserts the observable structural precondition instead:
- * `lastAccrualTime <= blockTimestamp`. Accrual always stamps
- * `lastAccrualTime = block.timestamp`, so it can never run ahead of the block;
- * an idle vault (lastAccrualTime behind the head) is perfectly healthy — the
- * earlier `=== blockTimestamp` port wrongly flagged every block without a
- * same-block transaction. Only a malformed snapshot or a clock/source bug can
- * put accrual in the future, which this fires on. The *strong* idempotence
- * guarantee is proven pre-deployment by the harness and
- * `test/mutant/MutantINV12.t.sol`, not by this passive read — see
- * docs/guardian-bot.md.
+ * INV-12 Accrue idempotence — mirrors invariant_accrueIdempotent(): simulate
+ * accrue() twice at blockTimestamp via the Vault.accrue() port in accrue-sim.ts
+ * and assert the second call is a no-op on (borrowIndex, totalSupplyAssets,
+ * totalBorrowShares, lastAccrualTime).
  */
 export function inv12(state: VaultState): InvariantResult {
   const blockTs = BigInt(state.blockTimestamp);
+  const fields = accrueFieldsFromState(state);
+  const idempotent = accrueTwiceIdempotent(fields, blockTs);
+  const structurallyValid = state.lastAccrualTime <= blockTs;
+  const passed = idempotent && structurallyValid;
   return {
     id: 'INV-12',
-    name: 'Accrue idempotence (structural)',
-    passed: state.lastAccrualTime <= blockTs,
-    actualValue: state.lastAccrualTime,
-    boundValue: blockTs,
-    description: 'lastAccrualTime must never exceed block.timestamp (accrual cannot run in the future)',
+    name: 'Accrue idempotence',
+    passed,
+    actualValue: passed ? 0n : 1n,
+    boundValue: 0n,
+    description: 'simulated double accrue() at block.timestamp must be a no-op',
   };
 }
 

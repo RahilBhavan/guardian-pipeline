@@ -54,7 +54,7 @@ not an SLA and AMC intentionally excludes runtime signal from the score.)
 **Grade:** A+ (97–100), A (93–96), A− (90–92), B+ (87–89), B (83–86),
 B− (80–82), C+ (77–79), … — see `gradeFor` in `assurance/src/score.ts`.
 
-**Current score: 91/100 → grade A−** (Static 82 · Exploit 100 · Traceability
+**Current score: 94/100 → grade A** (Static 86 · Exploit 100 · Traceability
 93.8). Regenerate it with the commands [below](#running-it-locally); the live
 figures are in `assurance/data/assurance-report.json`.
 
@@ -143,8 +143,8 @@ The summary sentence is regenerated alongside the table:
 → exploit-resistance score 100/100. CI fails if any scenario regresses (an
 outcome worse than expected) or is MISSED.
 
-EXP-01 is intentionally the reference DETECTED scenario: it is a staged,
-deliberately-planted breach (`AttackableVault.attack()`) used to show the
+**STAGED-01** is the reference DETECTED scenario: a staged,
+deliberately-planted breach (`AttackableVault.attack()`). **EXP-01** remains the ERC-4626 inflation replay (PREVENTED) used to show the
 runtime monitor catching an insolvency the contract code itself permitted. It
 demonstrates the *detection plumbing*; it is not a novel exploit.
 
