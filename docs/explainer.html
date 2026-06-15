@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Guardian Pipeline — The Interactive Explainer</title>
+<style>
+  :root {
+    --base: #0052ff;
+    --base-soft: #2f73ff;
+    --bg: #0a0e1a;
+    --bg-2: #0f1525;
+    --panel: #131b30;
+    --panel-2: #18223c;
+    --line: #243150;
+    --ink: #e8edf7;
+    --ink-2: #9fb0cc;
+    --ink-3: #6b7b9c;
+    --green: #2ecc71;
+    --green-soft: #1d8a4e;
+    --red: #ff5470;
+    --amber: #ffb13b;
+    --mono: "SFMono-Regular", ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--sans); line-height: 1.65; font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* ---------- layout ---------- */
+  #progress {
+    position: fixed; top: 0; left: 0; height: 3px; width: 0%;
+    background: linear-gradient(90deg, var(--base), #00d4ff); z-index: 100;
+    transition: width .15s ease;
+  }
+  .wrap { display: grid; grid-template-columns: 260px minmax(0,1fr); max-width: 1280px; margin: 0 auto; }
+  nav {
+    position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
+    padding: 28px 18px; border-right: 1px solid var(--line); font-size: 13.5px;
+  }
+  nav .brand { font-weight: 700; font-size: 15px; letter-spacing: .3px; margin-bottom: 4px; color: #fff; }
+  nav .brand span { color: var(--base-soft); }
+  nav .tag { color: var(--ink-3); font-size: 11.5px; margin-bottom: 22px; text-transform: uppercase; letter-spacing: 1px; }
+  nav a {
+    display: block; color: var(--ink-2); text-decoration: none; padding: 6px 10px;
+    border-radius: 7px; margin: 1px 0; border-left: 2px solid transparent;
+  }
+  nav a:hover { background: var(--panel); color: var(--ink); }
+  nav a.active { background: var(--panel-2); color: #fff; border-left-color: var(--base); }
+  nav a .num { color: var(--ink-3); font-variant-numeric: tabular-nums; margin-right: 8px; font-size: 12px; }
+  main { padding: 0 48px 160px; min-width: 0; }
+  section { padding: 70px 0 10px; scroll-margin-top: 20px; border-bottom: 1px solid transparent; }
+  /* ---------- typography ---------- */
+  h1 { font-size: 44px; line-height: 1.1; margin: 0 0 14px; letter-spacing: -1px; color: #fff; }
+  h2 { font-size: 30px; margin: 6px 0 6px; letter-spacing: -.5px; color: #fff; }
+  h3 { font-size: 19px; margin: 28px 0 8px; color: #fff; }
+  h4 { font-size: 15px; margin: 18px 0 6px; color: var(--ink); text-transform: uppercase; letter-spacing: .8px; }
+  .chapnum { color: var(--base-soft); font-family: var(--mono); font-size: 13px; letter-spacing: 2px; text-transform: uppercase; display:block; margin-bottom: 10px; }
+  p { color: var(--ink-2); margin: 14px 0; }
+  .lead { font-size: 19px; color: var(--ink); }
+  strong { color: var(--ink); font-weight: 650; }
+  em { color: var(--ink); font-style: italic; }
+  a.inline { color: var(--base-soft); }
+  code { font-family: var(--mono); background: var(--panel); padding: 2px 6px; border-radius: 5px; font-size: 13.5px; color: #cfe0ff; }
+  .formula { font-family: var(--mono); background: var(--bg-2); border: 1px solid var(--line); border-left: 3px solid var(--base); padding: 14px 18px; border-radius: 8px; color: #d7e6ff; font-size: 14.5px; overflow-x: auto; margin: 14px 0; }
+  ul, ol { color: var(--ink-2); }
+  li { margin: 7px 0; }
+  .muted { color: var(--ink-3); font-size: 14px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; margin: 22px 0; }
+  .callout { background: linear-gradient(180deg, rgba(0,82,255,.10), rgba(0,82,255,.02)); border: 1px solid #25407a; border-radius: 12px; padding: 16px 20px; margin: 20px 0; }
+  .callout.warn { background: linear-gradient(180deg, rgba(255,177,59,.08), rgba(255,177,59,.01)); border-color: #6b551f; }
+  .callout .k { font-size: 12px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--base-soft); font-weight: 700; }
+  .callout.warn .k { color: var(--amber); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; }
+  @media (max-width: 900px){ .grid2,.grid3 { grid-template-columns: 1fr; } .wrap{ grid-template-columns: 1fr;} nav{ display:none;} main{ padding: 0 20px 100px;} }
+  .pill { display:inline-block; font-size: 11.5px; font-family: var(--mono); padding: 2px 9px; border-radius: 20px; border:1px solid var(--line); color: var(--ink-2); }
+  .pill.ft { color:#ffd28a; border-color:#6b551f; background:rgba(255,177,59,.07);}
+  .pill.id { color:#8fb6ff; border-color:#25407a; background:rgba(0,82,255,.08);}
+  .pill.st { color:#9fb0cc; }
+  .pill.prevented { color: var(--green); border-color: var(--green-soft); background: rgba(46,204,113,.08);}
+  .btn { font-family: var(--sans); font-size: 13.5px; font-weight: 600; cursor: pointer; border-radius: 9px; padding: 9px 14px; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink); transition: all .12s; }
+  .btn:hover { border-color: var(--base); color:#fff; }
+  .btn:active { transform: translateY(1px); }
+  .btn.primary { background: var(--base); border-color: var(--base); color:#fff; }
+  .btn.primary:hover { background: var(--base-soft); }
+  .btn.ghost { background: transparent; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn.active { border-color: var(--base); color:#fff; background: var(--panel-2); }
+  .row { display:flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  /* ---------- hero ---------- */
+  .hero { padding-top: 56px; }
+  .hero .kicker { display:inline-block; font-family: var(--mono); font-size:12px; letter-spacing:2px; text-transform:uppercase; color:var(--base-soft); border:1px solid #25407a; padding:5px 12px; border-radius:20px; margin-bottom:22px;}
+  .hero .badges { display:flex; gap:8px; flex-wrap:wrap; margin-top:24px;}
+  .hero .badges .pill { background: var(--panel); }
+  .onebreath { font-size: 21px; color: var(--ink); max-width: 720px; }
+  /* ---------- diagram ---------- */
+  .stack { display:flex; flex-direction:column; gap:10px; margin: 18px 0; }
+  .layer { display:grid; grid-template-columns: 44px 1fr; gap:14px; align-items:center; background: var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; cursor:pointer; transition: all .15s; }
+  .layer:hover { border-color: var(--base); background: var(--panel-2); }
+  .layer .lnum { width:44px; height:44px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-weight:700; font-size:16px; background: rgba(0,82,255,.12); color: var(--base-soft); border:1px solid #25407a;}
+  .layer .ltitle { font-weight:650; color:#fff; }
+  .layer .ldesc { color: var(--ink-2); font-size:13.5px; }
+  .layer .detail { display:none; grid-column: 1/3; margin-top:10px; padding-top:12px; border-top:1px solid var(--line); color:var(--ink-2); font-size:14px; }
+  .layer.open .detail { display:block; }
+  .flowline { text-align:center; color:var(--ink-3); font-size:20px; line-height:1; }
+  /* ---------- simulator ---------- */
+  .sim { background: var(--bg-2); border:1px solid var(--line); border-radius:16px; overflow:hidden; margin: 24px 0; }
+  .sim .head { display:flex; justify-content:space-between; align-items:center; padding:14px 20px; border-bottom:1px solid var(--line); background: var(--panel); }
+  .sim .head .t { font-weight:700; color:#fff; }
+  .sim .head .clock { font-family:var(--mono); font-size:13px; color: var(--ink-2); }
+  .sim .body { display:grid; grid-template-columns: 1.1fr 1fr; gap:0; }
+  @media (max-width:900px){ .sim .body{ grid-template-columns:1fr;} }
+  .sim .controls { padding: 18px 20px; border-right:1px solid var(--line); }
+  .sim .controls .grp { margin-bottom: 16px; }
+  .sim .controls .grp h5 { margin:0 0 8px; font-size:12px; text-transform:uppercase; letter-spacing:1px; color: var(--ink-3);}
+  .sim .state { padding: 18px 20px; }
+  .actor { background: var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:10px;}
+  .actor .nm { font-weight:650; color:#fff; font-size:13.5px; margin-bottom:4px;}
+  .stat { display:flex; justify-content:space-between; font-family:var(--mono); font-size:13px; padding:3px 0; color: var(--ink-2);}
+  .stat b { color:#fff; font-weight:600; }
+  .invlist { margin-top: 8px; }
+  .inv { display:flex; align-items:center; gap:10px; font-family:var(--mono); font-size:12.5px; padding:5px 8px; border-radius:7px; margin:2px 0; background: var(--panel); }
+  .inv .dot { width:9px; height:9px; border-radius:50%; flex:0 0 9px; }
+  .inv.ok .dot { background: var(--green); box-shadow:0 0 8px rgba(46,204,113,.6); }
+  .inv.bad .dot { background: var(--red); box-shadow:0 0 8px rgba(255,84,112,.7); }
+  .inv .nm { color: var(--ink-2); flex:1; }
+  .inv.bad .nm { color: var(--red); }
+  .inv .val { color: var(--ink-3); font-size:11px; }
+  .log { font-family:var(--mono); font-size:12px; color: var(--ink-3); background: var(--bg); border-top:1px solid var(--line); padding:10px 20px; max-height:96px; overflow-y:auto;}
+  .log div { padding:1px 0; }
+  .log .hl { color: var(--base-soft); }
+  .log .ev { color: var(--green); }
+  .log .er { color: var(--red); }
+  /* code compare */
+  .compare { display:grid; grid-template-columns:1fr 1fr; gap:0; border:1px solid var(--line); border-radius:12px; overflow:hidden; margin:18px 0; }
+  @media (max-width:900px){ .compare{ grid-template-columns:1fr;} }
+  .compare .col { background: var(--bg-2); }
+  .compare .col:first-child { border-right:1px solid var(--line); }
+  .compare .ch { padding:10px 16px; font-size:12px; text-transform:uppercase; letter-spacing:1px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center;}
+  .compare .ch.sol { color:#c9a6ff; } .compare .ch.ts { color:#8fd6ff; }
+  pre { margin:0; padding:14px 16px; font-family:var(--mono); font-size:12.5px; line-height:1.6; overflow-x:auto; color:#cdd9f0; white-space:pre; }
+  pre .c { color: var(--ink-3); } pre .k { color:#ff9ec4; } pre .f { color:#8fd6ff; } pre .n { color:#ffd28a; } pre .s { color:#9be7a8; } pre .er { color:var(--red); }
+  /* fuzz */
+  .fuzz { background:var(--bg-2); border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin:20px 0;}
+  .fuzz .counters { display:flex; gap:24px; flex-wrap:wrap; margin:12px 0;}
+  .fuzz .ctr { font-family:var(--mono);}
+  .fuzz .ctr .big { font-size:28px; color:#fff; font-weight:700;}
+  .fuzz .ctr .lbl { font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--ink-3);}
+  .fuzz .feed { font-family:var(--mono); font-size:12px; height:150px; overflow:hidden; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:8px 12px; margin-top:8px;}
+  .fuzz .feed div { color:var(--ink-3); padding:1px 0;}
+  .fuzz .feed .call { color:var(--ink-2);}
+  .fuzz .feed .pass { color:var(--green-soft);}
+  .handlers { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0;}
+  .handlers .h { font-family:var(--mono); font-size:11px; padding:3px 8px; border-radius:6px; border:1px solid var(--line); color:var(--ink-3);}
+  .handlers .h.fire { border-color:var(--base); color:#fff; background:rgba(0,82,255,.15);}
+  /* mutation */
+  .mut { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:18px 0;}
+  @media (max-width:900px){ .mut{ grid-template-columns:1fr;} }
+  .toggle { display:inline-flex; align-items:center; gap:10px; cursor:pointer; user-select:none;}
+  .toggle .track { width:46px; height:26px; background:var(--line); border-radius:20px; position:relative; transition:.18s; flex:0 0 46px;}
+  .toggle .track .knob { position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%; background:#fff; transition:.18s;}
+  .toggle.on .track { background:var(--red);}
+  .toggle.on .track .knob { left:23px;}
+  /* exploit table */
+  table { width:100%; border-collapse:collapse; font-size:13.5px; margin:14px 0;}
+  th, td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top;}
+  th { color:var(--ink-3); font-size:11.5px; text-transform:uppercase; letter-spacing:.6px; font-weight:600;}
+  td { color:var(--ink-2);}
+  td .eid { font-family:var(--mono); color:#8fb6ff;}
+  /* amc */
+  .amc { background:var(--bg-2); border:1px solid var(--line); border-radius:16px; padding:24px; margin:22px 0;}
+  .amc .head { display:flex; align-items:baseline; gap:16px; margin-bottom:18px;}
+  .amc .score { font-size:56px; font-weight:800; color:#fff; line-height:1; font-family:var(--mono);}
+  .amc .grade { font-size:22px; color:var(--green); font-weight:700;}
+  .bar { margin:14px 0;}
+  .bar .blab { display:flex; justify-content:space-between; font-size:13px; margin-bottom:5px;}
+  .bar .blab .w { color:var(--ink-3); font-family:var(--mono);}
+  .bar .track { height:12px; background:var(--panel); border-radius:8px; overflow:hidden;}
+  .bar .fill { height:100%; width:0; border-radius:8px; transition:width 1.1s cubic-bezier(.2,.8,.2,1);}
+  .footer { color:var(--ink-3); font-size:13px; text-align:center; padding:50px 0 0; border-top:1px solid var(--line); margin-top:60px;}
+  .keycard { display:grid; grid-template-columns:auto 1fr; gap:12px 16px; align-items:start;}
+  .keycard .kk { font-family:var(--mono); color:var(--base-soft); white-space:nowrap;}
+  .tl { border-left:2px solid var(--line); padding-left:22px; margin:18px 0;}
+  .tl .step { position:relative; padding-bottom:20px;}
+  .tl .step::before { content:""; position:absolute; left:-29px; top:4px; width:12px; height:12px; border-radius:50%; background:var(--base); border:2px solid var(--bg);}
+  .tl .step h4 { margin:0 0 4px; text-transform:none; letter-spacing:0; font-size:15px;}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div class="wrap">
+  <nav>
+    <div class="brand">Guardian<span>Pipeline</span></div>
+    <div class="tag">Interactive Explainer</div>
+    <a href="#ch0"><span class="num">00</span>In one breath</a>
+    <a href="#ch1"><span class="num">01</span>The problem</a>
+    <a href="#ch2"><span class="num">02</span>What is a lending vault?</a>
+    <a href="#ch3"><span class="num">03</span>The vault, hands-on</a>
+    <a href="#ch4"><span class="num">04</span>Invariants: the core idea</a>
+    <a href="#ch5"><span class="num">05</span>The 12 invariants</a>
+    <a href="#ch6"><span class="num">06</span>Proving it (fuzzing)</a>
+    <a href="#ch7"><span class="num">07</span>The mirror</a>
+    <a href="#ch8"><span class="num">08</span>Mutation testing</a>
+    <a href="#ch9"><span class="num">09</span>Exploit replays</a>
+    <a href="#ch10"><span class="num">10</span>The assurance score</a>
+    <a href="#ch11"><span class="num">11</span>The four layers</a>
+    <a href="#ch12"><span class="num">12</span>What it is NOT</a>
+    <a href="#ch13"><span class="num">13</span>Map of the repo</a>
+  </nav>
+  <main>
+
+  <!-- ===================== HERO / 00 ===================== -->
+  <section id="ch0" class="hero">
+    <div class="kicker">Smart-contract assurance · Solidity + TypeScript</div>
+    <h1>Guardian Pipeline</h1>
+    <p class="onebreath lead">
+      It writes a protocol's mathematical safety rules <em>once</em>, then enforces
+      that <em>exact same</em> definition on both sides of a deployment — proven by a
+      fuzzing campaign <strong>before</strong> the code goes live, and re-checked by a
+      live monitor <strong>after</strong> it does.
+    </p>
+    <p>
+      That's the whole idea. Everything else in this page — the vault, the 12
+      invariants, the fuzzer, the monitor, the score — is detail in service of that
+      one sentence. This explainer builds it up from zero, assuming you know how to
+      think but not necessarily what a "collateral ratio" or a "fuzz campaign" is.
+      Several diagrams below are <strong>interactive</strong> — poke them.
+    </p>
+    <div class="badges">
+      <span class="pill">Solidity 0.8.24</span>
+      <span class="pill">Foundry fuzzing</span>
+      <span class="pill">TypeScript monitor</span>
+      <span class="pill">Base Sepolia</span>
+      <span class="pill">12 invariants</span>
+      <span class="pill">Self-graded AMC 94 · A</span>
+    </div>
+    <div class="callout" style="margin-top:30px">
+      <span class="k">How to read this</span>
+      <p style="margin:8px 0 0">
+        Chapters build on each other. If a term is new, it gets defined before it's
+        used. The hands-on vault simulator in <a class="inline" href="#ch3">Chapter&nbsp;3</a>
+        is the heart of it — once you've played with that, the rest clicks into place.
+      </p>
+    </div>
+  </section>
+
+  <!-- ===================== 01 PROBLEM ===================== -->
+  <section id="ch1">
+    <span class="chapnum">Chapter 01</span>
+    <h2>The problem: an audit is a photograph</h2>
+    <p class="lead">
+      Smart contracts hold real money and, once deployed, are very hard to change.
+      A bug isn't a crash — it's a theft. So how do people try to make them safe today?
+    </p>
+    <p>
+      The dominant answer is the <strong>audit</strong>: you pay experts to read your
+      code and write a report. That's genuinely useful, but it has a structural weakness
+      that this whole project is a response to.
+    </p>
+
+    <div class="grid2">
+      <div class="panel">
+        <h4 style="color:var(--amber)">Weakness 1 — it's a snapshot</h4>
+        <p style="margin:6px 0 0">
+          An audit attests that the code <em>looked sound on the day it was signed</em>.
+          It can't speak to the parameters, the market prices, or the state the contract
+          drifts into months later. The photograph is accurate; the world keeps moving.
+        </p>
+      </div>
+      <div class="panel">
+        <h4 style="color:var(--amber)">Weakness 2 — the two sides drift</h4>
+        <p style="margin:6px 0 0">
+          Teams usually test safety <em>before</em> launch with one tool, and monitor
+          <em>after</em> launch with a different tool — often checking
+          <em>differently-written</em> rules. So "the thing we proved" and "the thing
+          we watch" can quietly disagree. Nobody notices until it's too late.
+        </p>
+      </div>
+    </div>
+
+    <div class="callout">
+      <span class="k">Guardian Pipeline's bet</span>
+      <p style="margin:8px 0 0">
+        Write the safety properties <strong>once</strong>. Enforce that identical
+        definition in <strong>two places</strong>: a fuzzing campaign that attacks the
+        code before deploy, and a runtime monitor whose checks mirror that campaign
+        <em>function-for-function</em> after deploy. If the two ever disagree, the
+        project has failed its own thesis — so they're deliberately built to be the
+        same maths, sharing the same names (<code>INV-01</code> … <code>INV-12</code>).
+      </p>
+    </div>
+    <p class="muted">
+      The framing is informed by two empirical papers on the DeFi audit market
+      (Bourveau et&nbsp;al. 2024; Landsman et&nbsp;al. 2025), which find that audits are
+      widespread but their <em>effectiveness</em> is an open question. Continuous,
+      two-sided verification is this project's proposed answer — not a claim from
+      those papers.
+    </p>
+  </section>
+
+  <!-- ===================== 02 VAULT PRIMER ===================== -->
+  <section id="ch2">
+    <span class="chapnum">Chapter 02</span>
+    <h2>What is a lending vault, exactly?</h2>
+    <p class="lead">
+      To have something concrete to protect, the project ships a small lending vault.
+      You don't need DeFi background — here's the entire mental model in five pieces.
+    </p>
+
+    <div class="panel keycard">
+      <div class="kk">Two assets</div>
+      <div>There are <strong>two</strong> different tokens. The <strong>debt asset</strong> is what lenders supply and borrowers borrow (think: a stablecoin). The <strong>collateral asset</strong> is a separate token borrowers lock up as security (think: ETH).</div>
+
+      <div class="kk">Lenders</div>
+      <div>Deposit the debt asset and receive <strong>shares</strong>. A share is a claim on the pool. As borrowers pay interest, the pool grows, so each share is redeemable for <em>more</em> than was put in. Lenders earn yield as a rising <strong>share price</strong>.</div>
+
+      <div class="kk">Borrowers</div>
+      <div>Lock collateral, then borrow the debt asset against it — but only up to <strong>80%</strong> of the collateral's value (the <strong>collateral ratio</strong>). Borrowing more than your collateral backs is forbidden. This "over-collateralisation" is what protects lenders.</div>
+
+      <div class="kk">Interest</div>
+      <div>A borrower's debt grows every second via a <strong>borrow index</strong> — a multiplier that only ever ticks up. <code>accrue()</code> charges borrowers and credits the exact same amount to lenders. Both sides move together, by design.</div>
+
+      <div class="kk">Oracle</div>
+      <div>The vault needs to know the collateral's price. It reads an external <strong>price oracle</strong>. If a borrower's debt grows past 80% of their (re-priced) collateral, their position is <strong>under-water</strong> and anyone may <strong>liquidate</strong> it: repay the debt, seize the collateral, keep a small bonus.</div>
+    </div>
+
+    <div class="callout">
+      <span class="k">The one number that must never lie</span>
+      <p style="margin:8px 0 0">
+        <strong>Solvency.</strong> The vault must always hold (or be owed) at least as much
+        as it owes its lenders. In symbols:
+      </p>
+      <div class="formula" style="margin:12px 0 0">cash + totalBorrowed  ≥  totalSupplyAssets</div>
+      <p class="muted" style="margin:8px 0 0">
+        Idle cash, plus money out on loan, covers every lender's claim. If this is ever
+        false, lenders cannot all be paid back — the protocol is insolvent. Keep this
+        inequality in mind; it's <strong>INV-01</strong>, the master rule.
+      </p>
+    </div>
+  </section>
+
+  <!-- ===================== 03 SIMULATOR ===================== -->
+  <section id="ch3">
+    <span class="chapnum">Chapter 03</span>
+    <h2>The vault, hands-on</h2>
+    <p class="lead">
+      Reading about a vault is one thing. Here's a live one. Click the actions and watch
+      the state change — and watch the safety rules on the right stay green. This is a
+      faithful (simplified) model of <code>src/Vault.sol</code>.
+    </p>
+
+    <div class="sim" id="sim">
+      <div class="head">
+        <div class="t">Vault &nbsp;·&nbsp; <span class="muted" style="font-size:13px">debt = USDC · collateral = ETH</span></div>
+        <div class="clock">⏱ day <span id="simDay">0</span> &nbsp;·&nbsp; ETH price: <b id="simPrice">10</b> USDC</div>
+      </div>
+      <div class="body">
+        <div class="controls">
+          <div class="grp">
+            <h5>Alice — the lender</h5>
+            <div class="row">
+              <button class="btn" data-act="deposit">Deposit 1,000 USDC</button>
+              <button class="btn ghost" data-act="withdraw">Withdraw all</button>
+            </div>
+          </div>
+          <div class="grp">
+            <h5>Bob — the borrower</h5>
+            <div class="row">
+              <button class="btn" data-act="postcol">Post 100 ETH collateral</button>
+              <button class="btn" data-act="borrow">Borrow 500 USDC</button>
+              <button class="btn ghost" data-act="repay">Repay debt</button>
+            </div>
+          </div>
+          <div class="grp">
+            <h5>The world</h5>
+            <div class="row">
+              <button class="btn" data-act="time">Advance 90 days (accrue interest)</button>
+            </div>
+            <div class="row" style="margin-top:8px">
+              <button class="btn" data-act="crash">Crash ETH price −60%</button>
+              <button class="btn" data-act="liquidate">Liquidate Bob</button>
+            </div>
+          </div>
+          <div class="grp">
+            <div class="row">
+              <button class="btn primary" data-act="story">▶ Run the full story</button>
+              <button class="btn ghost" data-act="reset">Reset</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="state">
+          <div class="actor">
+            <div class="nm">🏦 Vault pool</div>
+            <div class="stat"><span>cash (idle USDC)</span><b id="s_cash">0</b></div>
+            <div class="stat"><span>totalBorrowed</span><b id="s_borrowed">0</b></div>
+            <div class="stat"><span>totalSupplyAssets (owed to lenders)</span><b id="s_assets">0</b></div>
+            <div class="stat"><span>borrowIndex</span><b id="s_index">1.000</b></div>
+            <div class="stat"><span>share price</span><b id="s_sp">1.000</b></div>
+          </div>
+          <div class="actor">
+            <div class="nm">👩 Alice</div>
+            <div class="stat"><span>shares held</span><b id="s_ashares">0</b></div>
+            <div class="stat"><span>redeemable value</span><b id="s_aval">0</b></div>
+          </div>
+          <div class="actor">
+            <div class="nm">👨 Bob</div>
+            <div class="stat"><span>collateral (ETH)</span><b id="s_bcol">0</b></div>
+            <div class="stat"><span>debt (USDC)</span><b id="s_bdebt">0</b></div>
+            <div class="stat"><span>borrow limit (80%)</span><b id="s_blim">0</b></div>
+            <div class="stat"><span>health</span><b id="s_health">—</b></div>
+          </div>
+
+          <h4 style="margin:12px 0 4px">Safety rules — live</h4>
+          <div class="invlist" id="simInv"></div>
+        </div>
+      </div>
+      <div class="log" id="simLog"><div class="hl">Vault deployed. Empty and solvent. Try "Run the full story".</div></div>
+    </div>
+
+    <div class="callout">
+      <span class="k">What to notice</span>
+      <p style="margin:8px 0 0">
+        After Bob borrows and time passes, his <strong>debt grows</strong> (interest) and
+        Alice's <strong>redeemable value grows by the exact same amount</strong> — that's
+        <code>accrue()</code> moving both sides together. The solvency rule never goes red,
+        because every operation is rounded in the protocol's favour. When ETH crashes,
+        Bob goes <strong>under-water</strong> and liquidation becomes possible — yet even
+        then the vault stays solvent. That property holding across <em>every</em> sequence
+        is exactly what the next chapters prove.
+      </p>
+    </div>
+  </section>
+
+  <!-- ===================== 04 INVARIANTS ===================== -->
+  <section id="ch4">
+    <span class="chapnum">Chapter 04</span>
+    <h2>Invariants: the core idea</h2>
+    <p class="lead">
+      An <strong>invariant</strong> is a statement that must be true in <em>every</em>
+      state the system can ever reach — not "true for this input", but "true always,
+      no matter what anyone does in what order".
+    </p>
+    <p>
+      A normal test says <em>"if I deposit 100, I get 100 shares."</em> That checks one
+      path. An invariant says <em>"no matter what sequence of deposits, borrows, repays,
+      liquidations, price moves and time jumps happen — the vault is still solvent."</em>
+      That's a vastly stronger claim, and it's the right shape for safety, because
+      attackers don't follow the happy path.
+    </p>
+
+    <div class="panel">
+      <h4>Why this framing is powerful</h4>
+      <ul>
+        <li><strong>It's machine-checkable.</strong> An invariant is just a boolean over the
+          contract's public state. A computer can evaluate it after any action.</li>
+        <li><strong>It's the same before and after deploy.</strong> The same boolean can be
+          fuzzed in CI <em>and</em> evaluated against a live chain. That's the whole bridge.</li>
+        <li><strong>Violations are precise.</strong> When one breaks, you get the exact rule
+          and the exact state that broke it — not a vague "something's wrong".</li>
+      </ul>
+    </div>
+
+    <h3>Not all invariants are equally hard — and the project says so</h3>
+    <p>
+      A point of intellectual honesty baked into this repo: some invariants are
+      genuinely <em>difficult</em> to keep true and a small bug breaks them; others are
+      nearly true-by-construction. The docs tag every invariant with a <strong>class</strong>
+      so nobody oversells. There are three:
+    </p>
+    <div class="grid3">
+      <div class="panel">
+        <span class="pill ft">Fuzz-tensioned</span>
+        <p style="margin:10px 0 0; font-size:14px">The fuzzer genuinely <em>attacks</em> these. A wrong rounding direction, call order, or missing guard breaks them. The interesting ones. (INV-01, 06, 07–12)</p>
+      </div>
+      <div class="panel">
+        <span class="pill st">Accounting identity</span>
+        <p style="margin:10px 0 0; font-size:14px">A bookkeeping equality (sums must match). Holds unless code desyncs the two sides of the ledger. The fuzzer's job here is regression detection. (INV-02, 03)</p>
+      </div>
+      <div class="panel">
+        <span class="pill st">Structural</span>
+        <p style="margin:10px 0 0; font-size:14px">True by construction — can't break without editing the source. Kept as cheap regression checks; INV-04 has a non-trivial proof confirmed empirically. (INV-04, 05)</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 05 THE 12 ===================== -->
+  <section id="ch5">
+    <span class="chapnum">Chapter 05</span>
+    <h2>The 12 invariants</h2>
+    <p class="lead">
+      Here is the complete safety specification of the vault. Click any card to expand
+      its plain-English meaning, what breaks it, and how it's caught. Filter by class.
+    </p>
+    <div class="row" style="margin:10px 0 4px">
+      <button class="btn filt active" data-filt="all">All 12</button>
+      <button class="btn filt" data-filt="ft">Fuzz-tensioned</button>
+      <button class="btn filt" data-filt="ai">Accounting</button>
+      <button class="btn filt" data-filt="struct">Structural</button>
+    </div>
+    <div id="invCards"></div>
+  </section>
+
+  <!-- ===================== 06 FUZZING ===================== -->
+  <section id="ch6">
+    <span class="chapnum">Chapter 06</span>
+    <h2>Proving it before deploy: invariant fuzzing</h2>
+    <p class="lead">
+      How do you show 12 rules hold across <em>every</em> sequence, when there are
+      infinitely many? You can't try them all — so you try a colossal number of
+      <em>random</em> ones and watch for any break. That's <strong>invariant fuzzing</strong>.
+    </p>
+    <p>
+      The tool here is <strong>Foundry</strong>. It drives the vault through random call
+      sequences and re-checks all 12 invariants after <em>every single call</em>. To keep
+      the randomness meaningful (instead of wasting runs on calls that just revert), the
+      campaign goes through <strong>eight handler contracts</strong> — each a thin wrapper
+      exposing one bounded action with sane, randomised inputs.
+    </p>
+
+    <div class="fuzz" id="fuzz">
+      <div class="row" style="justify-content:space-between">
+        <div><strong>Foundry invariant campaign</strong> <span class="muted">— profile: ci (2,000 runs × depth 150)</span></div>
+        <button class="btn primary" id="fuzzBtn">▶ Run campaign</button>
+      </div>
+      <div class="handlers" id="fuzzHandlers"></div>
+      <div class="counters">
+        <div class="ctr"><div class="big" id="fzRuns">0</div><div class="lbl">handler calls</div></div>
+        <div class="ctr"><div class="big" id="fzChecks">0</div><div class="lbl">invariant checks</div></div>
+        <div class="ctr"><div class="big" style="color:var(--green)" id="fzFails">0</div><div class="lbl">failures</div></div>
+      </div>
+      <div class="feed" id="fuzzFeed"></div>
+    </div>
+
+    <div class="grid2">
+      <div class="panel">
+        <h4>The eight handlers</h4>
+        <p style="margin:6px 0 0; font-size:14px">Deposit, Collateral, Borrow, Warp (advances time + accrues), Liquidate, <strong>Donation</strong> (transfers tokens straight to the vault — the share-inflation attack vector), <strong>Oracle</strong> (moves the price), and <strong>Reentrancy</strong>. The donation and oracle handlers exist specifically so dangerous attack classes are actually <em>exercised</em>, not just assumed away.</p>
+      </div>
+      <div class="panel">
+        <h4>What a green badge means</h4>
+        <p style="margin:6px 0 0; font-size:14px">A precise, falsifiable claim: <em>all 12 invariants held across ~300,000 handler calls without a single assertion failing.</em> If one breaks, Foundry <strong>shrinks</strong> the failure to the minimal call sequence that reproduces it. A second engine, <strong>Echidna</strong>, independently re-runs the campaign to corroborate.</p>
+      </div>
+    </div>
+    <div class="callout warn">
+      <span class="k">An honest limit</span>
+      <p style="margin:8px 0 0">
+        Fuzzing is <em>empirical</em>: it shows none of the (hundreds of thousands of)
+        sequences it tried broke a rule. It cannot prove <em>no</em> sequence exists. A
+        formal/symbolic proof (Certora, Halmos) would close that gap — the invariants are
+        deliberately shaped to allow one later — but the repo doesn't ship it yet, and
+        says so plainly.
+      </p>
+    </div>
+  </section>
+
+  <!-- ===================== 07 MIRROR ===================== -->
+  <section id="ch7">
+    <span class="chapnum">Chapter 07</span>
+    <h2>The mirror: one rule, both sides of deployment</h2>
+    <p class="lead">
+      This is the project's central trick. The 12 invariants proven in CI are re-checked
+      <em>live</em> by a TypeScript monitor — and the monitor is a deliberate
+      <strong>1:1 mirror</strong> of the Solidity test, function for function.
+    </p>
+    <p>
+      Below: the same invariant (INV-01, solvency) in both worlds. Left is the
+      pre-deployment Foundry assertion. Right is the post-deployment monitor in
+      <code>guardian/src/evaluator.ts</code>. They compute the <em>identical</em> boolean.
+      That's the bridge that stops "what we proved" and "what we watch" from drifting apart.
+    </p>
+
+    <div class="compare">
+      <div class="col">
+        <div class="ch sol">▲ Pre-deploy · Solidity · InvariantVault.t.sol</div>
+<pre><span class="c">// asserted after every fuzz call</span>
+<span class="k">function</span> <span class="f">invariant_solvency</span>() <span class="k">public</span> {
+    <span class="n">uint256</span> assets = vault.<span class="f">cash</span>()
+                   + vault.<span class="f">totalBorrowed</span>();
+    <span class="f">assertGe</span>(assets, vault.<span class="f">totalSupplyAssets</span>());
+}</pre>
+      </div>
+      <div class="col">
+        <div class="ch ts">▼ Post-deploy · TypeScript · evaluator.ts</div>
+<pre><span class="c">// evaluated against live chain state, per block</span>
+<span class="k">export function</span> <span class="f">inv01</span>(state: VaultState) {
+  <span class="k">const</span> assets = state.cash
+               + state.totalBorrowed;
+  <span class="k">return</span> { id: <span class="s">'INV-01'</span>,
+    passed: assets &gt;= state.totalSupplyAssets };
+}</pre>
+      </div>
+    </div>
+
+    <h3>How the monitor sees a live vault</h3>
+    <div class="tl">
+      <div class="step"><h4>1 · Fetch a full snapshot</h4><p style="margin:0">Every block (~2s on a real host; ~5min in the free hosted demo), the bot reads the whole vault state in one batched <code>multicall</code> RPC — totals, the borrow index, the oracle reading.</p></div>
+      <div class="step"><h4>2 · Discover every account</h4><p style="margin:0">For per-user rules (INV-02/03/06/09/10), it replays the vault's <code>Deposited</code>, <code>Borrowed</code>, <code>Liquidated</code> events to find <em>every</em> address, then reads each one's exact position. It's a real sum over the real users — not a sampled estimate.</p></div>
+      <div class="step"><h4>3 · Evaluate all 12 — three channels</h4><p style="margin:0"><strong>Snapshot</strong> (9 rules): pure function of the current state. <strong>Delta</strong> (INV-07, 09): compares against the prior block (persisted in Supabase). <strong>Event reconciliation</strong> (INV-08): re-checks each <code>Liquidated</code> log against that block's oracle price.</p></div>
+      <div class="step"><h4>4 · Persist &amp; alert</h4><p style="margin:0">Results land in Supabase (Postgres). A React dashboard reads them via a public read-only key and lights up red the instant a rule breaks.</p></div>
+    </div>
+
+    <div class="callout">
+      <span class="k">CI enforces the mirror itself</span>
+      <p style="margin:8px 0 0">
+        A dedicated CI job, <code>mirror-parity</code>, fails the build if any
+        <code>invariant_*</code> in the harness lacks a paired check in
+        <code>evaluator.ts</code>. The "write once, enforce both sides" promise isn't a
+        hope — it's a gate.
+      </p>
+    </div>
+  </section>
+
+  <!-- ===================== 08 MUTATION ===================== -->
+  <section id="ch8">
+    <span class="chapnum">Chapter 08</span>
+    <h2>Mutation testing: proving the rules actually bite</h2>
+    <p class="lead">
+      A green test suite is worthless if the tests can't fail. So the repo
+      <em>deliberately breaks</em> the vault and proves the matching invariant catches it.
+      Each "fuzz-tensioned" rule has a <code>MutantINV*.t.sol</code> partner.
+    </p>
+    <p>
+      Flip the switch below to introduce a real bug — a broken <code>accrue()</code> that
+      credits lenders <em>twice</em> — and watch the solvency invariant turn red. This is the
+      difference between "the test passed" and "the test would have caught the bug".
+    </p>
+
+    <div class="mut">
+      <div class="panel">
+        <h4 style="text-transform:none; letter-spacing:0">The mutation</h4>
+        <div class="toggle" id="mutToggle" style="margin:10px 0">
+          <div class="track"><div class="knob"></div></div>
+          <span id="mutLabel">Canonical vault (correct)</span>
+        </div>
+<pre style="background:var(--bg-2); border-radius:8px; border:1px solid var(--line)"><span class="k">function</span> <span class="f">accrue</span>() <span class="k">public</span> {
+  <span class="c">// ... raise borrowIndex ...</span>
+  totalSupplyAssets += interest;
+<span id="mutBugLine" style="display:none"><span class="er">  totalSupplyAssets += interest; // 🐛 credited twice</span>
+</span>}</pre>
+        <p class="muted" style="margin:10px 0 0">A one-line mutation: lenders are credited interest the vault never collected. The pool now claims to owe more than it holds.</p>
+      </div>
+      <div class="panel">
+        <h4 style="text-transform:none; letter-spacing:0">The verdict</h4>
+        <p style="margin:6px 0 12px; font-size:14px">After borrowing + 90 days of accrual under the chosen vault:</p>
+        <div class="actor"><div class="stat"><span>cash + totalBorrowed</span><b id="m_assets">—</b></div>
+          <div class="stat"><span>totalSupplyAssets (claims)</span><b id="m_claims">—</b></div></div>
+        <div class="inv" id="m_inv" style="font-size:13.5px"><span class="dot"></span><span class="nm">INV-01 · Protocol solvency</span></div>
+        <p class="muted" id="m_msg" style="margin:12px 0 0">Toggle the bug to see the fuzzer's verdict.</p>
+      </div>
+    </div>
+    <p>
+      In the real repo, the fuzz campaign run against this mutant <em>fails</em> with a
+      shrunk counter-example — proving <code>invariant_solvency</code> is
+      <strong>load-bearing</strong>, not decorative. INV-01 actually caught a real
+      one-wei solvency leak during development (finding <code>GUA-02</code>).
+    </p>
+  </section>
+
+  <!-- ===================== 09 EXPLOITS ===================== -->
+  <section id="ch9">
+    <span class="chapnum">Chapter 09</span>
+    <h2>Exploit replays: historical attacks, re-run</h2>
+    <p class="lead">
+      Invariants are abstract. To ground them, the repo replays <strong>10 classes of
+      real-world DeFi exploit</strong> against the vault — and against deliberately-broken
+      "attackable" variants — classifying each outcome.
+    </p>
+    <div class="grid3">
+      <div class="panel"><h4 style="color:var(--green)">PREVENTED</h4><p style="margin:6px 0 0;font-size:14px">The contract's own code blocked the attack. No state corruption.</p></div>
+      <div class="panel"><h4 style="color:var(--amber)">DETECTED</h4><p style="margin:6px 0 0;font-size:14px">State <em>was</em> corrupted, but an invariant caught it the same block. The monitor's reason to exist.</p></div>
+      <div class="panel"><h4 style="color:var(--red)">MISSED</h4><p style="margin:6px 0 0;font-size:14px">Value extracted, no invariant noticed. A genuine gap — fails the CI build.</p></div>
+    </div>
+    <p>The "dual-surface" design is the clever part: each scenario runs against an
+      <em>attackable</em> vault (which has the bug, to prove the attack is real and the
+      check fires) <em>and</em> against the canonical vault (to prove it's actually safe).</p>
+    <table>
+      <thead><tr><th>ID</th><th>Exploit class</th><th>Targets</th><th>Outcome</th></tr></thead>
+      <tbody id="expRows"></tbody>
+    </table>
+    <div class="callout">
+      <span class="k">Result</span>
+      <p style="margin:8px 0 0"><strong>10 mechanism replays · 10 PREVENTED · 0 MISSED</strong> → an exploit-resistance score of 100/100. A separate <code>STAGED-01</code> demo
+      deliberately plants an INV-01 breach (<code>AttackableVault.attack()</code>) purely so
+      the live monitor can be filmed catching it — it proves the detection <em>plumbing</em>,
+      not that the monitor stops novel attacks.</p>
+    </div>
+  </section>
+
+  <!-- ===================== 10 AMC ===================== -->
+  <section id="ch10">
+    <span class="chapnum">Chapter 10</span>
+    <h2>The assurance score (AMC)</h2>
+    <p class="lead">
+      An audit produces a static PDF. This project produces a number that
+      <strong>CI recomputes on every commit</strong> from its own evidence: the
+      <strong>Assurance Methodology Coverage</strong> score. Crucially, it measures
+      <em>how rigorously the verification methodology was applied</em> — <strong>not</strong>
+      how secure the code is.
+    </p>
+
+    <div class="amc" id="amc">
+      <div class="head">
+        <div class="score" id="amcScore">0</div>
+        <div>
+          <div class="grade">Grade A</div>
+          <div class="muted">composite, 0–100 · CI fails the build below 80</div>
+        </div>
+      </div>
+      <div class="bar"><div class="blab"><span>Static verification <span class="muted">— coverage + fuzz-campaign size</span></span><span class="w">86 × 45%</span></div><div class="track"><div class="fill" data-w="86" style="background:linear-gradient(90deg,var(--base),#00d4ff)"></div></div></div>
+      <div class="bar"><div class="blab"><span>Exploit resistance <span class="muted">— 10 classes replayed, dual-surface</span></span><span class="w">100 × 35%</span></div><div class="track"><div class="fill" data-w="100" style="background:linear-gradient(90deg,var(--green-soft),var(--green))"></div></div></div>
+      <div class="bar"><div class="blab"><span>Finding traceability <span class="muted">— review findings bound to a re-runnable check</span></span><span class="w">93.8 × 20%</span></div><div class="track"><div class="fill" data-w="93.8" style="background:linear-gradient(90deg,#7a5cff,#a98bff)"></div></div></div>
+    </div>
+
+    <div class="grid2">
+      <div class="panel">
+        <h4>Finding traceability, concretely</h4>
+        <p style="margin:6px 0 0;font-size:14px">The self-review produced 8 findings (<code>GUA-01…08</code>). The tooling checks each is bound to ≥1 invariant <em>and</em> ≥1 harness test <em>and</em> a monitor check. Current: <strong>8/8 fully assured, 0 gaps, 100% weighted coverage.</strong> A README sentence is auto-generated from <code>findings.json</code>, and CI fails if anyone hand-edits it out of sync.</p>
+      </div>
+      <div class="panel">
+        <h4>The weights are an opinion — stated as one</h4>
+        <p style="margin:6px 0 0;font-size:14px">45/35/20 isn't derived from data; it's an editorial choice documented in the <code>score.ts</code> header. Static verification carries the most weight because it's the broadest evidence. Fixing the weights in the open makes the bias explicit and the score reproducible.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 11 ARCHITECTURE ===================== -->
+  <section id="ch11">
+    <span class="chapnum">Chapter 11</span>
+    <h2>The four layers, assembled</h2>
+    <p class="lead">
+      Now the whole system in one picture. Three <em>runtime</em> layers carry the
+      invariants across the deployment boundary; a fourth <em>assurance</em> layer scores
+      the work. Click each layer to expand it.
+    </p>
+
+    <div class="stack" id="layers">
+      <div class="layer" data-k="1">
+        <div class="lnum">1</div>
+        <div>
+          <div class="ltitle">Pre-deployment — CI/CD</div>
+          <div class="ldesc">Foundry fuzzes the 12 invariants on every push · 2,000 runs · ~300k calls</div>
+          <div class="detail">Runs on every push and PR. Eight handlers drive random sequences; all 12 invariants are asserted after each call. A green badge = the whole campaign passed. Echidna re-runs it as an independent second opinion. <em>This is where the rules are proven.</em></div>
+        </div>
+      </div>
+      <div class="flowline">↓ &nbsp;same 12 invariant definitions &nbsp;↓</div>
+      <div class="layer" data-k="2">
+        <div class="lnum">2</div>
+        <div>
+          <div class="ltitle">The smart contract — <code>Vault.sol</code></div>
+          <div class="ldesc">Interest-bearing, over-collateralised, two-asset lending vault on Base Sepolia</div>
+          <div class="detail">The artifact being protected. Morpho-style dual-tracked accounting: the lender side stores assets directly; the borrow side scales an index. Every rounding direction is chosen to favour the protocol, so the solvency margin can only grow. Deployed to the Base Sepolia testnet.</div>
+        </div>
+      </div>
+      <div class="flowline">↓ &nbsp;reads live chain state &nbsp;↓</div>
+      <div class="layer" data-k="3">
+        <div class="lnum">3</div>
+        <div>
+          <div class="ltitle">Runtime monitor — <code>guardian/</code></div>
+          <div class="ldesc">TypeScript bot · viem + Alchemy · evaluates the same 12 rules every block · writes to Supabase</div>
+          <div class="detail">The 1:1 mirror from Chapter 7. Fetches state via multicall, discovers all accounts from events, evaluates all 12 invariants (snapshot / delta / event-reconciliation), persists to Supabase, and a React + Vite dashboard renders it. Runs as a ~2s daemon on a real host, or a ~5-min best-effort scheduled GitHub Action against the public demo vault.</div>
+        </div>
+      </div>
+      <div class="flowline">↓ &nbsp;scores all of the above &nbsp;↓</div>
+      <div class="layer" data-k="4">
+        <div class="lnum">4</div>
+        <div>
+          <div class="ltitle">Assurance layer — <code>assurance/</code></div>
+          <div class="ldesc">Replays 10 exploit classes · traces every finding · rolls it into the CI-gated AMC score</div>
+          <div class="detail">A pre-deployment scorer. Combines static-verification coverage, exploit-resistance replays, and finding traceability into the composite AMC number, regenerated by CI every commit and gated at ≥80. Feeds the dashboard's score, traceability, and exploit panels.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 12 HONESTY ===================== -->
+  <section id="ch12">
+    <span class="chapnum">Chapter 12</span>
+    <h2>What this project is <em>not</em></h2>
+    <p class="lead">
+      The single most important chapter for reading it correctly. The repo is unusually
+      forthright about its own limits — that honesty is part of what makes it a serious
+      portfolio piece rather than marketing. Take these at face value.
+    </p>
+    <div class="grid2">
+      <div class="panel"><h4 style="color:var(--amber)">Not production code</h4><p style="margin:6px 0 0;font-size:14px"><code>Vault.sol</code> is a teaching example: a permissionless <code>MockOracle</code> (no real price feed), no bad-debt reserve, no governance. Do not custody real value with it.</p></div>
+      <div class="panel"><h4 style="color:var(--amber)">Not a real audit</h4><p style="margin:6px 0 0;font-size:14px"><code>security-review/</code> is written by the repo author — a point-in-time self-review, not an independent third party. Commission a real audit before any real deployment.</p></div>
+      <div class="panel"><h4 style="color:var(--amber)">The AMC score is self-graded</h4><p style="margin:6px 0 0;font-size:14px">The same author writes the invariants, picks the exploits, tags the findings, picks the weights, <em>and</em> grades the result. Read "A / 94" as <em>"this codebase grades itself A against the rubric it ships"</em> — reproducible, not externally validated.</p></div>
+      <div class="panel"><h4 style="color:var(--amber)">Best-effort monitor, not an SLA</h4><p style="margin:6px 0 0;font-size:14px">The hosted monitor is a free scheduled GitHub Action; GitHub may delay or skip runs, and free-tier RPC limits can fail one. It has never been tested against a real attacker. "Continuous" describes the design pattern, not a hardened service.</p></div>
+      <div class="panel"><h4 style="color:var(--amber)">The detection demo is staged</h4><p style="margin:6px 0 0;font-size:14px"><code>AttackableVault.attack()</code> is a planted one-line flag for filming the monitor — not an exploit. The production <code>Vault</code> has no such function.</p></div>
+      <div class="panel"><h4 style="color:var(--amber)">No formal verification</h4><p style="margin:6px 0 0;font-size:14px">The proofs are empirical (fuzzing), not symbolic. A Certora/Halmos proof would close the "is there <em>any</em> sequence we missed" question; it's documented as a known, deliberate gap.</p></div>
+    </div>
+    <div class="callout">
+      <span class="k">The honest one-liner</span>
+      <p style="margin:8px 0 0">
+        Guardian Pipeline is a <strong>worked, reproducible demonstration of a methodology</strong>:
+        define safety once, prove it before deploy, watch the identical definition after deploy,
+        and score the rigor of having done so. It is not a claim that this particular vault is safe
+        to hold your money — and it goes out of its way to say so.
+      </p>
+    </div>
+  </section>
+
+  <!-- ===================== 13 REPO MAP ===================== -->
+  <section id="ch13">
+    <span class="chapnum">Chapter 13</span>
+    <h2>Map of the repo</h2>
+    <p class="lead">Where each idea from this explainer lives on disk.</p>
+    <div class="panel keycard">
+      <div class="kk">src/</div><div>The Solidity. <code>Vault.sol</code> (the real thing), <code>IPriceOracle.sol</code> + <code>MockOracle.sol</code> (the price feed), <code>MockERC20.sol</code> (test tokens), and <code>attackable/</code> (the deliberately-broken variants for exploit replays).</div>
+      <div class="kk">test/</div><div>Six test tiers: <code>unit/</code>, <code>fuzz/</code> (parameterized), <code>invariant/</code> (the Foundry harness + 8 handlers), <code>echidna/</code> (second fuzz engine), <code>differential/</code> (Solidity math vs a TS reference), <code>exploit/</code> (the 10 replays), and <code>mutant/</code> (the load-bearing proofs from Ch.&nbsp;8).</div>
+      <div class="kk">guardian/</div><div>The TypeScript runtime monitor. <code>src/evaluator.ts</code> is the 1:1 mirror; companions fetch state, discover accounts, simulate accrual, and persist to Supabase.</div>
+      <div class="kk">assurance/</div><div>The Node tooling that computes the AMC score, replays exploits, and traces findings. <code>src/score.ts</code> holds the weights.</div>
+      <div class="kk">dashboard/</div><div>React + Vite UI that reads Supabase and shows the 12 invariants, AMC panels, and live alerts. Deployed on Vercel.</div>
+      <div class="kk">security-review/</div><div>The self-conducted review and machine-readable <code>findings.json</code> (the <code>GUA-*</code> findings).</div>
+      <div class="kk">supabase/</div><div>Database schema + row-level-security policies — public reads, writes only from the bot's service key.</div>
+      <div class="kk">.github/</div><div>The 7-job CI pipeline: build, mirror-parity, invariant-fuzz, coverage, static-analysis, assurance, gas-snapshot.</div>
+      <div class="kk">docs/</div><div>The prose source of truth — and where this explainer lives. Start with <code>assurance.md</code>.</div>
+    </div>
+
+    <div class="footer">
+      Generated explainer for <strong>Guardian Pipeline</strong> · a reference implementation of
+      cross-deployment invariant enforcement.<br/>
+      The authoritative, always-current source is the repo's own docs — this page is a guided tour, not a spec.
+    </div>
+  </section>
+
+  </main>
+</div>
+
+<script>
+/* =========================================================================
+   DATA
+   ========================================================================= */
+const INVARIANTS = [
+  {id:'INV-01', name:'Protocol solvency', sev:'Critical', cls:'ft', f:'cash + totalBorrowed ≥ totalSupplyAssets',
+    plain:'The vault must always hold (or be owed) at least what it owes its lenders. The master rule.',
+    breaks:'Accrual credits lenders more than borrowers are charged; a repayment collects less than debt falls; shares minted with no backing.',
+    caught:'invariant_solvency · inv01 · replay EXP-01 · caught real bug GUA-02'},
+  {id:'INV-02', name:'Supply-share integrity', sev:'Critical', cls:'ai', f:'totalSupplyShares = Σ userSupplyShares[i]',
+    plain:'The stored total of lender shares equals the sum of every account — no share appears or vanishes off-book.',
+    breaks:'A deposit/withdraw/liquidation updates one side of the share ledger but not the other.',
+    caught:'invariant_supplyShareIntegrity · inv02'},
+  {id:'INV-03', name:'Debt-share integrity', sev:'High', cls:'ai', f:'totalBorrowShares = Σ userBorrowShares[i]',
+    plain:'The debt-side twin of INV-02: total borrow shares equal the sum across borrowers.',
+    breaks:'A borrow/repay/liquidation mis-accounts borrow shares.',
+    caught:'invariant_debtShareIntegrity · inv03'},
+  {id:'INV-04', name:'Lender-value floor', sev:'High', cls:'struct', f:'totalSupplyAssets ≥ totalSupplyShares',
+    plain:'The share price never falls below 1:1 — lenders cannot lose nominal principal.',
+    breaks:'Only by changing a rounding direction in deposit/withdraw/liquidate. Every conversion floors in the protocol’s favour.',
+    caught:'invariant_lenderValueFloor · inv04 · replay EXP-02'},
+  {id:'INV-05', name:'Interest-index floor', sev:'Medium', cls:'struct', f:'borrowIndex ≥ 1e18',
+    plain:'Interest is monotone: the debt-scaling index starts at 1e18 and only ever ticks up.',
+    breaks:'Only by a source change to the accrual maths — accrue() only adds to the index.',
+    caught:'invariant_interestIndexFloor · inv05'},
+  {id:'INV-06', name:'No uncollateralised debt', sev:'High', cls:'ft', f:'collateral[u]=0 ⇒ userDebt(u)=0',
+    plain:'An account with zero collateral can never carry debt — no structurally unrecoverable bad debt.',
+    breaks:'A withdrawal removes all collateral while debt is open, or a liquidation seizes everything without clearing the debt. Both paths are guarded.',
+    caught:'invariant_noUncollateralisedDebt · inv06 · replays EXP-03, EXP-06'},
+  {id:'INV-07', name:'Solvency monotonicity', sev:'High', cls:'ft', f:'(cash+borrowed−claims)ₜ ≥ (…)ₜ₋₁',
+    plain:'The solvency margin never shrinks between two consecutive observations.',
+    breaks:'A path lets the margin fall block-to-block, e.g. accrual crediting lenders beyond the matching index rise.',
+    caught:'invariant_solvencyMonotone · inv07 (delta) · MutantINV07 proves it load-bearing'},
+  {id:'INV-08', name:'No-free-lunch on liquidation', sev:'High', cls:'ft', f:'seized·price·BPS ≤ paid·(BPS+bonus)·WAD',
+    plain:'A liquidator can never extract more value than the debt repaid plus the permitted bonus.',
+    breaks:'Inflated seize coefficient, removed bonus cap, or a manipulated settlement price.',
+    caught:'invariant_liquidationNoFreeLunch · inv08 (event reconciliation) · EXP-05, EXP-07 · MutantINV08'},
+  {id:'INV-09', name:'Per-position debt monotonicity', sev:'Medium', cls:'ft', f:'flat shares ⇒ userDebtₜ ≥ userDebtₜ₋₁',
+    plain:'If a borrower’s share count is unchanged, their debt in asset terms cannot have fallen — interest only goes forward.',
+    breaks:'borrowIndex falls (contradicting INV-05) or the share→debt conversion rounds toward the borrower.',
+    caught:'invariant_debtMonotoneUnderAccrual · inv09 (delta) · MutantINV09'},
+  {id:'INV-10', name:'Debt rounding favours protocol', sev:'Medium', cls:'ft', f:'Σ userDebt[a] ≤ totalBorrowed',
+    plain:'The sum of each borrower’s floored debt never exceeds the protocol’s floored aggregate.',
+    breaks:'The per-account debt view rounds up (toward the borrower) instead of down.',
+    caught:'invariant_debtRoundingFavoursProtocol · inv10 · replay EXP-08 · MutantINV10'},
+  {id:'INV-11', name:'Oracle freshness gate', sev:'High', cls:'ft', f:'now − oracle.lastUpdatedAt ≤ MAX_STALENESS',
+    plain:'The vault never acts on a price more than 1 day old. A stale price reverts every price-dependent path.',
+    breaks:'The staleness guard is removed or its constant raised, letting borrows/liquidations run on a stale price.',
+    caught:'invariant_oracleFreshnessGate · inv11 · replays EXP-03, EXP-09 · MutantINV11'},
+  {id:'INV-12', name:'Accrue idempotence', sev:'Medium', cls:'ft', f:'accrue(); accrue();  ⟹  state unchanged',
+    plain:'A second accrue() in the same block changes nothing — interest cannot be compounded twice per block.',
+    breaks:'The "if (dt == 0) return;" early-return is removed, or lastAccrualTime isn’t updated.',
+    caught:'invariant_accrueIdempotent · inv12 · MutantINV12'},
+];
+
+const CLASS_LABEL = {ft:'Fuzz-tensioned', ai:'Accounting identity', struct:'Structural'};
+const CLASS_PILL = {ft:'ft', ai:'st', struct:'st'};
+
+const EXPLOITS = [
+  ['EXP-01','Share-price manipulation (ERC-4626 inflation)','INV-01, INV-04'],
+  ['EXP-02','Health-check bypass on collateral reduction','INV-01, INV-06'],
+  ['EXP-03','Oracle price manipulation via donation','INV-01, INV-11'],
+  ['EXP-04','Collateralisation bypass','INV-01'],
+  ['EXP-05','No-free-lunch on liquidation','INV-01, INV-08'],
+  ['EXP-06','ERC-20 transferFrom defect (mint-on-credit)','INV-06'],
+  ['EXP-07','No-free-lunch under price-drop liquidation','INV-01, INV-08'],
+  ['EXP-08','Per-borrower debt rounding flipped','INV-10'],
+  ['EXP-09','Action against a price the contract should distrust','INV-11'],
+  ['EXP-10','Sub-rounding-threshold donation across N depositors','INV-01, INV-04'],
+];
+
+/* =========================================================================
+   PROGRESS BAR + NAV ACTIVE STATE
+   ========================================================================= */
+const sections = [...document.querySelectorAll('section')];
+const navLinks = [...document.querySelectorAll('nav a')];
+function onScroll(){
+  const h = document.documentElement;
+  const pct = (h.scrollTop) / (h.scrollHeight - h.clientHeight) * 100;
+  document.getElementById('progress').style.width = pct + '%';
+  let cur = sections[0].id;
+  for(const s of sections){ if(s.getBoundingClientRect().top <= 120) cur = s.id; }
+  navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#'+cur));
+}
+window.addEventListener('scroll', onScroll, {passive:true});
+
+/* =========================================================================
+   CHAPTER 3 — VAULT SIMULATOR  (faithful simplified model of Vault.sol)
+   ========================================================================= */
+const RATE_PER_DAY = 0.10/365;     // 10% APR
+const CR = 0.80;                   // 80% collateral ratio
+const BONUS = 0.05;                // 5% liquidation bonus
+const MAX_STALENESS_DAYS = 1;
+
+function freshVault(){
+  return {
+    day:0, price:10, oracleUpdatedDay:0, _lastAccrual:0,
+    cash:0, totalSupplyAssets:0, totalSupplyShares:0,
+    totalBorrowShares:0, borrowIndex:1,
+    aliceShares:0, bobCol:0, bobBorrowShares:0,
+  };
+}
+let V = freshVault();
+
+const totalBorrowed = v => v.totalBorrowShares * v.borrowIndex;
+const bobDebt = v => v.bobBorrowShares * v.borrowIndex;
+const sharePrice = v => v.totalSupplyShares===0 ? 1 : v.totalSupplyAssets/v.totalSupplyShares;
+const bobLimit = v => v.bobCol * v.price * CR;
+
+function simLog(msg, cls){
+  const el = document.getElementById('simLog');
+  const d = document.createElement('div');
+  if(cls) d.className = cls;
+  d.innerHTML = msg;
+  el.prepend(d);
+}
+
+function accrue(v){
+  if(v.day === v._lastAccrual) return 0;
+  const dt = v.day - v._lastAccrual;
+  v._lastAccrual = v.day;
+  const before = totalBorrowed(v);
+  if(before === 0) return 0;
+  v.borrowIndex += v.borrowIndex * RATE_PER_DAY * dt;
+  const interest = totalBorrowed(v) - before;
+  if(interest > 0) v.totalSupplyAssets += interest;
+  return interest;
+}
+
+const ACTS = {
+  deposit(v){
+    accrue(v);
+    const amt = 1000;
+    const shares = v.totalSupplyShares===0 ? amt : amt*v.totalSupplyShares/v.totalSupplyAssets;
+    v.cash += amt; v.totalSupplyAssets += amt; v.totalSupplyShares += shares; v.aliceShares += shares;
+    simLog(`<span class="ev">Alice deposited 1,000 USDC</span> → minted ${fmt(shares)} shares`);
+  },
+  withdraw(v){
+    accrue(v);
+    if(v.aliceShares===0){ simLog('Alice has no shares.', 'er'); return; }
+    const amountOut = v.aliceShares * v.totalSupplyAssets / v.totalSupplyShares;
+    if(v.cash < amountOut - 1e-9){ simLog(`Not enough idle cash to withdraw (${fmt(amountOut)} needed, ${fmt(v.cash)} free) — borrowers must repay first.`, 'er'); return; }
+    v.cash -= amountOut; v.totalSupplyAssets -= amountOut; v.totalSupplyShares -= v.aliceShares; v.aliceShares = 0;
+    const earned = amountOut-1000>0?amountOut-1000:0;
+    simLog(`<span class="ev">Alice withdrew ${fmt(amountOut)} USDC</span> (deposited 1,000 → earned ${fmt(earned)} interest)`);
+  },
+  postcol(v){
+    v.bobCol += 100;
+    simLog(`<span class="ev">Bob posted 100 ETH collateral</span> (worth ${fmt(100*v.price)} USDC)`);
+  },
+  borrow(v){
+    accrue(v);
+    const amt = 500;
+    if(bobDebt(v)+amt > bobLimit(v)+1e-9){ simLog(`Borrow blocked: would exceed Bob's 80% limit (${fmt(bobLimit(v))} USDC). Post collateral first.`, 'er'); return; }
+    if(v.cash < amt){ simLog(`Borrow blocked: vault has only ${fmt(v.cash)} idle USDC. Alice must deposit first.`, 'er'); return; }
+    const shares = Math.ceil(amt/v.borrowIndex*1e6)/1e6;
+    v.cash -= amt; v.totalBorrowShares += shares; v.bobBorrowShares += shares;
+    simLog(`<span class="ev">Bob borrowed 500 USDC</span> against his collateral`);
+  },
+  repay(v){
+    accrue(v);
+    const debt = bobDebt(v);
+    if(debt===0){ simLog('Bob has no debt.', 'er'); return; }
+    const before = totalBorrowed(v);
+    v.totalBorrowShares -= v.bobBorrowShares; v.bobBorrowShares = 0;
+    const pay = before - totalBorrowed(v);
+    v.cash += pay;
+    simLog(`<span class="ev">Bob repaid ${fmt(pay)} USDC</span> — debt cleared`);
+  },
+  time(v){
+    v.day += 90;
+    const interest = accrue(v);
+    simLog(`<span class="hl">90 days pass.</span> Interest accrued: ${fmt(interest)} USDC (charged to Bob, credited to Alice)`);
+    // keep oracle fresh in this teaching sim so price-dependent paths don't revert on time alone
+    v.oracleUpdatedDay = v.day;
+  },
+  crash(v){
+    accrue(v);
+    v.price = +(v.price * 0.4).toFixed(2); v.oracleUpdatedDay = v.day;
+    simLog(`<span class="er">⚠ ETH price crashed −60% → ${v.price} USDC.</span> Check Bob's health.`);
+  },
+  liquidate(v){
+    accrue(v);
+    const debt = bobDebt(v);
+    if(debt===0){ simLog('Bob has no debt to liquidate.', 'er'); return; }
+    if(debt <= bobLimit(v)+1e-9){ simLog(`Liquidation blocked: Bob is healthy (debt ${fmt(debt)} ≤ limit ${fmt(bobLimit(v))}).`, 'er'); return; }
+    const seizeValue = debt * (1+BONUS);
+    let seizeCol = seizeValue / v.price;
+    if(seizeCol >= v.bobCol) seizeCol = v.bobCol;
+    const before = totalBorrowed(v);
+    v.totalBorrowShares -= v.bobBorrowShares; v.bobBorrowShares = 0;
+    const pay = before - totalBorrowed(v);
+    v.cash += pay; v.bobCol -= seizeCol;
+    simLog(`<span class="ev">Bob liquidated:</span> liquidator repaid ${fmt(pay)} USDC, seized ${fmt(seizeCol)} ETH (incl. 5% bonus)`);
+  },
+};
+
+function fmt(n){
+  if(n===0) return '0';
+  if(Math.abs(n) < 0.001) return n.toExponential(2);
+  return n.toLocaleString('en-US',{maximumFractionDigits: Math.abs(n)<10?3:1});
+}
+
+function evalSim(v){
+  const assets = v.cash + totalBorrowed(v);
+  const debtSum = bobDebt(v);
+  return [
+    {id:'INV-01', nm:'Protocol solvency', ok: assets >= v.totalSupplyAssets - 1e-6, val:`${fmt(assets)} ≥ ${fmt(v.totalSupplyAssets)}`},
+    {id:'INV-02', nm:'Supply-share integrity', ok: Math.abs(v.totalSupplyShares - v.aliceShares) < 1e-6, val:'shares balance'},
+    {id:'INV-03', nm:'Debt-share integrity', ok: Math.abs(v.totalBorrowShares - v.bobBorrowShares) < 1e-6, val:'shares balance'},
+    {id:'INV-04', nm:'Lender-value floor', ok: v.totalSupplyAssets >= v.totalSupplyShares - 1e-6, val:`price ${fmt(sharePrice(v))} ≥ 1`},
+    {id:'INV-05', nm:'Interest-index floor', ok: v.borrowIndex >= 1, val:`index ${fmt(v.borrowIndex)}`},
+    {id:'INV-06', nm:'No uncollateralised debt', ok: !(v.bobCol===0 && v.bobBorrowShares>0), val: (v.bobCol===0&&v.bobBorrowShares>0)?'OFFENDER':'clean'},
+    {id:'INV-10', nm:'Debt rounding favours protocol', ok: debtSum <= totalBorrowed(v)+1e-6, val:`${fmt(debtSum)} ≤ ${fmt(totalBorrowed(v))}`},
+    {id:'INV-11', nm:'Oracle freshness gate', ok: (v.day - v.oracleUpdatedDay) <= MAX_STALENESS_DAYS, val:`gap ${v.day-v.oracleUpdatedDay}d`},
+  ];
+}
+
+function renderSim(){
+  const v = V;
+  document.getElementById('simDay').textContent = v.day;
+  document.getElementById('simPrice').textContent = v.price;
+  document.getElementById('s_cash').textContent = fmt(v.cash);
+  document.getElementById('s_borrowed').textContent = fmt(totalBorrowed(v));
+  document.getElementById('s_assets').textContent = fmt(v.totalSupplyAssets);
+  document.getElementById('s_index').textContent = fmt(v.borrowIndex);
+  document.getElementById('s_sp').textContent = fmt(sharePrice(v));
+  document.getElementById('s_ashares').textContent = fmt(v.aliceShares);
+  document.getElementById('s_aval').textContent = fmt(v.aliceShares*sharePrice(v));
+  document.getElementById('s_bcol').textContent = fmt(v.bobCol) + ' ETH';
+  document.getElementById('s_bdebt').textContent = fmt(bobDebt(v));
+  document.getElementById('s_blim').textContent = fmt(bobLimit(v));
+  const under = bobDebt(v) > bobLimit(v)+1e-6 && bobDebt(v)>0;
+  const hEl = document.getElementById('s_health');
+  hEl.textContent = bobDebt(v)===0 ? '—' : (under ? 'UNDER-WATER' : 'healthy');
+  hEl.style.color = bobDebt(v)===0 ? 'var(--ink-3)' : (under ? 'var(--red)' : 'var(--green)');
+
+  const inv = evalSim(v);
+  document.getElementById('simInv').innerHTML = inv.map(r =>
+    `<div class="inv ${r.ok?'ok':'bad'}"><span class="dot"></span><span class="nm">${r.id} · ${r.nm}</span><span class="val">${r.val}</span></div>`
+  ).join('');
+}
+
+document.querySelectorAll('#sim [data-act]').forEach(b => {
+  b.addEventListener('click', async () => {
+    const a = b.dataset.act;
+    if(a==='reset'){ V = freshVault(); document.getElementById('simLog').innerHTML=''; simLog('<span class="hl">Vault reset.</span>'); renderSim(); return; }
+    if(a==='story'){ await runStory(); return; }
+    ACTS[a](V); renderSim();
+  });
+});
+
+async function runStory(){
+  V = freshVault(); document.getElementById('simLog').innerHTML=''; renderSim();
+  const seq = ['deposit','postcol','borrow','time','time','crash','liquidate'];
+  for(const s of seq){ ACTS[s](V); renderSim(); await sleep(950); }
+  simLog('<span class="hl">Full lifecycle complete — solvency held the entire way.</span>');
+}
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+renderSim();
+
+/* =========================================================================
+   CHAPTER 5 — INVARIANT CARDS
+   ========================================================================= */
+function renderCards(filt='all'){
+  const host = document.getElementById('invCards');
+  const items = INVARIANTS.filter(i => filt==='all' || i.cls===filt);
+  host.innerHTML = items.map(i => `
+    <div class="panel invcard" style="cursor:pointer; margin:12px 0">
+      <div class="row" style="justify-content:space-between">
+        <div class="row">
+          <span class="pill id">${i.id}</span>
+          <strong style="font-size:16px">${i.name}</strong>
+          <span class="pill ${i.cls==='ft'?'ft':'st'}">${CLASS_LABEL[i.cls]}</span>
+        </div>
+        <span class="muted">${i.sev} &nbsp;▾</span>
+      </div>
+      <div class="formula" style="margin:12px 0 0">${i.f}</div>
+      <div class="cardbody" style="display:none; margin-top:12px">
+        <p style="margin:0 0 10px">${i.plain}</p>
+        <div class="grid2">
+          <div><h4 style="color:var(--amber); margin-top:0">Breaks when</h4><p class="muted" style="margin:4px 0 0">${i.breaks}</p></div>
+          <div><h4 style="color:var(--green); margin-top:0">Caught by</h4><p class="muted" style="margin:4px 0 0; font-family:var(--mono); font-size:12.5px">${i.caught}</p></div>
+        </div>
+      </div>
+    </div>`).join('');
+  host.querySelectorAll('.invcard').forEach(c => {
+    c.addEventListener('click', () => {
+      const b = c.querySelector('.cardbody');
+      b.style.display = b.style.display==='none' ? 'block' : 'none';
+    });
+  });
+}
+renderCards();
+document.querySelectorAll('.filt').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.filt').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); renderCards(b.dataset.filt);
+}));
+
+/* =========================================================================
+   CHAPTER 6 — FUZZ CAMPAIGN ANIMATION
+   ========================================================================= */
+const HANDLERS = ['Deposit','Collateral','Borrow','Warp','Liquidate','Donation','Oracle','Reentrancy'];
+const HANDLER_CALLS = {
+  Deposit:'deposit(1.2e3)', Collateral:'depositCollateral(840)', Borrow:'borrow(310)',
+  Warp:'warp(+3600s) → accrue()', Liquidate:'liquidate(0x9f.., 120)', Donation:'donate(7) → vault',
+  Oracle:'setPrice(9.84e18)', Reentrancy:'reenter(withdraw)'
+};
+function renderHandlerChips(active){
+  document.getElementById('fuzzHandlers').innerHTML = HANDLERS.map(h =>
+    `<span class="h ${h===active?'fire':''}">${h}Handler</span>`).join('');
+}
+renderHandlerChips();
+let fuzzRunning = false;
+document.getElementById('fuzzBtn').addEventListener('click', () => {
+  if(fuzzRunning) return; fuzzRunning = true;
+  const btn = document.getElementById('fuzzBtn'); btn.disabled = true; btn.textContent='running…';
+  let runs=0, checks=0;
+  const feed = document.getElementById('fuzzFeed'); feed.innerHTML='';
+  const target = 300000;
+  function tick(){
+    for(let k=0;k<30;k++){ runs += Math.floor(8+Math.random()*40); checks = runs*12; }
+    const h = HANDLERS[Math.floor(Math.random()*HANDLERS.length)];
+    renderHandlerChips(h);
+    document.getElementById('fzRuns').textContent = Math.min(runs,target).toLocaleString();
+    document.getElementById('fzChecks').textContent = Math.min(checks,target*12).toLocaleString();
+    const line = document.createElement('div');
+    line.innerHTML = `<span class="call">[call ${Math.min(runs,target).toLocaleString()}] ${h}Handler.${HANDLER_CALLS[h]}</span>  <span class="pass">✓ 12/12 invariants hold</span>`;
+    feed.prepend(line);
+    while(feed.childElementCount>9) feed.lastChild.remove();
+    if(runs < target){ setTimeout(tick, 55); }
+    else {
+      document.getElementById('fzRuns').textContent = target.toLocaleString();
+      document.getElementById('fzChecks').textContent = (target*12).toLocaleString();
+      renderHandlerChips();
+      const d = document.createElement('div');
+      d.innerHTML = `<span class="pass">━━ campaign complete · 0 failures · all 12 invariants held across the campaign ━━</span>`;
+      feed.prepend(d);
+      btn.disabled=false; btn.textContent='▶ Run again'; fuzzRunning=false;
+    }
+  }
+  tick();
+});
+
+/* =========================================================================
+   CHAPTER 8 — MUTATION TOGGLE
+   ========================================================================= */
+function runMutation(buggy){
+  // borrow 500, accrue 90 days at 10% APR; 1000 deposited, 500 lent out
+  let idx = 1; const shares = 500, cash = 500; let claims = 1000;
+  const dt = 90; idx += idx*RATE_PER_DAY*dt;
+  const borrowed = shares*idx;
+  const interest = borrowed - 500;
+  claims += interest;
+  if(buggy) claims += interest; // bug: credited twice
+  const assets = cash + borrowed;
+  const ok = assets >= claims - 1e-6;
+  document.getElementById('m_assets').textContent = fmt(assets);
+  document.getElementById('m_claims').textContent = fmt(claims);
+  document.getElementById('m_inv').className = 'inv ' + (ok?'ok':'bad');
+  document.getElementById('m_msg').innerHTML = ok
+    ? '<span style="color:var(--green)">✓ Campaign PASSES.</span> Assets cover claims with a positive margin. The vault is solvent across the sequence.'
+    : '<span style="color:var(--red)">✗ Campaign FAILS.</span> Foundry shrinks to a minimal counter-example: borrow → accrue. Lenders are credited interest the vault never collected — solvency broken. The invariant <em>bites</em>.';
+}
+const mt = document.getElementById('mutToggle');
+mt.addEventListener('click', () => {
+  const on = mt.classList.toggle('on');
+  document.getElementById('mutLabel').textContent = on ? 'Mutant vault (interest credited twice 🐛)' : 'Canonical vault (correct)';
+  document.getElementById('mutBugLine').style.display = on ? 'inline' : 'none';
+  runMutation(on);
+});
+runMutation(false);
+
+/* =========================================================================
+   CHAPTER 9 — EXPLOIT TABLE
+   ========================================================================= */
+document.getElementById('expRows').innerHTML = EXPLOITS.map(([id,cls,t]) => `
+  <tr><td><span class="eid">${id}</span></td><td>${cls}</td><td>${t}</td>
+  <td><span class="pill prevented">PREVENTED</span></td></tr>`).join('');
+
+/* =========================================================================
+   CHAPTER 10 — AMC ANIMATE ON SCROLL
+   ========================================================================= */
+let amcDone = false;
+const amcEl = document.getElementById('amc');
+const io = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if(e.isIntersecting && !amcDone){
+      amcDone = true;
+      amcEl.querySelectorAll('.fill').forEach(f => f.style.width = f.dataset.w + '%');
+      const target = 94; let cur = 0;
+      const t = setInterval(() => { cur += 2; if(cur>=target){cur=target; clearInterval(t);} document.getElementById('amcScore').textContent = cur; }, 22);
+    }
+  });
+}, {threshold: .4});
+io.observe(amcEl);
+
+/* =========================================================================
+   CHAPTER 11 — CLICKABLE LAYERS
+   ========================================================================= */
+document.querySelectorAll('#layers .layer').forEach(l => {
+  l.addEventListener('click', () => l.classList.toggle('open'));
+});
+
+onScroll();
+</script>
+</body>
+</html>
