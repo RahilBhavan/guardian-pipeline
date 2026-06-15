@@ -187,6 +187,20 @@ address, Supabase URL) are inlined in the workflow. The schedule runs every
 > For real-time, run `guardian/Dockerfile` on a paid host: `guardian/fly.toml`
 > is kept for Fly.io (~$2/mo), and the same image works on Koyeb or Railway.
 
+### Keeping the demo oracle fresh (INV-11)
+
+INV-11 (oracle freshness gate) reverts price-dependent paths once the oracle is
+older than `MAX_STALENESS` (1 day). The demo `MockOracle` is permissionless but
+nobody updates it, so on an idle demo it goes stale and the monitor flags INV-11.
+[`.github/workflows/oracle-keeper.yml`](../.github/workflows/oracle-keeper.yml)
+re-stamps it every 6 hours by calling `setPrice(currentPrice)` (which writes
+`block.timestamp` exactly — never ahead of chain time). To enable it, add one
+repository secret, `ORACLE_KEEPER_KEY` (the raw key of any funded Base Sepolia
+wallet — `setPrice` is permissionless, the key only pays gas), and trigger the
+workflow once from the Actions tab. Until the secret is set the job logs a
+warning and skips. A real deployment would point `IPriceOracle` at an
+authenticated feed (Chainlink/Pyth) that refreshes itself.
+
 ## 7. Run the dashboard
 
 ```bash
