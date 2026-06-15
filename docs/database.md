@@ -76,6 +76,27 @@ The dashboard uses this table two ways: the latest row's `checked_at` proves
 the bot is **alive**, and the recent `latency_ms` series feeds the latency
 **sparkline**.
 
+### `vault_state_previous`
+
+One row **per vault**, overwritten every block — the previous `VaultState`
+observation the two delta invariants (INV-07 solvency monotonicity, INV-09
+per-position debt monotonicity) compare against. It lets the single-pass
+monitor (`once.ts`) and a restarted daemon resume without losing a block of
+delta coverage. The dashboard never reads it.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `vault` | `text` | Primary key — the monitored vault address. |
+| `block_number` | `bigint` | Block of the stored observation. |
+| `block_ts` | `bigint` | Unix seconds of that block. |
+| `cash`, `total_supply_assets`, `total_supply_shares`, `total_borrow_shares`, `total_borrowed`, `borrow_index`, `collateral_ratio`, `last_accrual_time`, `liquidation_bonus`, `max_staleness`, `oracle_last_updated_at` | `text` | The aggregate snapshot, each a `uint256` stored as text (see the note above). |
+| `users_jsonb` | `jsonb` | Per-user positions `[{address, supplyShares, borrowShares, collateral}]`, values text-encoded. |
+| `updated_at` | `timestamptz` | Last overwrite, `now()`. |
+
+> **No public read.** RLS is enabled with **no policy**, so the anon and
+> authenticated keys cannot read it — only the bot's service-role key can. The
+> per-user positions stay off the public API.
+
 ---
 
 ## Row-level security
@@ -130,12 +151,15 @@ CLI.
 |------|---------|
 | `0001_init.sql` | Creates `alerts` and `blocks_checked`, their indexes, enables RLS with the two public-read policies, and adds both tables to the real-time publication. |
 | `0002_lockdown_insert_rls.sql` | Remediation migration. `drop policy if exists` for any public insert policy left by an earlier schema version. Safe to run on a fresh database — `if exists` makes it a no-op there. |
+| `0003_alerts_unique.sql` | Dedups, then adds unique constraints — `(vault, block_number, invariant_id)` on `alerts` and `(vault, block_number)` on `blocks_checked` — so a bot restart or transient retry can't inflate the feed with duplicate rows. Idempotent; safe to re-run. |
+| `0004_state_history.sql` | Creates [`vault_state_previous`](#vault_state_previous) (one RLS-locked row per vault) so the delta invariants INV-07 / INV-09 keep their prior snapshot across a restart. |
 
 `0002` exists because an earlier draft of `0001` granted public
 `insert with check (true)` policies. Any database provisioned from that draft
 must run `0002` to lock writes back down to the service-role key. The current
 `0001` never creates those policies, so on a fresh setup `0002` simply
-confirms there is nothing to remove.
+confirms there is nothing to remove. `0003` and `0004` were added when the bot
+gained restart-safe idempotency and the two delta invariants (INV-07, INV-09).
 
 ---
 

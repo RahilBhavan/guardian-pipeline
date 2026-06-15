@@ -45,10 +45,11 @@ verification is the broadest evidence, so it carries the most weight. They are
 fixed in the open so the score is reproducible and the bias is explicit.
 
 **Scope.** An earlier design added a fourth "Continuous Monitoring" component
-scored from a live Guardian deployment. It was removed: this project ships the
-runtime monitor as a runnable reference implementation, not a hosted service, so
-there is no live deployment to score. The Assurance Score is a pre-deployment
-metric only.
+scored from a live Guardian deployment. It was removed: AMC is deliberately a
+**pre-deployment** metric, scored only from CI artefacts. (A free, best-effort
+scheduled GitHub Actions monitor does run against the demo vault — see
+[Scope & honesty](../README.md#scope--honesty) — but that convenience hosting is
+not an SLA and AMC intentionally excludes runtime signal from the score.)
 
 **Grade:** A+ (97–100), A (93–96), A− (90–92), B+ (87–89), B (83–86),
 B− (80–82), C+ (77–79), … — see `gradeFor` in `assurance/src/score.ts`.
@@ -81,10 +82,10 @@ but the score is **not**:
   Lifting the score is a code-and-process exercise inside this repo, not a
   result earned against an adversary.
 - **A live-deployment outcome.** The score is computed entirely from CI
-  artefacts. It does not — and *cannot* — speak to incident-free runtime,
-  because there is no live deployment to score. An earlier draft included a
-  fourth "Continuous Monitoring" component sourced from a hosted Guardian
-  instance; it was removed because the hosted instance does not exist.
+  artefacts. It does not — and *cannot* — speak to incident-free runtime. A
+  free, best-effort scheduled GitHub Actions monitor does run against the demo
+  vault, but that is convenience hosting, not a production deployment, and AMC
+  deliberately excludes its signal — the score stays a pre-deployment metric.
 - **A measure of the runtime monitor's effectiveness.** The monitor ships as a
   runnable reference implementation. The score covers properties the monitor
   is *designed* to catch; it does not measure properties it *has* caught
@@ -101,8 +102,8 @@ score is on either side of that sentence.
 
 ## Exploit replays
 
-`test/exploit/` replays 7 *classes* of real-world DeFi exploit against the
-vault. Each is classified by outcome:
+`test/exploit/` replays 10 *scenarios* spanning real-world DeFi exploit classes
+against the vault. Each is classified by outcome:
 
 - **PREVENTED** — the contract's own code blocked the attack; no state
   corruption.
@@ -199,6 +200,6 @@ Matrix**, and **Exploit Replay** panels.
 
 - [architecture.md](architecture.md) — the assurance layer among the four layers.
 - [invariants.md](invariants.md) — the 12 invariants violations roll up from.
-- [invariants.md#testing-strategy](invariants.md#testing-strategy) — the four test tiers including exploit replay.
+- [invariants.md#testing-strategy](invariants.md#testing-strategy) — the six test tiers including exploit replay.
 - [../README.md#cicd-pipeline](../README.md#cicd-pipeline) — the `assurance` CI job that gates on the score.
 - [../assurance/README.md](../assurance/README.md) — the assurance engine's CLI.

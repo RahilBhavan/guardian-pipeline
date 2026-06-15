@@ -2,7 +2,7 @@
 
 The vault's safety is defined by 12 invariants. Each is asserted by an
 `invariant_*` function in `test/invariant/InvariantVault.t.sol`, mirrored in
-`guardian/src/evaluator.ts` (`inv01`…`inv06`), and re-checked by the
+`guardian/src/evaluator.ts` (`inv01`…`inv12`), and re-checked by the
 exploit-replay harness (`test/exploit/`).
 
 **Notation:** `WAD = 1e18` (fixed-point unit); `BPS = 100_00` (basis-point
@@ -13,9 +13,12 @@ borrowIndex / WAD`; `userDebt(u) = userBorrowShares[u] × borrowIndex / WAD`.
 **Not every invariant is equally hard to satisfy** — and this document does not
 pretend they are. Each invariant below carries a **class**:
 
-- **Fuzz-tensioned** (INV-01, INV-06) — a wrong rounding direction or call
-  ordering genuinely breaks it. These are the properties the fuzz campaign
-  exists to attack, and INV-01 already caught a real bug (GUA-03).
+- **Fuzz-tensioned** (INV-01, INV-06, INV-07..INV-12) — properties the fuzz
+  campaign genuinely attacks: a wrong rounding direction, call ordering, or
+  missing guard breaks them. INV-01 already caught a real bug (GUA-03).
+  INV-07..INV-12 are each paired with a `test/mutant/MutantINV*.t.sol`
+  mutation test that breaks the Vault on purpose and asserts the matching
+  `invariant_*` catches it.
 - **Accounting identity** (INV-02, INV-03) — a share-sum equality that holds
   unless a code path desyncs the two sides of the ledger. The fuzzer's role is
   regression detection.
@@ -35,16 +38,17 @@ on each is set so the green badge is a precise, falsifiable claim.
 |------|-----------|---------------------|---------|
 | Unit | `test/unit/` | Does every individual path behave exactly as specified? | via `coverage` (≥ 85% lines on `Vault.sol`) |
 | Parameterized fuzz | `test/fuzz/` | Do the invariants hold under *any* APR / liquidation-bonus parameter pair? | runs with `forge test` |
-| Invariant fuzz (Foundry) | `test/invariant/` | Do the six properties survive *any* call sequence? | `invariant-fuzz` (zero `[FAIL]`) |
+| Invariant fuzz (Foundry) | `test/invariant/` | Do the twelve properties survive *any* call sequence? | `invariant-fuzz` (zero `[FAIL]`) |
 | Invariant fuzz (Echidna) | `test/echidna/` | Does an independent fuzz engine reach the same conclusion as Foundry? | `make echidna` (skipped locally if binary missing) |
 | Differential | `test/differential/` | Does Solidity's share/debt math agree with a TS reference on every input? | runs with `forge test` (FFI to `assurance/bin/refmath-cli.mjs`) |
 | Exploit replay | `test/exploit/` | Does the vault resist known DeFi exploit classes? | `assurance` (no regression, no `MISSED`) |
 
-The invariant suite drives five handlers (Deposit, Borrow, Warp, Liquidate,
-Donation) so a campaign explores meaningful state transitions — including the
-ERC-4626 share-inflation vector via direct donations — instead of burning runs
-on amounts that trivially revert. The donation handler exists specifically to
-prove the donation/inflation attack class is exercised, not just asserted.
+The invariant suite drives eight handlers (Deposit, Collateral, Borrow, Warp,
+Liquidate, Donation, Oracle, Reentrancy) so a campaign explores meaningful state
+transitions — including the ERC-4626 share-inflation vector via direct donations,
+oracle-price moves, and re-entrant call sequences — instead of burning runs on
+amounts that trivially revert. The donation handler exists specifically to prove
+the donation/inflation attack class is exercised, not just asserted.
 
 Counterexamples shrink to a minimal failing call sequence under
 `[FAIL] invariant_<name>()`. For how the tiers run as CI jobs, see
@@ -52,7 +56,7 @@ Counterexamples shrink to a minimal failing call sequence under
 
 ### Formal verification — a known gap
 
-This repo does **not** ship a Certora or Halmos symbolic proof of the six
+This repo does **not** ship a Certora or Halmos symbolic proof of the twelve
 invariants. The campaign is empirical: a 2,000-run invariant fuzz on CI plus
 256-run parameterized fuzz over the constructor space. A symbolic proof would
 close the residual *is there any sequence we missed* question — fuzzing can
@@ -155,24 +159,143 @@ protocol never accumulates structurally unrecoverable bad debt.
 - **Caught by:** `invariant_noUncollateralisedDebt()` · `inv06()` · replays
   EXP-03, EXP-06.
 
+## INV-07 · Per-observation solvency monotonicity · *High*
+
+```
+(cash + totalBorrowed − totalSupplyAssets)_t ≥ (cash + totalBorrowed − totalSupplyAssets)_{t−1}
+```
+
+The solvency margin — idle cash plus outstanding debt minus total lender claims
+— must never shrink between consecutive observations. A mutation that lets
+repayments or accrual silently widen the gap in the wrong direction is detected
+on the next block.
+
+- **Breaks when:** a code path causes `cash + totalBorrowed − totalSupplyAssets`
+  to fall between two consecutive observations; for example, if accrual credits
+  lenders more than the matching borrow-index rise covers.
+- **Class — Fuzz-tensioned, load-bearing.** `test/mutant/MutantINV07.t.sol`
+  breaks the Vault on purpose and asserts `invariant_solvencyMonotone` catches it.
+- **Caught by:** `invariant_solvencyMonotone()` · `inv07()` (delta check;
+  short-circuits to PASS on the first observation after deploy or restart).
+
+## INV-08 · No-free-lunch on liquidation · *High*
+
+```
+seized · price · BPS ≤ paid · (BPS + bonus) · WAD
+```
+
+Every liquidation must satisfy the fee-bounded inequality: the value extracted
+by the liquidator (seized collateral at oracle price) cannot exceed the debt
+repaid plus the permitted bonus.
+
+- **Breaks when:** the seize coefficient is inflated, the bonus cap is removed,
+  or the oracle price used at settlement has been manipulated — letting the
+  liquidator extract more value than the bonus allows.
+- **Class — Fuzz-tensioned, load-bearing.** `test/mutant/MutantINV08.t.sol`
+  breaks the Vault on purpose; checked via event reconciliation (each `Liquidated`
+  log is re-evaluated against the on-block oracle price and the vault's immutable
+  bonus).
+- **Caught by:** `invariant_liquidationNoFreeLunch()` · `inv08()` · replays
+  EXP-05, EXP-07.
+
+## INV-09 · Per-position debt monotonicity under accrual · *Medium*
+
+```
+userBorrowShares[a]_t = userBorrowShares[a]_{t−1}  ⇒  userDebt(a)_t ≥ userDebt(a)_{t−1}
+```
+
+If a borrower's share count is unchanged between observations, their computed
+debt in asset terms must not have fallen — interest only accrues forward.
+
+- **Breaks when:** `borrowIndex` falls (contradicting INV-05) or the share-to-
+  debt conversion rounds in the borrower's favour on consecutive observations.
+- **Class — Fuzz-tensioned, load-bearing.** `test/mutant/MutantINV09.t.sol`
+  breaks the Vault on purpose; checked as a delta against the prior observation
+  (short-circuits to PASS on the first observation).
+- **Caught by:** `invariant_debtMonotoneUnderAccrual()` · `inv09()`.
+
+## INV-10 · Debt rounding favours the protocol · *Medium*
+
+```
+Σ userDebt[a] ≤ totalBorrowed
+```
+
+The sum of every borrower's floored per-account debt must not exceed the
+protocol's own floored aggregate. Sum-of-floors ≤ floor-of-sum is an arithmetic
+identity; the invariant tensions on the rounding direction of the per-actor view.
+
+- **Breaks when:** the per-account debt computation rounds up (towards the
+  borrower) rather than down, causing the sum to exceed `totalBorrowed`.
+- **Class — Fuzz-tensioned, load-bearing.** `test/mutant/MutantINV10.t.sol`
+  breaks the Vault on purpose.
+- **Caught by:** `invariant_debtRoundingFavoursProtocol()` · `inv10()` · replay
+  EXP-08.
+
+## INV-11 · Oracle freshness gate · *High*
+
+```
+block.timestamp − oracle.lastUpdatedAt ≤ MAX_STALENESS  (MAX_STALENESS = 1 day)
+```
+
+The vault must never act on a price that is more than `MAX_STALENESS` seconds
+old. The on-chain `_freshPrice` guard enforces this on every price-dependent
+path; the monitor mirrors the same check per block.
+
+- **Breaks when:** the staleness guard is removed or its constant is raised,
+  letting the vault execute borrows or liquidations against a price that no
+  longer reflects market conditions.
+- **Class — Fuzz-tensioned, load-bearing.** `test/mutant/MutantINV11.t.sol`
+  breaks the Vault on purpose.
+- **Caught by:** `invariant_oracleFreshnessGate()` · `inv11()` · replays
+  EXP-03, EXP-09.
+
+## INV-12 · Accrue idempotence · *Medium*
+
+```
+accrue(); accrue();  ⟹  (borrowIndex, totalSupplyAssets, totalBorrowShares, lastAccrualTime) unchanged
+```
+
+A second call to `accrue()` within the same block must leave all accrual-related
+state byte-identical to after the first call. The on-chain guard `if (dt == 0)
+return;` achieves this; the monitor's structural port confirms `lastAccrualTime
+== block.timestamp` so the guard would fire on any re-entrant call.
+
+- **Breaks when:** the `dt == 0` early-return is removed or `lastAccrualTime`
+  is not updated, allowing a second `accrue()` to compound interest a second
+  time in the same block.
+- **Class — Fuzz-tensioned, load-bearing.** `test/mutant/MutantINV12.t.sol`
+  breaks the Vault on purpose; the off-chain port is a snapshot check
+  (`lastAccrualTime == blockTimestamp`).
+- **Caught by:** `invariant_accrueIdempotent()` · `inv12()`.
+
 ---
 
 ## Where each invariant is enforced
 
 | ID | Foundry harness | Guardian bot | Exploit replay |
 |----|-----------------|--------------|----------------|
-| INV-01 | `invariant_solvency` | `inv01` (exact) | EXP-01 |
-| INV-02 | `invariant_supplyShareIntegrity` | `inv02` (exact) | — |
-| INV-03 | `invariant_debtShareIntegrity` | `inv03` (exact) | — |
-| INV-04 | `invariant_lenderValueFloor` | `inv04` (exact) | EXP-02 |
-| INV-05 | `invariant_interestIndexFloor` | `inv05` (exact) | — |
-| INV-06 | `invariant_noUncollateralisedDebt` | `inv06` (exact) | EXP-03, EXP-06 |
+| INV-01 | `invariant_solvency` | `inv01` (snapshot) | EXP-01 |
+| INV-02 | `invariant_supplyShareIntegrity` | `inv02` (snapshot) | — |
+| INV-03 | `invariant_debtShareIntegrity` | `inv03` (snapshot) | — |
+| INV-04 | `invariant_lenderValueFloor` | `inv04` (snapshot) | EXP-02 |
+| INV-05 | `invariant_interestIndexFloor` | `inv05` (snapshot) | — |
+| INV-06 | `invariant_noUncollateralisedDebt` | `inv06` (snapshot) | EXP-03, EXP-06 |
+| INV-07 | `invariant_solvencyMonotone` | `inv07` (delta) | — |
+| INV-08 | `invariant_liquidationNoFreeLunch` | `inv08` (event reconciliation) | EXP-05, EXP-07 |
+| INV-09 | `invariant_debtMonotoneUnderAccrual` | `inv09` (delta) | — |
+| INV-10 | `invariant_debtRoundingFavoursProtocol` | `inv10` (snapshot) | EXP-08 |
+| INV-11 | `invariant_oracleFreshnessGate` | `inv11` (snapshot) | EXP-03, EXP-09 |
+| INV-12 | `invariant_accrueIdempotent` | `inv12` (snapshot) | — |
 
-Every off-chain check is **exact**, not a proxy. INV-02, INV-03 and INV-06 need
-per-account state: the bot discovers every account from the vault's `Deposited`,
-`Borrowed` and `Liquidated` events and reads each one's on-chain position, so
-the off-chain sum is over the same user set the harness iterates. The property
-proven pre-deployment is byte-for-byte the property monitored after it.
+Every off-chain check is **exact**, not a proxy. INV-02, INV-03, INV-06, INV-09
+and INV-10 need per-account state: the bot discovers every account from the
+vault's `Deposited`, `Borrowed` and `Liquidated` events and reads each one's
+on-chain position, so the off-chain sum is over the same user set the harness
+iterates. INV-07 and INV-09 are delta checks that require the prior observation
+persisted in Supabase; they short-circuit to PASS on the very first block after
+deploy or restart. INV-08 is an event-reconciliation check that re-evaluates
+each `Liquidated` log against the on-block oracle price. The property proven
+pre-deployment is byte-for-byte the property monitored after it.
 
 For how violations roll up into the Assurance Score, see
 [assurance.md](assurance.md).
