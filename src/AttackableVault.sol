@@ -5,7 +5,7 @@ import {Vault} from "./Vault.sol";
 
 /// @title  AttackableVault — a demo-only Vault with a deliberate insolvency hole
 /// @notice Identical to {Vault} in every respect except for the {attack}
-///         function, which exists purely so the Guardian bot can be filmed
+///         function, which exists purely so the Guardian bot can be observed
 ///         detecting a live invariant breach. This contract is **never**
 ///         deployed to a production chain — the breach lives in a separate
 ///         contract so `src/Vault.sol`, the contract actually under audit,

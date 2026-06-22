@@ -90,11 +90,11 @@ but the score is **not**:
   runnable reference implementation. The score covers properties the monitor
   is *designed* to catch; it does not measure properties it *has* caught
   against real traffic.
-- **An audit rebuttal.** "A−" is what the project's own rubric returns for the
+- **An audit rebuttal.** "A" is what the project's own rubric returns for the
   project's own code. Treat it as evidence the methodology is reproducible —
   not as evidence the code is safe.
 
-The right way to read the headline figure is: *"this codebase grades itself A−
+The right way to read the headline figure is: *"this codebase grades itself A
 against the rubric the codebase ships."* Everything load-bearing about the
 score is on either side of that sentence.
 

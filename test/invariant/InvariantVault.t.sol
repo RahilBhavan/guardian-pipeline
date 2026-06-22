@@ -33,8 +33,9 @@ import {ReentrantAttackToken} from "../fixtures/ReentrantAttackToken.sol";
 ///         `depositCalls`) let the campaign assert it actually exercised
 ///         every action, rather than counting attempts that never landed.
 ///
-///         The six invariants are not all equally hard to satisfy, and this
-///         harness does not pretend they are:
+///         The six core invariants below — a subset of the twelve the harness
+///         asserts — are not all equally hard to satisfy, and this harness
+///         does not pretend they are:
 ///
 ///         - **INV-01 (solvency)** and **INV-06 (no uncollateralised debt)**
 ///           are the genuinely *tensioned* properties. Interest accrual,
@@ -42,7 +43,7 @@ import {ReentrantAttackToken} from "../fixtures/ReentrantAttackToken.sol";
 ///           collateral seizure all push against them; a wrong rounding
 ///           choice breaks them, which is exactly what the campaign exists
 ///           to rule out. INV-01 already caught a real one-wei leak during
-///           development (security-review finding GUA-03).
+///           development (security-review finding GUA-02).
 ///         - **INV-02 / INV-03 (share-sum integrity)** are accounting
 ///           identities. They hold unless a code path updates one side of
 ///           the share ledger without the other — the fuzzer's role here is

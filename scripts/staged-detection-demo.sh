@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Staged detection demo — triggers AttackableVault.attack() on Base Sepolia.
 # Prerequisites: guardian bot running, dashboard open, guardian-demo keystore funded.
-# See docs/setup.md §8 and docs/demo-recording.md for filming notes.
+# See docs/setup.md §8 for the staged-demo runbook.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

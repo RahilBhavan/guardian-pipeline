@@ -140,6 +140,8 @@ jobs:
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1
+        with:
+          version: stable
 
       - name: Install deps
         run: forge install
@@ -184,6 +186,8 @@ jobs:
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1
+        with:
+          version: stable
 
       - name: Install deps
         run: forge install
@@ -254,9 +258,7 @@ jobs:
         # The heavy fuzz campaign ran in the invariant-fuzz job; this step
         # places that artifact at assurance/data/runs.json where gatherStatic
         # expects it.
-        # NOTE: pin to a SHA before merge — every other action in this file is
-        # SHA-pinned. Using the `v4` tag here until the reviewer supplies one.
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: invariant-runs-json
           path: assurance/data
@@ -361,6 +363,8 @@ jobs:
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1
+        with:
+          version: stable
 
       - name: Install deps
         run: forge install

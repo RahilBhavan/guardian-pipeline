@@ -95,7 +95,7 @@ plainly. The **Class** column is the honest distinction:
 | INV-03 | Debt-share integrity | `totalBorrowShares = Σ userBorrowShares[i]` | Accounting identity — fuzzer regression-checks for a desync |
 | INV-04 | Lender-value floor | `totalSupplyAssets ≥ totalSupplyShares` | Structural — non-trivial proof, confirmed empirically |
 | INV-05 | Interest-index floor | `borrowIndex ≥ 1e18` | Structural — true by construction; cheap regression check |
-| INV-06 | No uncollateralised debt | `∀u: userSupplyShares[u] == 0 ⇒ userDebt(u) == 0` | **Fuzz-tensioned** — guarded by `withdraw`/`liquidate` logic |
+| INV-06 | No uncollateralised debt | `∀u: userCollateral[u] == 0 ⇒ userDebt(u) == 0` | **Fuzz-tensioned** — guarded by `withdrawCollateral`/`liquidate` logic |
 | INV-07 | Per-block solvency monotonicity | `(totalAssets − totalSupplyAssets)_t ≥ (…)_{t−1}` | **Fuzz-tensioned** — load-bearing per `test/mutant/MutantINV07.t.sol` |
 | INV-08 | No-free-lunch on liquidation | `seized · price · BPS ≤ paid · (BPS + bonus) · WAD` | **Fuzz-tensioned** — load-bearing per `test/mutant/MutantINV08.t.sol` |
 | INV-09 | Per-position debt monotonicity under accrual | `userBorrowShares[a]_t = userBorrowShares[a]_{t−1} ⇒ userDebt(a)_t ≥ userDebt(a)_{t−1}` | **Fuzz-tensioned** — load-bearing per `test/mutant/MutantINV09.t.sol` |
@@ -171,7 +171,7 @@ git clone https://github.com/rahilbhavan/guardian-pipeline
 cd guardian-pipeline
 forge install                        # forge-std + openzeppelin-contracts
 
-forge test                           # 91 tests: unit + parameterized fuzz + invariant + exploit replay + mutant
+forge test                           # 92 tests: unit + parameterized fuzz + invariant + exploit replay + mutant
 cd assurance && npm install && npm test && cd ..
 ```
 
@@ -202,7 +202,7 @@ vars the UI loads but shows no live data.
 
 ## The staged detection demo
 
-The runtime monitor can be filmed catching a violation end-to-end. This is a
+The runtime monitor can be observed catching a violation end-to-end. This is a
 **staged demo, not a caught attack**: `attack()` lives only on
 `AttackableVault` — a demo-only subclass — and is a deliberate one-line flag
 that forces an INV-01 violation. It is not an exploit, and the production
@@ -225,7 +225,7 @@ evaluate → alert — works; it does not claim the monitor catches novel exploi
 | Job | What it does | Feeds AMC? |
 |-----|--------------|------------|
 | `build` | `forge build --sizes`; gates all other jobs | no |
-| `mirror-parity` | Asserts every harness `invariant_*` has a paired entry in `guardian/src/evaluator.ts` | no |
+| `mirror-parity` | Asserts every INV-tagged harness `invariant_*` has a paired entry in `guardian/src/evaluator.ts` | no |
 | `invariant-fuzz` | 2,000-run invariant campaign; fails on any `[FAIL]` | yes — emits `runs.json` artifact AMC consumes |
 | `coverage` | LCOV report; gates `src/Vault.sol` at ≥ 85% line coverage | no — capped runs/depth are coverage-budget only |
 | `static-analysis` | Slither + Aderyn, uploaded as artifacts (non-gating) | no |
@@ -297,12 +297,12 @@ front:
   picks the exploit set, tags the findings against those invariants, *and*
   grades the result. AMC explicitly measures *methodology coverage* —
   reproducible, not externally validated. Read "A / 94" as "this codebase
-  grades itself A− against the rubric the codebase ships" — not as a
+  grades itself A against the rubric the codebase ships" — not as a
   third-party certification. The
   [docs/assurance.md](docs/assurance.md#what-this-score-is-not) page spells out
   what the score is and is not in more detail.
 - **The detection demo is staged.** `AttackableVault.attack()` is a planted flag
-  for filming the monitor, not a real exploit.
+  for demonstrating the monitor, not a real exploit.
 - **No formal verification.** The invariant proofs are empirical (Foundry fuzz
   + parameterized constructor fuzz), not symbolic — a Certora/Halmos proof
   would close the residual "is there *any* sequence we missed" question and
@@ -343,10 +343,11 @@ markets:
   pervasive, value-relevant, and substantively different from conventional
   financial audits.
 - **Landsman, Lyandres, Maydew, Rabetti & Zhang (2025)** — *Auditing Smart
-  Contracts.* SSRN. Examines determinants and consequences of audits across
-  ~8,195 reports and 1,575 protocols; finds outcomes depend on auditor
-  characteristics (market share, launch rate, hack rate) more than on the mere
-  presence of an audit.
+  Contracts.* SSRN. Examines the determinants and consequences of audits across
+  thousands of reports and protocols; finds that, on average, having an audit
+  does *not* reduce the likelihood of future breaches — but audits by *top-tier*
+  centralized and decentralized auditors do — so outcomes depend on auditor
+  quality more than on the mere presence of an audit.
 
 These papers establish that the DeFi audit ecosystem is real and that audit
 *effectiveness* is an open empirical question. They do **not** themselves

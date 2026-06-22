@@ -146,15 +146,15 @@ The debt-scaling index only ever accrues forward; it can never drop below its
 ## INV-06 · No uncollateralised debt · *High*
 
 ```
-∀u: userSupplyShares[u] == 0  ⇒  userDebt(u) == 0
+∀u: userCollateral[u] == 0  ⇒  userDebt(u) == 0
 ```
 
-An account with zero collateral shares can never carry outstanding debt — the
+An account with zero posted collateral can never carry outstanding debt — the
 protocol never accumulates structurally unrecoverable bad debt.
 
 - **Breaks when:** a withdrawal removes all of a borrower's collateral while
   debt is open, or a liquidation seizes every share without clearing the debt.
-  Both paths are guarded — `withdraw` re-checks the collateral cap and
+  Both paths are guarded — `withdrawCollateral` re-checks the collateral cap and
   `liquidate` requires a full close before seizing all collateral.
 - **Caught by:** `invariant_noUncollateralisedDebt()` · `inv06()` · replays
   EXP-03, EXP-06.

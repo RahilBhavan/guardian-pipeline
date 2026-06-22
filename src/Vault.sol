@@ -21,7 +21,10 @@ import {IPriceOracle} from "./IPriceOracle.sol";
 ///         The borrower side is split: `userCollateral` holds the collateral
 ///         asset; `userBorrowShares` index the debt asset. Liquidation seizes
 ///         collateral priced through the oracle. The contract's value is in
-///         six mathematical invariants, each one *tensioned* by interest
+///         twelve mathematical invariants — the six core state invariants
+///         tabulated below, extended by the rounding-direction, freshness, and
+///         idempotence properties INV-07–INV-12 catalogued in
+///         docs/invariants.md. Each is *tensioned* by interest
 ///         accrual, liquidation, or oracle movement, proven pre-deployment by
 ///         the Foundry fuzz harness (test/invariant/InvariantVault.t.sol) and
 ///         monitored live by the Guardian bot (guardian/src/evaluator.ts):

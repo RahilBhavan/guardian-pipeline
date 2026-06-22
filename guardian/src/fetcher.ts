@@ -229,10 +229,10 @@ export async function fetchVaultState(
   users: `0x${string}`[],
   liquidationEvents: LiquidationEvent[] = [],
 ): Promise<VaultState> {
-  // The aggregate state is a fixed 13-call multicall: 10 vault views
-  // (six original + lastAccrualTime/liquidationBonus/MAX_STALENESS for
-  // INV-08/11/12) + 2 oracle views (price/lastUpdatedAt for INV-08/11) +
-  // the debt-asset balance that backs INV-01's `cash` term. Per-user
+  // The aggregate state is a fixed 12-call multicall: 10 vault views +
+  // 1 oracle view (lastUpdatedAt for INV-11) + the debt-asset balance that
+  // backs INV-01's `cash` term. oracle.price() is not read here — it is
+  // fetched per-block in fetchLiquidationsInRange for the INV-08 check. Per-user
   // positions are batched into chunks of {@link USERS_PER_MULTICALL_BATCH}
   // users — at scale a single all-users multicall exceeds the free-tier
   // RPC response-size cap and the bot starts failing every block. Batches

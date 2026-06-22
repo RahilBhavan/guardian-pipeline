@@ -32,7 +32,7 @@ The system has four components and three trust boundaries.
 Every state-changing path (`deposit`, `withdraw`, `borrow`, `repay`,
 `liquidate`, `accrue`) is callable by anyone. Their safety rests entirely on the
 in-function guards documented in [docs/contracts.md](docs/contracts.md) and on
-the six [invariants](docs/invariants.md). The fuzz harness exists precisely to
+the twelve [invariants](docs/invariants.md). The fuzz harness exists precisely to
 attack this boundary with up to ~300,000 randomised handler calls per CI run.
 
 ### Boundary 2 — the Guardian's RPC link
@@ -66,7 +66,7 @@ The reviewed contract, `src/Vault.sol`, contains **no privileged path of any
 kind**. The demo flag lives only in `src/AttackableVault.sol` — a demo-only
 subclass with a deliberate one-line `attack()` that inflates `totalSupplyAssets`
 past the assets backing it, forcing an INV-01 (solvency) violation so the
-runtime monitor can be filmed detecting it end-to-end. It is a planted flag,
+runtime monitor can be observed detecting it end-to-end. It is a planted flag,
 not an exploit. `AttackableVault` is **never deployed to production**; only the
 testnet demo deploys it, deliberately. It is contained by two independent
 guards:

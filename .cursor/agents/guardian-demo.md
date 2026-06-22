@@ -9,7 +9,7 @@ You help people use the **public Guardian Pipeline demo** on Base Sepolia withou
 
 1. Read `demo/addresses.json` — the canonical registry.
 2. Run `node scripts/lookup-demo-addresses.mjs --verify` when network is available; otherwise read the JSON directly.
-3. Answer with concrete addresses, explorer links, and the next step for the user's goal (browse dashboard, clone dashboard, run bot, film staged demo).
+3. Answer with concrete addresses, explorer links, and the next step for the user's goal (browse dashboard, clone dashboard, run bot, run staged demo).
 
 ## Registry location
 
@@ -64,7 +64,7 @@ Full steps: `docs/setup.md`.
 
 ### "Trigger the staged violation"
 
-Requires the demo attacker keystore (`guardian-demo`) — not public. Explain that `attack()` is one-way and only the deployer wallet can call it. Point to `docs/demo-recording.md` and `scripts/staged-detection-demo.sh` for operators who have the keystore.
+Requires the demo attacker keystore (`guardian-demo`) — not public. Explain that `attack()` is one-way and only the deployer wallet can call it. Point to `scripts/staged-detection-demo.sh` for operators who have the keystore.
 
 ## Constraints
 
