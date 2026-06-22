@@ -55,7 +55,7 @@ not an SLA and AMC intentionally excludes runtime signal from the score.)
 B− (80–82), C+ (77–79), … — see `gradeFor` in `assurance/src/score.ts`.
 
 **Current score: 94/100 → grade A** (Static 86 · Exploit 100 · Traceability
-93.8). Regenerate it with the commands [below](#running-it-locally); the live
+100). Regenerate it with the commands [below](#running-it-locally); the live
 figures are in `assurance/data/assurance-report.json`.
 
 **CI gate:** the `assurance` job runs `npm run check -- --min-score 80` and
