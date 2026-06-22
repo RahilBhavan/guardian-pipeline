@@ -19,7 +19,7 @@ const WORKFLOW = readFileSync(WORKFLOW_PATH, 'utf8');
 
 /** Extract a single top-level job block (jobs are indented by 2 spaces). */
 function extractJob(name: string): string {
-  const re = new RegExp(`^ {2}${name}:[\\s\\S]*?(?=^ {2}\\w[\\w-]*:|\\Z)`, 'm');
+  const re = new RegExp(`^ {2}${name}:[\\s\\S]*?(?=^ {2}\\w[\\w-]*:|(?![\\s\\S]))`, 'm');
   const m = WORKFLOW.match(re);
   assert.ok(m, `${name} job block not found in invariant-ci.yml`);
   return m[0];

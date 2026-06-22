@@ -686,7 +686,7 @@
       <span class="k">Result</span>
       <p style="margin:8px 0 0"><strong>10 mechanism replays · 10 PREVENTED · 0 MISSED</strong> → an exploit-resistance score of 100/100. A separate <code>STAGED-01</code> demo
       deliberately plants an INV-01 breach (<code>AttackableVault.attack()</code>) purely so
-      the live monitor can be filmed catching it — it proves the detection <em>plumbing</em>,
+      the live monitor can be observed catching it — it proves the detection <em>plumbing</em>,
       not that the monitor stops novel attacks.</p>
     </div>
   </section>
@@ -791,7 +791,7 @@
       <div class="panel"><h4 style="color:var(--amber)">Not a real audit</h4><p style="margin:6px 0 0;font-size:14px"><code>security-review/</code> is written by the repo author — a point-in-time self-review, not an independent third party. Commission a real audit before any real deployment.</p></div>
       <div class="panel"><h4 style="color:var(--amber)">The AMC score is self-graded</h4><p style="margin:6px 0 0;font-size:14px">The same author writes the invariants, picks the exploits, tags the findings, picks the weights, <em>and</em> grades the result. Read "A / 94" as <em>"this codebase grades itself A against the rubric it ships"</em> — reproducible, not externally validated.</p></div>
       <div class="panel"><h4 style="color:var(--amber)">Best-effort monitor, not an SLA</h4><p style="margin:6px 0 0;font-size:14px">The hosted monitor is a free scheduled GitHub Action; GitHub may delay or skip runs, and free-tier RPC limits can fail one. It has never been tested against a real attacker. "Continuous" describes the design pattern, not a hardened service.</p></div>
-      <div class="panel"><h4 style="color:var(--amber)">The detection demo is staged</h4><p style="margin:6px 0 0;font-size:14px"><code>AttackableVault.attack()</code> is a planted one-line flag for filming the monitor — not an exploit. The production <code>Vault</code> has no such function.</p></div>
+      <div class="panel"><h4 style="color:var(--amber)">The detection demo is staged</h4><p style="margin:6px 0 0;font-size:14px"><code>AttackableVault.attack()</code> is a planted one-line flag for demonstrating the monitor — not an exploit. The production <code>Vault</code> has no such function.</p></div>
       <div class="panel"><h4 style="color:var(--amber)">No formal verification</h4><p style="margin:6px 0 0;font-size:14px">The proofs are empirical (fuzzing), not symbolic. A Certora/Halmos proof would close the "is there <em>any</em> sequence we missed" question; it's documented as a known, deliberate gap.</p></div>
     </div>
     <div class="callout">

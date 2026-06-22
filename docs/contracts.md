@@ -210,7 +210,7 @@ Pulls back `amount` of posted collateral. Reverts if the remaining collateral
 can no longer cover the caller's outstanding debt at the current oracle price.
 
 - **Collateral cap (post-withdrawal):** computes
-  `remainingValue = (userCollateral[msg.sender] - amount) * oracle.price() / WAD`
+  `remainingValue = (userCollateral[msg.sender] - amount) * _freshPrice() / WAD`
   and `maxBorrow = remainingValue * collateralRatio / BPS`. Reverts
   `CollateralCapExceeded` if `userDebt(msg.sender) > maxBorrow`.
 - **State:** `userCollateral[msg.sender] -= amount`, `totalCollateral -= amount`.
@@ -218,11 +218,6 @@ can no longer cover the caller's outstanding debt at the current oracle price.
 - **Reverts:** `ZeroAmount`; `InsufficientCollateral` if `amount` exceeds the
   caller's posted collateral; `CollateralCapExceeded` as above.
 - **Emits:** `CollateralWithdrawn(msg.sender, amount)`.
-
-> **Note.** `withdrawCollateral` reads `oracle.price()` directly, without the
-> `MAX_STALENESS` freshness gate. Only paths that route through
-> `collateralValue` — namely `borrow` and `liquidate` — are gated by
-> `_freshPrice`.
 
 #### `borrow`
 
@@ -412,7 +407,7 @@ for production use — a real deployment must wrap an authenticated feed behind
 
 > **Demo only.** `AttackableVault` is identical to `Vault` except for a single
 > `attack()` function — a deliberate one-line flag, not an exploit. It exists
-> so the runtime monitor can be filmed detecting an invariant breach
+> so the runtime monitor can be observed detecting an invariant breach
 > end-to-end. It is **never deployed to production**; isolating the flag here
 > means the reviewed `Vault` carries no privileged path at all. See
 > [SECURITY.md](../SECURITY.md).

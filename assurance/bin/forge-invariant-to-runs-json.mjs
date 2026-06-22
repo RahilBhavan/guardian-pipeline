@@ -12,8 +12,9 @@
  * That separation enforces the AMC contract: the score reflects the campaign
  * the workflow actually ran, not whatever the local toml currently says.
  *
- * `totalCalls` and `durationSeconds` are summed across every invariant test
- * found in the forge JSON document.
+ * `totalCalls` is summed across every invariant test found in the forge JSON
+ * document; `durationSeconds` is summed across all suites (forge reports
+ * duration at suite granularity, not per test).
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 

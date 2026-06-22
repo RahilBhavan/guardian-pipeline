@@ -11,7 +11,7 @@ import {MockOracle} from "../src/MockOracle.sol";
 /// @notice Deploys an {AttackableVault} (and the supporting debt asset,
 ///         collateral asset and {MockOracle} when not supplied) to Base
 ///         Sepolia. The demo uses AttackableVault so the Guardian bot can be
-///         filmed catching a live INV-01 breach; a production deployment
+///         observed catching a live INV-01 breach; a production deployment
 ///         would deploy `src/Vault.sol` directly, which carries no
 ///         `attack()` backdoor at all.
 /// @dev    Environment:

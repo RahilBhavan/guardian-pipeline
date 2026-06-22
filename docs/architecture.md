@@ -72,7 +72,7 @@ directly, the borrow side scales an index.
 - **`attack()`** lives only on `src/AttackableVault.sol`, a demo-only subclass.
   It is a deliberate one-line flag — not an exploit — that inflates
   `totalSupplyAssets` past the assets backing it, breaking INV-01 so the runtime
-  monitor can be filmed catching it. It is callable only by the `attacker`
+  monitor can be observed catching it. It is callable only by the `attacker`
   address and reverts on Base mainnet (`block.chainid == 8453`). The reviewed
   `Vault` has no such function.
 

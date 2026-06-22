@@ -412,3 +412,81 @@ Two real issues that run surfaced (independent of the rate-limit fix):
   Relaxed to `lastAccrualTime <= blockTimestamp` (passive structural sanity
   check; the strong second-`accrue()`-no-op guarantee stays in the harness +
   MutantINV12). Updated evaluator.ts + the test fixture + guardian-bot.md.
+
+## 2026-06-22 — Credibility check: both research citations verified real + accurate
+What: Closed out the 2026-05-22 open flag ("I cannot confirm the two cited
+papers exist as cited"). Verified both against primary sources:
+- **Bourveau, Brendel & Schoenfeld (2024)**, *DeFi assurance: early evidence* —
+  CONFIRMED exact: Review of Accounting Studies 29(3), pp. 2209–2253; SSRN
+  4457936; ~8,500 hand-coded audit reports; "pervasive, value-relevant". No
+  change needed.
+- **Landsman, Lyandres, Maydew, Rabetti & Zhang (2025)**, *Auditing Smart
+  Contracts* — CONFIRMED: SSRN 5198563; authors/title/venue exact. Core finding
+  accurately characterised (read the Oct-2025 Wharton-hosted PDF abstract:
+  "on average, audits do not reduce the likelihood of future security breaches.
+  However, audits conducted by top-tier … auditors are associated with a lower
+  likelihood…"). TWO gloss drifts fixed: (1) the parenthetical "(market share,
+  launch rate, hack rate)" overspecified the paper — abstract says *top-tier*
+  auditors; only "market share" is supported, so reworded to "auditor quality";
+  (2) "~8,195 reports / 1,575 protocols" were the MARCH-2025 draft's figures —
+  the current Oct-2025 draft says "nearly 10,000 reports / thousands of
+  protocols", so changed to "thousands". Edited `README.md` References +
+  `docs/glossary.md`. `docs/assurance.md` + `explainer.html` use only the
+  general "auditor characteristics" phrasing (no stale counts) — left as-is.
+Why: The whole project thesis is honesty-of-framing; an unverified-but-
+confident citation was the single highest-credibility-risk open item. Now
+both are verifiable and the gloss matches the abstracts.
+Rejected: Deleting the citations (they are real and apt); leaving the
+overspecified parenthetical (it claimed metrics the abstract doesn't state).
+
+## 2026-06-22 — Dropped the video deliverable + full pre-post validation
+What: User decided not to ship a demo video. Removed the recording deliverable
+while KEEPING the runnable staged detection demo (`attack()` +
+`scripts/staged-detection-demo.sh` stay — anyone can run it). Deleted
+`docs/demo-recording.md`; reworded every "filmed/filming the monitor" →
+"observed/demonstrated" across README, docs/architecture.md, docs/contracts.md,
+docs/explainer.html (×2), SECURITY.md, ONBOARDING.md, .cursor/agents/
+guardian-demo.md, and the NatSpec of src/AttackableVault.sol +
+script/DeployVault.s.sol. Fixed the dangling `docs/demo-recording.md` links in
+ONBOARDING.md (→ run the staged demo), the .cursor agent, and
+staged-detection-demo.sh's header comment (→ docs/setup.md §8). Final sweep:
+0 film/video/loom refs outside MEMORY history.
+Validation (all green, local): forge test 92/92 · assurance 50/50 + AMC gate
+PASS (10/10 exploits prevented, score ≥80) · trace/exploit-docs + docs-drift
+checks clean · guardian typecheck clean + 66/66 tests · mirror-parity 12-of-12
+· dashboard `tsc && vite build` OK.
+Why: User asked to drop the video and confirm the repo is post-ready.
+Note (non-blocking, pre-existing — NOT video-related): `src/Vault.sol` NatSpec
+header (~lines 24-36) still says "six mathematical invariants" / lists only
+INV-01..06 while the code has 12 — a stale source comment a source-reader will
+see. `docs/architecture.svg`'s Layer-2 box still depicts the single-asset
+model. `dashboard` still on Vite 5 (2 moderate esbuild advisories, dev-only).
+Rejected: Deleting attack()/staged-detection-demo.sh (they're a runnable demo,
+not the video); fixing the Vault.sol NatSpec count in this pass (out of the
+stated scope — flagged for a decision).
+
+## 2026-06-22 — Deep hygiene pass
+What: Repo cleanup. (1) Pruned 9 fully-merged LOCAL branches. (2) Reverted
+generated-artifact churn that my own validation runs left in `assurance/data/*`
++ `dashboard/src/data/assurance-report.json` (re-stamped reports / appended
+history line — noise, not edits). (3) Dead-code sweep: `depcheck` flagged
+`pino-pretty` in guardian but it's a FALSE POSITIVE (used at runtime as a pino
+`transport.target`, not a static import — kept). `ts-prune` flagged 6 assurance
+exports; 5 refmath fns are used by `test/refmath.test.ts` (kept); only
+`renderExploitBlocks` (exploit-docs.ts) was genuinely dead — a convenience
+wrapper with 0 consumers anywhere, superseded by direct calls to
+`renderExploitSummarySentence`/`renderExploitCatalogueTable`. Removed it +
+its now-orphaned `ExploitDoc` import. assurance `npm test` 50/50 still green.
+(4) Verified: no orphan docs (all 10 referenced), no broken refs to removed
+files, `.DS_Store` gitignored.
+Why: User asked for a deep hygiene/cleanup pass.
+Blocked (needs explicit confirmation): deleting the 11 fully-merged REMOTE
+branches on origin — the Claude Code permission classifier denied it twice
+(destructive/outward git op; "clean up redundant parts" judged not specific
+enough). Listed for the user to confirm or run `git push origin --delete …`.
+Note: a known pre-existing `tsc --noEmit` quirk surfaced — `test/refmath.test.ts`
+imports a `.ts` extension (TS5097) under a raw tsc invocation; the project's
+real gate (`npm test` via its own runner) is unaffected. Left as-is (pre-
+existing, out of scope). The working tree still holds the uncommitted video +
+citation + this dead-code edit — commit is the user's call (no direct commits
+to main).

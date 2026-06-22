@@ -83,7 +83,7 @@ tooling terms follow.
 | Term | Meaning |
 |------|---------|
 | **Bourveau, Brendel & Schoenfeld (2024)** | *Decentralized Finance (DeFi) assurance: early evidence* (Review of Accounting Studies 29(3)). Hand-codes ~8,500 audit reports; documents the DeFi audit market as pervasive, value-relevant, and substantively different from conventional financial audits. |
-| **Landsman, Lyandres, Maydew, Rabetti & Zhang (2025)** | *Auditing Smart Contracts* (SSRN). Across ~8,195 reports and 1,575 protocols, finds post-deployment outcomes depend on auditor characteristics — market share, launch rate, hack rate — rather than on the mere presence of an audit. |
+| **Landsman, Lyandres, Maydew, Rabetti & Zhang (2025)** | *Auditing Smart Contracts* (SSRN 5198563). Across thousands of audit reports and DeFi protocols, finds that on average an audit does *not* reduce the likelihood of future breaches, but audits by *top-tier* centralized and decentralized auditors do — post-deployment outcomes depend on auditor quality more than on the mere presence of an audit. |
 
 These papers establish that the DeFi audit market is real and that audit
 *effectiveness* is an open empirical question. The continuous, multi-layered

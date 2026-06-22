@@ -7,7 +7,7 @@ import {
   computeDepositShares,
   computeUserDebt,
   computeWithdrawAmount,
-} from '../src/refmath.ts';
+} from '../src/refmath.js';
 
 // These cases mirror the pinned regression vectors in
 // test/differential/ShareMathDifferential.t.sol. If a value here changes,

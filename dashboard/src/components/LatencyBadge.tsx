@@ -9,7 +9,7 @@ interface Props {
 }
 
 /** Liveness threshold — hosted demo uses ~5 min GHA cron; 7 min window avoids false DOWN. */
-const LIVE_WINDOW_MS = 10_000;
+const LIVE_WINDOW_MS = 420_000;
 
 export function LatencyBadge({ latencyMs, blockNumber, lastChecked }: Props) {
   // Re-render once a second so "last checked" and the liveness dot stay current.
