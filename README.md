@@ -171,7 +171,7 @@ git clone https://github.com/rahilbhavan/guardian-pipeline
 cd guardian-pipeline
 forge install                        # forge-std + openzeppelin-contracts
 
-forge test                           # 92 tests: unit + parameterized fuzz + invariant + exploit replay + mutant
+forge test                           # 92 tests: unit + parameterized fuzz + invariant + differential + exploit replay + mutant
 cd assurance && npm install && npm test && cd ..
 ```
 
