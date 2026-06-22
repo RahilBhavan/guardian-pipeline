@@ -1,4 +1,6 @@
 /** A single invariant health card in the 12-invariant grid. */
+import { Tip } from './InfoTip';
+import { copy, type CopyKey } from '../content';
 
 interface Props {
   invariantId: string;
@@ -26,7 +28,14 @@ export function InvariantHealth({ invariantId, name, description, passed }: Prop
   return (
     <div className="inv-card" style={{ borderLeftColor: borderColor }}>
       <div className="top">
-        <span className="id">{invariantId}</span>
+        <span className="id-group">
+          <span className="id">{invariantId}</span>
+          <Tip
+            title={`${invariantId} · ${name}`}
+            plain={copy(invariantId as CopyKey).plain}
+            technical={copy(invariantId as CopyKey).technical}
+          />
+        </span>
         <span className={badge.className}>{badge.label}</span>
       </div>
       <div className="name">{name}</div>

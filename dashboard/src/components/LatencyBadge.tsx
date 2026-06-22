@@ -1,5 +1,7 @@
 /** Top-bar status: latest block, last-checked time, average latency, liveness dot. */
 import { useEffect, useState } from 'react';
+import { Tip } from './InfoTip';
+import { copy } from '../content';
 
 interface Props {
   /** Average detection latency over the last N readings, in ms. */
@@ -30,7 +32,12 @@ export function LatencyBadge({ latencyMs, blockNumber, lastChecked }: Props) {
   return (
     <div className="topbar-status">
       <div className="item">
-        <span className="label">Latest block</span>
+        <Tip
+          plain={copy('topbar:latest-block').plain}
+          technical={copy('topbar:latest-block').technical}
+        >
+          <span className="label">Latest block</span>
+        </Tip>
         <span className="value">
           {blockNumber != null ? (
             <a
@@ -46,18 +53,33 @@ export function LatencyBadge({ latencyMs, blockNumber, lastChecked }: Props) {
         </span>
       </div>
       <div className="item">
-        <span className="label">Last checked</span>
+        <Tip
+          plain={copy('topbar:last-checked').plain}
+          technical={copy('topbar:last-checked').technical}
+        >
+          <span className="label">Last checked</span>
+        </Tip>
         <span className="value">{agoText}</span>
       </div>
       <div className="item">
-        <span className="label">Avg latency</span>
+        <Tip
+          plain={copy('topbar:avg-latency').plain}
+          technical={copy('topbar:avg-latency').technical}
+        >
+          <span className="label">Avg latency</span>
+        </Tip>
         <span className="value">{latencyMs != null ? `${latencyMs.toFixed(1)}ms` : '—'}</span>
       </div>
       <div className="live-pill">
         <span className={`dot ${isLive ? 'live' : 'down'}`} />
-        <span style={{ color: isLive ? 'var(--green)' : 'var(--red)' }}>
-          {isLive ? 'GUARDIAN LIVE' : 'GUARDIAN DOWN'}
-        </span>
+        <Tip
+          plain={copy('topbar:guardian-live').plain}
+          technical={copy('topbar:guardian-live').technical}
+        >
+          <span style={{ color: isLive ? 'var(--green)' : 'var(--red)' }}>
+            {isLive ? 'GUARDIAN LIVE' : 'GUARDIAN DOWN'}
+          </span>
+        </Tip>
       </div>
     </div>
   );

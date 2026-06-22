@@ -15,7 +15,11 @@ import { AssuranceScore } from './components/AssuranceScore';
 import { TraceabilityMatrix } from './components/TraceabilityMatrix';
 import { ExploitReplay } from './components/ExploitReplay';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { IntroPanel } from './components/IntroPanel';
+import { PanelHeader } from './components/PanelHeader';
+import { Tip } from './components/InfoTip';
 import { assuranceReport } from './assurance';
+import { copy } from './content';
 
 /** Page size for the alert feed — also the chunk size for "load older". */
 const ALERT_PAGE_SIZE = 50;
@@ -25,6 +29,8 @@ const LATENCY_HISTORY_SIZE = 100;
 const MAX_INITIAL_LOAD_ATTEMPTS = 10;
 /** Backoff schedule (ms) for failed initial loads — capped at 30s. */
 const INITIAL_LOAD_BACKOFF_MS = [1000, 2000, 4000, 8000, 16000, 30000];
+/** localStorage key remembering that the user dismissed the intro strip. */
+const INTRO_DISMISSED_KEY = 'guardian.intro.dismissed';
 
 function backoffMsFor(attempt: number): number {
   const idx = Math.min(attempt - 1, INITIAL_LOAD_BACKOFF_MS.length - 1);
@@ -95,6 +101,31 @@ export function App() {
   const [canLoadOlder, setCanLoadOlder] = useState<boolean>(true);
   const [loadingOlder, setLoadingOlder] = useState<boolean>(false);
 
+  /** Whether the "How to read this" intro shows; dismissal persists locally. */
+  const [showIntro, setShowIntro] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(INTRO_DISMISSED_KEY) !== '1';
+    } catch {
+      return true;
+    }
+  });
+  const dismissIntro = useCallback(() => {
+    setShowIntro(false);
+    try {
+      localStorage.setItem(INTRO_DISMISSED_KEY, '1');
+    } catch {
+      /* private-mode storage failure is non-fatal — intro just reappears */
+    }
+  }, []);
+  const reopenIntro = useCallback(() => {
+    setShowIntro(true);
+    try {
+      localStorage.removeItem(INTRO_DISMISSED_KEY);
+    } catch {
+      /* non-fatal */
+    }
+  }, []);
+
   /**
    * The mount effect owns lifecycle flags — components below trigger reloads
    * via the manual-retry callback, but the cancelled/timeout refs let us abort
@@ -112,14 +143,14 @@ export function App() {
     const { data: recentAlerts, error: alertsError } = await supabase
       .from('alerts')
       .select('*')
-      .eq('vault', VAULT_ADDRESS.toLowerCase())
+      .eq('vault', VAULT_ADDRESS)
       .order('created_at', { ascending: false })
       .limit(ALERT_PAGE_SIZE);
 
     const { data: recentBlocks, error: blocksError } = await supabase
       .from('blocks_checked')
       .select('*')
-      .eq('vault', VAULT_ADDRESS.toLowerCase())
+      .eq('vault', VAULT_ADDRESS)
       .order('checked_at', { ascending: false })
       .limit(LATENCY_HISTORY_SIZE);
 
@@ -311,7 +342,7 @@ export function App() {
     const { data, error } = await supabase
       .from('alerts')
       .select('*')
-      .eq('vault', VAULT_ADDRESS.toLowerCase())
+      .eq('vault', VAULT_ADDRESS)
       .order('created_at', { ascending: false })
       .range(from, to);
     if (cancelledRef.current) return;
@@ -360,8 +391,20 @@ export function App() {
           <span className="shield">◈</span>Guardian Pipeline
         </div>
         <LatencyBadge latencyMs={avgLatency} blockNumber={latestBlock} lastChecked={lastChecked} />
-        <span className="vault">{VAULT_ADDRESS}</span>
+        <Tip
+          plain={copy('topbar:vault-address').plain}
+          technical={copy('topbar:vault-address').technical}
+        >
+          <span className="vault">{VAULT_ADDRESS}</span>
+        </Tip>
+        {!showIntro && (
+          <button type="button" className="btn help-btn" onClick={reopenIntro}>
+            What is this?
+          </button>
+        )}
       </header>
+
+      {showIntro && <IntroPanel onDismiss={dismissIntro} />}
 
       {initialBanner && (
         <div className="realtime-banner" role="alert">
@@ -387,7 +430,7 @@ export function App() {
           </ErrorBoundary>
           <ErrorBoundary name="Invariant Health">
             <section className="panel">
-              <div className="panel-title">Invariant Health</div>
+              <PanelHeader title="Invariant Health" copyKey="panel:invariant-health" />
               <div className="invariant-grid scrollbar">
                 {INVARIANTS.map((inv) => (
                   <InvariantHealth
@@ -417,7 +460,11 @@ export function App() {
         <div className="col">
           <ErrorBoundary name="Alert Feed">
             <section className="panel">
-              <div className="panel-title">Alert Feed · latest {alerts.length}</div>
+              <PanelHeader
+                title="Alert Feed"
+                copyKey="panel:alert-feed"
+                suffix={`· latest ${alerts.length}`}
+              />
               <AlertFeed
                 alerts={alerts}
                 canLoadOlder={canLoadOlder}
@@ -428,9 +475,11 @@ export function App() {
           </ErrorBoundary>
           <ErrorBoundary name="Detection Latency">
             <section className="panel chart-wrap">
-              <div className="panel-title">
-                Detection Latency · last {latencyHistory.length} blocks
-              </div>
+              <PanelHeader
+                title="Detection Latency"
+                copyKey="panel:detection-latency"
+                suffix={`· last ${latencyHistory.length} blocks`}
+              />
               <LatencyChart points={latencyHistory} />
             </section>
           </ErrorBoundary>

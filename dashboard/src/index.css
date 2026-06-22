@@ -881,3 +881,241 @@ button:focus-visible {
   background: var(--red-dim);
   color: var(--red);
 }
+
+/* ===========================================================================
+   Explanatory layer — panel subtitles, info tooltips, "How to read this".
+   The dashboard reads plain-language by default (subtitles, the intro); the
+   tooltip popover is the on-demand technical layer. See components/InfoTip.tsx.
+   =========================================================================== */
+
+/* ---------- Panel header: title + inline (i) + plain subtitle ---------- */
+.panel-head {
+  flex: none;
+  margin-bottom: 12px;
+}
+.panel-head .panel-title {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0;
+}
+.panel-sub {
+  margin-top: 4px;
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: -0.005em;
+  text-transform: none;
+  color: var(--text-dim);
+}
+
+/* ---------- Info-tip trigger: a small circled-i glyph ---------- */
+.tip-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-left: 5px;
+  padding: 0;
+  font: 600 9px/1 var(--mono);
+  color: var(--text-faint);
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-pill);
+  cursor: help;
+  vertical-align: middle;
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+.tip-trigger:hover,
+.tip-trigger[aria-expanded='true'] {
+  color: var(--primary-hover);
+  border-color: var(--primary-focus);
+  background: var(--primary-dim);
+}
+.tip-i {
+  transform: translateY(0.5px);
+}
+
+/* ---------- Info-tip trigger: wrapping an existing tag/label ----------
+   No glyph; the wrapped element keeps its own look and gains a help cursor
+   plus a hover lift so it reads as interactive. */
+.tip-as-child {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: help;
+  transition: opacity 120ms ease;
+}
+.tip-as-child:hover,
+.tip-as-child[aria-expanded='true'] {
+  opacity: 0.82;
+}
+
+/* ---------- Info-tip popover (portaled to <body>, position: fixed) ---------- */
+.tip-pop {
+  position: fixed;
+  z-index: 50;
+  padding: 10px 12px;
+  font-family: var(--sans);
+  background: var(--surface-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55), var(--edge-highlight);
+  animation: tip-in 110ms ease;
+}
+@keyframes tip-in {
+  from {
+    opacity: 0;
+  }
+}
+.tip-title {
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.tip-plain {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+.tip-divider {
+  height: 1px;
+  margin: 9px 0 8px;
+  background: var(--border);
+}
+.tip-tech-label {
+  margin-bottom: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.tip-tech {
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.5;
+  letter-spacing: 0;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Invariant card: id + (i) grouped on the left ---------- */
+.inv-card .top .id-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* ---------- AMC component row: label + (i) ---------- */
+.score-comp-head .tip-trigger {
+  margin-left: 4px;
+}
+
+/* ---------- "How to read this" intro strip ---------- */
+.intro {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--primary);
+  border-radius: var(--r-lg);
+  box-shadow: var(--edge-highlight);
+}
+.intro-icon {
+  flex: none;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--primary);
+}
+.intro-body {
+  flex: 1;
+  min-width: 0;
+}
+.intro-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-bottom: 3px;
+}
+.intro-text {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+.intro-tech {
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.5;
+  letter-spacing: 0;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+.intro-dismiss {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-faint);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+.intro-dismiss:hover {
+  color: var(--text);
+  background: var(--bg-elevated);
+  border-color: var(--border);
+}
+
+/* The topbar "What is this?" reopen button keeps its own size in the flex row. */
+.help-btn {
+  flex: none;
+}
+
+/* ---------- Intro glossary: jargon terms as hover-to-define chips ---------- */
+.intro-glossary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+.intro-glossary-label {
+  margin-right: 2px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.gl-chip {
+  padding: 2px 9px;
+  font-size: 11px;
+  color: var(--ink-muted);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  cursor: help;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.gl-chip:hover {
+  color: var(--primary-hover);
+  border-color: var(--primary-focus);
+}

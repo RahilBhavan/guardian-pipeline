@@ -1,10 +1,13 @@
 /**
- * AssuranceScore — the composite Assurance Score and its four component layers.
+ * AssuranceScore — the composite Assurance Score and its three component layers.
  *
  * The headline metric of the project: a single 0-100 number quantifying
  * continuous, multi-layered assurance (Bourveau et al. 2024).
  */
 import type { AssuranceReport, ScoreComponent } from '../assurance';
+import { Tip } from './InfoTip';
+import { PanelHeader } from './PanelHeader';
+import { copy, type CopyKey } from '../content';
 
 /**
  * Score visuals use the single lavender brand accent while the gate passes,
@@ -31,6 +34,11 @@ function ComponentRow({ component }: { component: ScoreComponent }) {
     <div className="score-comp">
       <div className="score-comp-head">
         <span className="score-comp-label">{component.label}</span>
+        <Tip
+          title={component.label}
+          plain={copy(`amc:${component.key}` as CopyKey).plain}
+          technical={copy(`amc:${component.key}` as CopyKey).technical}
+        />
         <span className="score-comp-weight">{Math.round(component.weight * 100)}% weight</span>
         <span className="score-comp-value" style={{ color }}>
           {component.available ? component.score.toFixed(1) : 'n/a'}
@@ -49,7 +57,7 @@ export function AssuranceScore({ report }: { report: AssuranceReport }) {
 
   return (
     <section className="panel assurance-panel">
-      <div className="panel-title">Assurance Methodology Coverage (AMC) · self-graded methodology rigor</div>
+      <PanelHeader title="Assurance Methodology Coverage (AMC)" copyKey="panel:assurance-score" />
 
       <div className="assurance-hero">
         <div className="score-readout">
@@ -60,6 +68,11 @@ export function AssuranceScore({ report }: { report: AssuranceReport }) {
           <span className="score-grade" style={{ borderColor: color, color }}>
             {score.grade}
           </span>
+          <Tip
+            title="Assurance Methodology Coverage (AMC)"
+            plain={copy('concept:amc').plain}
+            technical={copy('concept:amc').technical}
+          />
         </div>
         <div className="score-meta">
           <div>

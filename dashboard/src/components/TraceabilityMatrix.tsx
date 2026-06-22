@@ -7,6 +7,9 @@
  * re-checked on every commit.
  */
 import type { CoverageTier, ResolvedFinding } from '../assurance';
+import { Tip } from './InfoTip';
+import { PanelHeader } from './PanelHeader';
+import { copy, type CopyKey } from '../content';
 
 const SEVERITY_CLASS: Record<string, string> = {
   Critical: 'sev-critical',
@@ -27,10 +30,13 @@ const TIER_META: Record<CoverageTier, { label: string; cls: string }> = {
 
 /** A small count chip for one assurance layer. */
 function LayerChip({ label, count }: { label: string; count: number }) {
+  const c = copy(`chip:${label}` as CopyKey);
   return (
-    <span className={`layer-chip ${count > 0 ? 'layer-on' : 'layer-off'}`} title={`${count} ${label}`}>
-      {label} {count}
-    </span>
+    <Tip plain={c.plain} technical={c.technical}>
+      <span className={`layer-chip ${count > 0 ? 'layer-on' : 'layer-off'}`}>
+        {label} {count}
+      </span>
+    </Tip>
   );
 }
 
@@ -39,9 +45,14 @@ function FindingRow({ finding }: { finding: ResolvedFinding }) {
   return (
     <div className="trace-row">
       <div className="trace-main">
-        <span className={`sev-tag ${SEVERITY_CLASS[finding.severity] ?? 'sev-info'}`}>
-          {finding.severity}
-        </span>
+        <Tip
+          plain={copy(`sev:${finding.severity}` as CopyKey).plain}
+          technical={copy(`sev:${finding.severity}` as CopyKey).technical}
+        >
+          <span className={`sev-tag ${SEVERITY_CLASS[finding.severity] ?? 'sev-info'}`}>
+            {finding.severity}
+          </span>
+        </Tip>
         <span className="trace-id">{finding.id}</span>
         <span className="trace-title">{finding.title}</span>
       </div>
@@ -52,7 +63,12 @@ function FindingRow({ finding }: { finding: ResolvedFinding }) {
           <LayerChip label="live" count={finding.layers.liveMonitors} />
           <LayerChip label="replay" count={finding.layers.exploitReplays} />
         </div>
-        <span className={`tier-tag ${tier.cls}`}>{tier.label}</span>
+        <Tip
+          plain={copy(`tier:${finding.tier}` as CopyKey).plain}
+          technical={copy(`tier:${finding.tier}` as CopyKey).technical}
+        >
+          <span className={`tier-tag ${tier.cls}`}>{tier.label}</span>
+        </Tip>
       </div>
     </div>
   );
@@ -67,7 +83,7 @@ export function TraceabilityMatrix({
 
   return (
     <section className="panel">
-      <div className="panel-title">Finding Traceability · review findings → continuous checks</div>
+      <PanelHeader title="Finding Traceability" copyKey="panel:finding-traceability" />
 
       <div className="trace-summary">
         <div className="trace-stat">
