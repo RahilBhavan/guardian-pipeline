@@ -45,10 +45,24 @@ invariants after each step.
 | `deep` | 10,000 | 200 | Pre-release |
 
 A green CI badge is a claim: *all 12 invariants held across the campaign — no
-`invariant_*` assertion failed.* (Handlers wrap legitimately-reverting calls in
-`try/catch`, so a revert is a valid no-op, not a campaign failure — see
-[invariants.md#testing-strategy](invariants.md#testing-strategy).) The full
-job summary is in the [root README](../README.md#cicd-pipeline).
+`invariant_*` assertion failed.* (Handlers return early on the conditions
+where the vault would revert, and `foundry.toml` sets `fail_on_revert = true`,
+so every handler call must succeed — see
+[invariants.md#testing-strategy](invariants.md#testing-strategy).)
+
+### CI jobs
+
+`.github/workflows/invariant-ci.yml` runs **7 jobs** on every push/PR to `main`:
+
+| Job | What it does | Feeds AMC? |
+|-----|--------------|------------|
+| `build` | `forge build --sizes`; gates all other jobs | no |
+| `mirror-parity` | Asserts every INV-tagged harness `invariant_*` has a paired entry in `guardian/src/evaluator.ts` | no |
+| `invariant-fuzz` | 2,000-run invariant campaign; fails on any `[FAIL]` | yes — emits `runs.json` artifact AMC consumes |
+| `coverage` | LCOV report; gates `src/Vault.sol` at ≥ 85% line coverage | no — capped runs/depth are coverage-budget only |
+| `static-analysis` | Slither + Aderyn, uploaded as artifacts (non-gating) | no |
+| `assurance` | Exploit replays + composite Assurance Score; gates at ≥ 80 | yes — computes the score |
+| `gas-snapshot` | `forge snapshot --check`; posts the gas diff as a PR comment | no |
 
 ## Layer 2 — Smart contract
 
@@ -155,8 +169,8 @@ git push ──▶ GitHub Actions ──▶ Forge fuzz + Slither/Aderyn + Assura
 - [contracts.md](contracts.md) — the `Vault` / `AttackableVault` / `MockERC20` API reference
 - [guardian-bot.md](guardian-bot.md) — the off-chain bot, module by module
 - [database.md](database.md) — the Supabase schema and RLS model
-- [invariants.md#testing-strategy](invariants.md#testing-strategy) — the six test tiers
-- [../README.md#cicd-pipeline](../README.md#cicd-pipeline) — the seven-job CI/CD pipeline summary
+- [invariants.md#testing-strategy](invariants.md#testing-strategy) — the seven test tiers
+- [CI jobs](#ci-jobs) — the seven-job CI/CD pipeline summary
 - [assurance.md](assurance.md) — the Assurance Score and exploit replays
 - [setup.md](setup.md) — running every layer locally
 - [glossary.md](glossary.md) — terminology

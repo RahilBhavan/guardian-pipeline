@@ -88,5 +88,5 @@ tooling terms follow.
 These papers establish that the DeFi audit market is real and that audit
 *effectiveness* is an open empirical question. The continuous, multi-layered
 framing is this project's interpretation — not a claim of either paper. See
-the [References section of the root README](../README.md#references).
+the [References section of assurance.md](assurance.md#references).
 </content>

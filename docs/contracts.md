@@ -475,7 +475,7 @@ Each contract is a minimal subclass (or standalone stub) with a single
 deliberate defect; the exploit-replay test runs the attack on the broken
 surface (expected: succeeds), then repeats it on the canonical `Vault`
 (expected: reverts or has no effect). Mapping to the exploit catalogue in
-[assurance.md](assurance.md#exploit-resistance) is shown below.
+[assurance.md](assurance.md#exploit-replays) is shown below.
 
 | Contract | Defect | EXP |
 |----------|--------|-----|
@@ -524,5 +524,5 @@ Full broadcast instructions — keystore setup, RPC, `--verify` — are in
 - [invariants.md](invariants.md) — the 12 invariants the contract must hold.
 - [guardian-bot.md](guardian-bot.md) — how the off-chain bot reads this contract.
 - [invariants.md#testing-strategy](invariants.md#testing-strategy) — how the harness and exploit replays exercise it.
-- [assurance.md](assurance.md#exploit-resistance) — the full exploit-replay catalogue with EXP→invariant mapping.
+- [assurance.md](assurance.md#exploit-replays) — the full exploit-replay catalogue with EXP→invariant mapping.
 - [SECURITY.md](../SECURITY.md) — trust boundaries and the `attack()` demo flag.

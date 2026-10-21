@@ -43,4 +43,4 @@ Top MCP Servers:
 1. `forge test` — contract + fuzz suite (no external services).
 2. `cd assurance && npm test` — AMC tooling tests.
 3. Follow [docs/setup.md](docs/setup.md) for Base Sepolia + bot + dashboard.
-4. Optional: run the staged detection demo (`./scripts/staged-detection-demo.sh`) — see the [staged detection demo](README.md#the-staged-detection-demo) section.
+4. Optional: run the staged detection demo (`./scripts/staged-detection-demo.sh`) — see the [staged detection demo](docs/setup.md#8-trigger-the-demo-violation) section.

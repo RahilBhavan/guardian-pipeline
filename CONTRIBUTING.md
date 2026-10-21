@@ -56,12 +56,13 @@ rejected.
 
 ## CI gates
 
-`.github/workflows/invariant-ci.yml` runs 6 jobs on every push/PR to `main`.
+`.github/workflows/invariant-ci.yml` runs 7 jobs on every push/PR to `main`.
 A PR is mergeable only when all gating jobs pass:
 
 | Job | Gate |
 |-----|------|
 | `build` | `forge build` succeeds |
+| `mirror-parity` | every harness `invariant_*` has a paired check in `guardian/src/evaluator.ts` |
 | `invariant-fuzz` | 2,000-run campaign, zero `[FAIL]` |
 | `coverage` | `src/Vault.sol` ≥ 85% line coverage |
 | `assurance` | composite Assurance Score ≥ 80 |

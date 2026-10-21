@@ -31,7 +31,7 @@ pretend they are. Each invariant below carries a **class**:
 
 ## Testing strategy
 
-Six complementary test tiers ship evidence for these invariants. The CI gate
+Seven complementary test tiers ship evidence for these invariants. The CI gate
 on each is set so the green badge is a precise, falsifiable claim.
 
 | Tier | Directory | Question it answers | CI gate |
@@ -42,6 +42,7 @@ on each is set so the green badge is a precise, falsifiable claim.
 | Invariant fuzz (Echidna) | `test/echidna/` | Does an independent fuzz engine reach the same conclusion as Foundry? | `make echidna` (skipped locally if binary missing) |
 | Differential | `test/differential/` | Does Solidity's share/debt math agree with a TS reference on every input? | runs with `forge test` (FFI to `assurance/bin/refmath-cli.mjs`) |
 | Exploit replay | `test/exploit/` | Does the vault resist known DeFi exploit classes? | `assurance` (no regression, no `MISSED`) |
+| Mutation | `test/mutant/` | Do INV-07…INV-12 each catch a vault variant that is broken on purpose? | runs with `forge test` |
 
 The invariant suite drives eight handlers (Deposit, Collateral, Borrow, Warp,
 Liquidate, Donation, Oracle, Reentrancy) so a campaign explores meaningful state
@@ -52,7 +53,7 @@ the donation/inflation attack class is exercised, not just asserted.
 
 Counterexamples shrink to a minimal failing call sequence under
 `[FAIL] invariant_<name>()`. For how the tiers run as CI jobs, see
-[the CI/CD section in the root README](../README.md#cicd-pipeline).
+[the CI jobs table in architecture.md](architecture.md#ci-jobs).
 
 ### Formal verification — a known gap
 
