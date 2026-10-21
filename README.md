@@ -8,6 +8,22 @@
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.24-363636)](https://soliditylang.org)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue)](./LICENSE)
 
+A Solidity lending vault whose 12 safety invariants are checked twice: by a Foundry invariant harness in CI before deployment, and by a TypeScript runtime monitor against a Base Sepolia demo vault after it.
+
+**Live dashboard: [guardian.rahilbhavan.com](https://guardian.rahilbhavan.com)**
+
+## Results
+
+- **92 Foundry tests:** 39 unit and boundary, 8 parameterized fuzz, 13 invariant, 9 differential, 10 exploit replays and 13 mutation tests, each mutant breaking the Vault on purpose so the matching invariant must catch it.
+- **12 invariants (INV-01 to INV-12)** run as a 2,000-run invariant campaign (depth 150) on every push to `main` and every PR, plus a nightly 10,000-run deep profile.
+- **The solvency invariant caught a real bug during development:** a full-close repayment that eroded the solvency margin by one wei (review finding GUA-02, resolved).
+- **The runtime monitor mirrors all 12 invariants 1:1,** and a CI `mirror-parity` job fails if the monitor and the fuzz harness drift apart.
+- **7-job invariant CI pipeline** (build, mirror parity, invariant fuzz, coverage gate, Slither/Aderyn, assurance, gas snapshot); the security review lists 8 findings, 3 resolved and 5 acknowledged.
+
+**How it works:** the invariants are written once in `test/invariant/InvariantVault.t.sol`, fuzzed by Foundry in CI, and re-evaluated by `guardian/src/evaluator.ts` against live vault state, which writes any violation to Supabase for the React dashboard.
+
+**Run the tests:** `forge install && forge test` (needs [Foundry](https://getfoundry.sh/))
+
 > A reference implementation of **cross-deployment invariant enforcement**: the
 > same mathematical safety properties checked by a Foundry fuzz campaign *before*
 > deployment, and by a runtime monitor that mirrors that campaign *after* it.
@@ -37,12 +53,12 @@ Two things are generally true of smart-contract security in practice:
   conditions that exist afterwards.
 - Pre-deployment invariant fuzzing and post-deployment on-chain monitoring are
   usually built as **separate tools**, often checking separately-written
-  properties — so "the thing proven in CI" and "the thing watched on-chain" can
+  properties — so "the thing checked in CI" and "the thing watched on-chain" can
   quietly drift apart.
 
 Guardian Pipeline is a worked implementation of one idea: write the safety
 properties **once**, and enforce that exact definition on both sides of
-deployment — proven by a Foundry fuzz campaign in CI, and re-checked by a
+deployment — tested by a Foundry fuzz campaign in CI, and re-checked by a
 runtime monitor whose checks mirror the harness function-for-function. The
 framing is informed by two papers on DeFi assurance; see [References](#references).
 
