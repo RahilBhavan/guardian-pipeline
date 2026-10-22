@@ -4,6 +4,8 @@ pragma solidity ^0.8.24;
 import {HandlerBase} from "./HandlerBase.sol";
 import {Vault} from "../../../src/Vault.sol";
 import {MockERC20} from "../../../src/MockERC20.sol";
+import {ILendingVaultAdapter} from "../../kit/ILendingVaultAdapter.sol";
+import {LendingInvariants} from "../../kit/LendingInvariants.sol";
 
 /// @title  LiquidateHandler — bounded action space for liquidations.
 /// @notice Liquidations only fire when the borrower's debt has been pushed
@@ -23,7 +25,13 @@ contract LiquidateHandler is HandlerBase {
     ///         by {InvariantVault.invariant_liquidationNoFreeLunch}.
     uint256 public liquidationsViolatedINV08;
 
-    constructor(Vault v, MockERC20 d, MockERC20 c) HandlerBase(v, d, c) {}
+    /// @notice Kit adapter over {HandlerBase.VAULT}; the health and
+    ///         no-free-lunch checks read through it.
+    ILendingVaultAdapter internal immutable ADAPTER;
+
+    constructor(Vault v, MockERC20 d, MockERC20 c, ILendingVaultAdapter adapter) HandlerBase(v, d, c) {
+        ADAPTER = adapter;
+    }
 
     /// @notice Fuzz entrypoint: a pseudo-random liquidator clears a bounded
     ///         slice of a pseudo-random borrower's debt.
@@ -44,7 +52,7 @@ contract LiquidateHandler is HandlerBase {
 
         uint256 debtBefore = DEBT.balanceOf(liquidator);
         uint256 colBefore = COLLATERAL.balanceOf(liquidator);
-        uint256 price = VAULT.oracle().price();
+        uint256 price = ADAPTER.collateralPrice();
 
         vm.prank(liquidator);
         VAULT.liquidate(borrower, amount);
@@ -54,12 +62,7 @@ contract LiquidateHandler is HandlerBase {
         uint256 seized = COLLATERAL.balanceOf(liquidator) - colBefore;
 
         // INV-08: seized * price / WAD <= paid * (BPS + bonus) / BPS.
-        // Multiply through to avoid the inner floor:
-        //   seized * price * BPS  <=  paid * (BPS + bonus) * WAD.
-        uint256 bps = VAULT.BPS();
-        uint256 bonus = VAULT.liquidationBonus();
-        uint256 wad = VAULT.WAD();
-        if (seized * price * bps > paid * (bps + bonus) * wad) {
+        if (!LendingInvariants.liquidationWithinBonus(paid, seized, price, ADAPTER.liquidationBonusBps())) {
             liquidationsViolatedINV08++;
         }
     }
@@ -79,8 +82,7 @@ contract LiquidateHandler is HandlerBase {
         if (debt < 2) return 0;
 
         // Must actually be under-water at the current oracle price.
-        uint256 maxBorrow = (VAULT.collateralValue(borrower) * VAULT.collateralRatio()) / VAULT.BPS();
-        if (debt <= maxBorrow) return 0;
+        if (!LendingInvariants.liquidatable(ADAPTER, borrower)) return 0;
 
         uint256 ownedCollateral = VAULT.userCollateral(borrower);
         if (ownedCollateral == 0) return 0;

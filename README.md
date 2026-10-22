@@ -11,7 +11,8 @@ Guardian Pipeline is a Solidity lending vault with 12 safety invariants. A Found
 
 ## Results
 
-- **92 Foundry tests** in `test/`: 39 unit and boundary, 8 parameterized fuzz, 13 invariant (the 12 named invariants plus a reentrancy check for finding GUA-01), 9 differential, 10 exploit replays and 13 mutation tests. The mutation tests break the vault on purpose for INV-07 to INV-12 and assert that the matching invariant catches each break.
+- **99 Foundry tests** in `test/`: 39 unit and boundary, 8 parameterized fuzz, 14 invariant (the 12 named invariants, a reentrancy check for finding GUA-01 and a share-price monotonicity check), 9 differential, 10 exploit replays, 13 mutation tests and 6 invariant-kit tests. The mutation tests break the vault on purpose for INV-07 to INV-12 and assert that the matching invariant catches each break.
+- **The invariants are reusable.** The vault-agnostic invariants live in `test/kit/` behind an adapter interface, and the harness reads this vault through `GuardianVaultAdapter`. [test/kit/README.md](test/kit/README.md) describes how to point them at another lending vault, with Revert's `V4Vault` and Morpho Blue as examples. Those two adapters are not written yet.
 - **12 invariants** (INV-01 to INV-12). CI runs them as a 2,000-run invariant campaign at depth 150 on every push and pull request to `main` (`foundry.toml`, `[profile.ci.invariant]`). A scheduled 10,000-run profile is in `.github/workflows/deep-fuzz.yml`. Plain fuzz tests use 256 runs.
 - **The solvency invariant (INV-01) caught a real bug during development.** A full-close repayment eroded the solvency margin by one wei. The self-review records it as GUA-02, High, Resolved (`security-review/findings.json`).
 - **The runtime monitor mirrors all 12 invariants.** `guardian/src/evaluator.ts` has one check per invariant, and the `mirror-parity` CI job fails if the monitor and the harness drift apart.
@@ -57,11 +58,11 @@ cd guardian && npm install && npm test && cd ..
 
 Observed on 2026-10-21 with forge 1.8.6 and Node.js 26.8.1:
 
-- `forge test` passed all 92 test functions. Forge prints "80 tests" because it reports the 13 `invariant_*` functions of `InvariantVault` as one suite entry. Each of the 13 prints its own `[PASS]` line.
+- `forge test` passed all 99 test functions. Forge prints "86 tests" because it reports the 14 `invariant_*` functions of `InvariantVault` as one suite entry. Each of the 14 prints its own `[PASS]` line.
 - `assurance`: 50 of 50 tests passed.
 - `guardian`: 66 of 66 tests passed.
 
-To run the invariant campaign with the CI profile (2,000 runs, depth 150). On 2026-10-21 this run made 300,000 handler calls in 135 s, and all 13 invariant functions passed:
+To run the invariant campaign with the CI profile (2,000 runs, depth 150). On 2026-10-21 this run made 300,000 handler calls in 243 s, and all 14 invariant functions passed. Reading the vault through the kit adapter costs time: the same campaign on `main` before the kit took 137 s on the same machine:
 
 ```bash
 FOUNDRY_PROFILE=ci forge test --match-contract InvariantVault -vvv
@@ -72,7 +73,7 @@ The monitor and the dashboard need an Alchemy key and a Supabase project. The mo
 ## Repository layout
 
 - `src/`: Solidity: `Vault`, `AttackableVault` (demo-only), the oracle interface and mocks, and `attackable/` exploit targets.
-- `test/`: Foundry unit, fuzz, invariant, differential, exploit-replay, mutation and Echidna tests.
+- `test/`: Foundry unit, fuzz, invariant, differential, exploit-replay, mutation and Echidna tests, and the reusable invariant kit in `test/kit/`.
 - `script/`: Foundry scripts for deployment and the exploit-replay catalogue.
 - `scripts/`: demo address lookup and the staged detection demo.
 - `security-review/`: the self-conducted review and its machine-readable findings.
