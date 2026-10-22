@@ -12,7 +12,7 @@ hosts that cannot keep a process alive — notably the free, best-effort
 implementation, not a hardened production service.
 
 This document is the module-by-module reference. For the bigger picture see
-[architecture.md](architecture.md#layer-3--runtime-guardian); for running it
+[architecture.md](architecture.md#layer-3--runtime-monitor); for running it
 see [setup.md](setup.md#6-configure-and-start-the-guardian-bot).
 
 ---

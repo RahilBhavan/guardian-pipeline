@@ -184,6 +184,6 @@ Dashboard  ◀──(anon key, SELECT + subscribe)──────┘
 ## Related documents
 
 - [guardian-bot.md](guardian-bot.md#routerts) — how the bot writes these rows.
-- [architecture.md](architecture.md#layer-3--runtime-guardian) — the bot/database/dashboard flow.
+- [architecture.md](architecture.md#layer-3--runtime-monitor) — the bot/database/dashboard flow.
 - [setup.md](setup.md#5-provision-supabase) — provisioning the project.
 </content>

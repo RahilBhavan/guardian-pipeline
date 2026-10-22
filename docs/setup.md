@@ -187,6 +187,11 @@ address, Supabase URL) are inlined in the workflow. The schedule runs every
 > For real-time, run `guardian/Dockerfile` on a paid host: `guardian/fly.toml`
 > is kept for Fly.io (~$2/mo), and the same image works on Koyeb or Railway.
 
+> **Current state:** GitHub disables scheduled workflows in a public repository
+> after 60 days with no activity. `guardian-monitor.yml` last ran on 2026-08-23
+> and showed as disabled for inactivity on 2026-10-21. To resume monitoring,
+> enable the workflow again from the Actions tab.
+
 ### Keeping the demo oracle fresh (INV-11)
 
 INV-11 (oracle freshness gate) reverts price-dependent paths once the oracle is

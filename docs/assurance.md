@@ -22,8 +22,7 @@ on the mere presence of an audit. Neither paper itself argues for "continuous,
 multi-layered verification" — that framing is this project's interpretation of
 one design response to the open question both papers raise about audit
 effectiveness. The score is a worked demonstration of that interpretation, not
-a claim to have settled the question. See the [References section of the
-README](../README.md#references).
+a claim to have settled the question. See [References](#references).
 
 ---
 
@@ -48,7 +47,7 @@ fixed in the open so the score is reproducible and the bias is explicit.
 scored from a live Guardian deployment. It was removed: AMC is deliberately a
 **pre-deployment** metric, scored only from CI artefacts. (A free, best-effort
 scheduled GitHub Actions monitor does run against the demo vault — see
-[Scope & honesty](../README.md#scope--honesty) — but that convenience hosting is
+[Scope and limits](../README.md#scope-and-limits) — but that convenience hosting is
 not an SLA and AMC intentionally excludes runtime signal from the score.)
 
 **Grade:** A+ (97–100), A (93–96), A− (90–92), B+ (87–89), B (83–86),
@@ -200,6 +199,30 @@ Matrix**, and **Exploit Replay** panels.
 
 - [architecture.md](architecture.md) — the assurance layer among the four layers.
 - [invariants.md](invariants.md) — the 12 invariants violations roll up from.
-- [invariants.md#testing-strategy](invariants.md#testing-strategy) — the six test tiers including exploit replay.
-- [../README.md#cicd-pipeline](../README.md#cicd-pipeline) — the `assurance` CI job that gates on the score.
+- [invariants.md#testing-strategy](invariants.md#testing-strategy) — the seven test tiers including exploit replay.
+- [architecture.md#ci-jobs](architecture.md#ci-jobs) — the `assurance` CI job that gates on the score.
 - [../assurance/README.md](../assurance/README.md) — the assurance engine's CLI.
+
+## References
+
+The project's framing is informed by two empirical papers on DeFi audit
+markets:
+
+- **Bourveau, Brendel & Schoenfeld (2024)** — *Decentralized Finance (DeFi)
+  assurance: early evidence.* Review of Accounting Studies 29(3). Hand-codes
+  ~8,500 smart-contract audit reports and documents that this audit market is
+  pervasive, value-relevant, and substantively different from conventional
+  financial audits.
+- **Landsman, Lyandres, Maydew, Rabetti & Zhang (2025)** — *Auditing Smart
+  Contracts.* SSRN. Examines the determinants and consequences of audits across
+  thousands of reports and protocols; finds that, on average, having an audit
+  does *not* reduce the likelihood of future breaches — but audits by *top-tier*
+  centralized and decentralized auditors do — so outcomes depend on auditor
+  quality more than on the mere presence of an audit.
+
+These papers establish that the DeFi audit ecosystem is real and that audit
+*effectiveness* is an open empirical question. They do **not** themselves
+argue for continuous, multi-layered verification — that framing is this
+project's interpretation of one possible design response, not a claim of
+either paper. They motivate the question; they are not load-bearing for the
+tooling. If you cite this project, read both papers directly first.
