@@ -244,6 +244,9 @@ to Supabase, and the dashboard cards turn red.
 | Bot starts but never logs blocks | Wrong RPC or vault address | Check `ALCHEMY_KEY` and `VAULT_ADDRESS` |
 | Supabase writes rejected | Using the anon key | The bot needs `SUPABASE_SERVICE_KEY` |
 | `npm start` uses old behaviour | Stale `dist/` | `npm run build`, or use `npm run dev` |
+| Dashboard shows **GUARDIAN DOWN**, no monitor runs in the Actions tab | GitHub disables scheduled workflows after 60 days without repository activity (`gh workflow list --all` shows `disabled_inactivity`) | `gh workflow enable guardian-monitor.yml oracle-keeper.yml`, then `gh workflow run guardian-monitor.yml` |
+| Monitor run logs `ENOTFOUND <ref>.supabase.co`; dashboard stays **DOWN** | The Supabase project was paused or deleted (free tier pauses after inactivity) | Restore it from the Supabase dashboard, or create a new project and apply step 5; then update `SUPABASE_URL` in `guardian-monitor.yml`, the `SUPABASE_SERVICE_KEY` secret and the dashboard's `VITE_SUPABASE_*` Vercel env vars |
+| Monitor flags `INV-11` on an idle demo | The demo oracle went stale: `oracle-keeper.yml` is disabled, or it runs but skips because `ORACLE_KEEPER_KEY` is unset (its log shows a warning) | Set `ORACLE_KEEPER_KEY`, enable the keeper and run it once |
 
 ---
 
