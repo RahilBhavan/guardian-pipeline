@@ -3,7 +3,7 @@
 **Reviewer:** Project author — self-conducted review *(not an independent third-party audit)*
 **Subject:** `src/Vault.sol` — interest-bearing, over-collateralised lending vault
 **Reviewed commit:** `src/Vault.sol` as of this commit
-**Report date:** 2026-05-21
+**Report date:** 2026-05-23
 **Classification:** Public
 
 > **About this document.** This is a **self-conducted** security review, written
@@ -73,64 +73,52 @@ limitation the Guardian Pipeline is built to close.
 | [GUA-07](#gua-07) | Low | Deeply under-water positions can leave residual bad debt | Acknowledged |
 | [GUA-08](#gua-08) | Medium | Oracle adapter must enforce deviation and circuit-breaker beyond vault staleness gate | Acknowledged |
 
-**Distribution:** 1 Critical · 1 High · 2 Medium · 2 Low · 2 Informational.
+**Distribution:** 1 High · 3 Medium · 2 Low · 2 Informational.
 
 Each finding below carries a **Continuous Assurance** box: the invariants,
 harness tests, runtime-monitor checks and exploit replays that keep the finding verified
 after this report's snapshot date. Those bindings are machine-readable in
 [`findings.json`](./findings.json) and resolved by `assurance trace`.
 
+> **Note — demo insolvency backdoor (not a GUA finding).** An earlier revision
+> shipped a privileged `attack()` function inside `src/Vault.sol` that forced the
+> vault insolvent for the runtime-detection demo. It has been removed from
+> `Vault` entirely and now lives only in `src/AttackableVault.sol`, a demo-only
+> subclass that is never deployed to production and that reverts on Base mainnet
+> (`block.chainid == 8453`). The reviewed `Vault` carries no privileged
+> accounting path. The runtime monitor detects the `AttackableVault` breach
+> through its `INV-01` (solvency) check.
+
 ---
 
-## GUA-01 — Critical
-
-### Demo insolvency backdoor isolated to a separate contract
-
-An earlier revision shipped a privileged `attack()` function inside
-`src/Vault.sol` that forced the vault insolvent for the runtime-detection demo.
-Reviewing a contract that contains its own backdoor is unsound.
-
-**Impact.** Total, immediate insolvency while the function executes.
-
-**Status — Resolved.** `attack()` has been removed from `Vault` entirely and now
-lives only in `src/AttackableVault.sol`, a demo-only subclass that is never
-deployed to production. The reviewed `Vault` carries no privileged accounting
-path of any kind. `AttackableVault.attack()` additionally reverts on Base
-mainnet (`block.chainid == 8453`) as defence-in-depth.
-
-**Recommendation.** Keep the demo breach confined to `AttackableVault` and
-deploy only `src/Vault.sol` to production.
-
-> **Continuous Assurance** — invariants `INV-01` · harness `invariant_solvency` ·
-> monitor `INV-01` · replay `EXP-01`. `INV-01` is fuzz-proven against `Vault`
-> pre-deployment and is also the runtime monitor's primary check; `EXP-01`
-> replays the `AttackableVault` breach to prove the runtime monitor catches an
-> insolvency regardless of its cause.
-
-## GUA-02 — Medium
+## GUA-01
 
 ### Reentrancy exposure on state-mutating functions
+
+**Severity:** Medium · **Status:** Resolved · **Location:** `src/Vault.sol` — deposit / withdraw / depositCollateral / withdrawCollateral / borrow / repay / liquidate
 
 `deposit`, `withdraw`, `borrow`, `repay` and `liquidate` move ERC-20 value. A
 token with transfer hooks (ERC-777-style) would otherwise expose the liquidity
 and collateral checks to a reentrant call sequence.
 
 **Status — Resolved.** The contract inherits OpenZeppelin's `ReentrancyGuard`
-and all five mutating functions are marked `nonReentrant`.
+and all mutating functions are marked `nonReentrant`.
 
 **Recommendation.** Resolved — retain the `ReentrancyGuard`.
 
-> **Continuous Assurance** — invariants `INV-01` · harness *(none)* · monitor
-> `INV-01` · replay *(none)*. **Monitored-only by design:** the
-> `ReentrancyGuard` blocks this class structurally, but the fuzz harness uses a
-> non-callback `MockERC20` and cannot reproduce a reentrant sequence, so it is
-> *not* proven absent by the harness. The runtime monitor covers it — a reentrancy that
-> drained value breaks `INV-01` within one block. The traceability map surfaces
-> this as **monitored-only**.
+> **Continuous Assurance** — invariants `INV-01` · harness
+> `invariant_reentrancySafe` · monitor `INV-01` · replay *(none)*. A
+> callback-bearing debt asset (`ReentrantAttackToken`) reenters the vault on
+> every transfer; the invariant asserts every attempt reverted with
+> OpenZeppelin's `ReentrancyGuardReentrantCall` selector and the parallel vault
+> stays solvent. `INV-01` stays bound to the runtime monitor as the
+> post-deployment safety net.
 
-## GUA-03 — High
+## GUA-02
 
 ### Full-close repayment could erode the solvency margin by one wei
+
+**Severity:** High · **Status:** Resolved · **Location:** `src/Vault.sol` — `_burnDebt`
 
 An earlier revision of `_burnDebt` charged a full repayment the borrower's
 nominal `userDebt()`. Because `totalBorrowed()` floors `totalBorrowShares *
@@ -155,9 +143,11 @@ exact.
 > fuzz-proven in CI and is also a runtime-monitor check, so any reintroduction
 > is caught both in CI and by the monitor.
 
-## GUA-04 — Medium
+## GUA-03
 
 ### Liquidation seizing all collateral must clear the full debt
+
+**Severity:** Medium · **Status:** Resolved · **Location:** `src/Vault.sol` — `liquidate`
 
 `liquidate` seizes collateral worth the repaid amount plus the liquidation
 bonus. Without a guard, a partial repayment could seize a borrower's entire
@@ -172,13 +162,16 @@ closing the full position.
 uncollateralised debt) hold by construction.
 
 > **Continuous Assurance** — invariants `INV-06` · harness
-> `invariant_noUncollateralisedDebt` · monitor `INV-06` · replay `EXP-06`. The
-> harness fuzzes liquidation alongside interest accrual; `EXP-06` replays the
-> interest-driven liquidation path end to end.
+> `invariant_noUncollateralisedDebt` · monitor `INV-06` · replay `EXP-05`,
+> `EXP-07`. The harness fuzzes liquidation alongside interest accrual and oracle
+> moves; `EXP-05` replays the interest-driven path and `EXP-07` the price-drop
+> path end to end.
 
-## GUA-05 — Low
+## GUA-04
 
 ### Sustained interest can make a lender redemption exceed idle cash
+
+**Severity:** Low · **Status:** Acknowledged · **Location:** `src/Vault.sol` — `withdraw`
 
 `withdraw` pays out `shares * totalSupplyAssets / totalSupplyShares` and reverts
 with `InsufficientLiquidity` if idle cash cannot cover it. Once interest has
@@ -190,13 +183,16 @@ caller may be surprised; the revert is graceful and corrupts no state.
 by available liquidity, as in any lending market. No code change required.
 
 > **Continuous Assurance** — invariants `INV-01` · harness `invariant_solvency` ·
-> monitor `INV-01` · replay `EXP-04`. The liquidity revert protects `INV-01`: the
-> vault never pays out assets it does not hold. `EXP-04` confirms the buffer
-> survives a maximal borrow.
+> monitor `INV-01` · replay *(none)*. The liquidity revert protects `INV-01`: the
+> vault never pays out assets it does not hold. The deposit and borrow handlers
+> drive the vault to the borrow cap on every fuzz run, so the buffer's survival
+> under maximal borrow is continuously fuzzed against the solvency invariant.
 
-## GUA-06 — Informational
+## GUA-05
 
-### Share price is immune to direct token donations
+### Share price and collateral accounting are immune to direct token donations
+
+**Severity:** Informational · **Status:** Acknowledged · **Location:** `src/Vault.sol` — `sharePrice` / `userCollateral`
 
 Anyone can transfer the asset directly to the vault, raising
 `token.balanceOf(vault)`. Because `sharePrice` is derived from the stored
@@ -209,17 +205,21 @@ inflation attack; the donated funds simply enlarge the solvency margin.
 
 > **Continuous Assurance** — invariants `INV-01`, `INV-04` · harness
 > `invariant_solvency`, `invariant_lenderValueFloor` · monitor `INV-01`, `INV-04` ·
-> replay `EXP-02`. `INV-04` and `INV-01` bound the lender side; `EXP-02` replays
-> the donation/inflation class and confirms the victim is not diluted.
+> replay `EXP-01`. `INV-04` and `INV-01` bound the lender side; the
+> `DonationHandler` interleaves direct transfers of both assets into the fuzz
+> campaign, and `EXP-01` replays the donation/inflation class and confirms the
+> victim is not diluted.
 
-## GUA-07 — Informational
+## GUA-06
 
-### A full-close repayment may charge up to one wei above `userDebt()`
+### A full-close repayment may charge up to one wei above userDebt()
+
+**Severity:** Informational · **Status:** Acknowledged · **Location:** `src/Vault.sol` — `_burnDebt` full-close branch
 
 Closing a position charges the realised drop in floored `totalBorrowed()`, which
 equals `userDebt()` or, by one wei of index rounding, one wei more. A caller
 repaying exactly `userDebt()` may therefore transfer one extra wei. This is the
-deliberate fix for [GUA-03](#gua-03--high) — charging the realised cost is what
+deliberate fix for [GUA-02](#gua-02) — charging the realised cost is what
 keeps solvency exact.
 
 **Recommendation.** Acknowledged — document that callers should approve a small
@@ -231,9 +231,11 @@ one-wei direction always favours the protocol.
 > keep `INV-01` exact; the harness proves the rounding direction never erodes
 > the solvency margin across the full invariant campaign.
 
-## GUA-08 — Low
+## GUA-07
 
 ### Deeply under-water positions can leave residual bad debt
+
+**Severity:** Low · **Status:** Acknowledged · **Location:** `src/Vault.sol` — `liquidate`
 
 If interest pushes a borrower's debt above the *full* value of their collateral,
 no rational liquidator will repay it — closing the position would cost more than
@@ -248,10 +250,34 @@ factor and a bad-debt socialisation path. The debt remains counted in
 not an accounting break.
 
 > **Continuous Assurance** — invariants `INV-01` · harness `invariant_solvency` ·
-> monitor `INV-01` · replay `EXP-06`. Residual bad debt does not break `INV-01` —
-> the debt is still counted as an asset — but the runtime monitor tracks the
-> solvency margin so erosion is visible. `EXP-06` exercises the interest-driven
-> liquidation path that keeps healthy positions cleared.
+> monitor `INV-01` · replay `EXP-05`, `EXP-07`. Residual bad debt does not break
+> `INV-01` — the debt is still counted as an asset — but the runtime monitor
+> tracks the solvency margin so erosion is visible. `EXP-05` and `EXP-07`
+> exercise the interest-driven and price-driven liquidation paths that keep
+> healthy positions cleared.
+
+## GUA-08
+
+### Oracle adapter must enforce deviation and circuit-breaker beyond vault staleness gate
+
+**Severity:** Medium · **Status:** Acknowledged · **Location:** `src/Vault.sol` — `_freshPrice` / borrow / withdrawCollateral / liquidate; `src/MockOracle.sol`
+
+The vault gates collateral reads through `_freshPrice()` on `borrow`,
+`withdrawCollateral`, and `liquidate` health checks (`MAX_STALENESS` /
+`INV-11`). Seizure math still reads `oracle.price()` after the health check
+passes. A production `IPriceOracle` adapter must still enforce deviation
+thresholds and circuit-breakers; the demo `MockOracle` is permissionless.
+
+**Recommendation.** Acknowledged. The `IPriceOracle` interface is the
+integration boundary: a production deployment must supply an oracle adapter that
+implements staleness, deviation and breaker logic. The vault itself is
+parametric on the oracle and does not need changes.
+
+> **Continuous Assurance** — invariants `INV-11` · harness
+> `invariant_oracleFreshnessGate` · monitor `INV-11` · replay `EXP-09`. `INV-11`
+> and `MutantINV11` prove the freshness gate is load-bearing on price-dependent
+> paths; `EXP-09` replays a stale-oracle liquidation. Deviation/TWAP
+> manipulation remains an adapter concern.
 
 ---
 
