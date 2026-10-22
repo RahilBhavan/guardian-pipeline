@@ -52,20 +52,6 @@ abstract contract HandlerBase is Test {
         return actors;
     }
 
-    /// @notice Sum of `userSupplyShares` across every actor — used to assert INV-02.
-    function sumSupplyShares() external view returns (uint256 sum) {
-        for (uint256 i = 0; i < actors.length; i++) {
-            sum += VAULT.userSupplyShares(actors[i]);
-        }
-    }
-
-    /// @notice Sum of `userBorrowShares` across every actor — used to assert INV-03.
-    function sumBorrowShares() external view returns (uint256 sum) {
-        for (uint256 i = 0; i < actors.length; i++) {
-            sum += VAULT.userBorrowShares(actors[i]);
-        }
-    }
-
     /// @notice Pick an actor deterministically from a fuzz seed.
     function _pickActor(uint256 seed) internal view returns (address) {
         return actors[bound(seed, 0, actors.length - 1)];

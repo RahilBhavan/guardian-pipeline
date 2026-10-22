@@ -14,6 +14,8 @@ import {DonationHandler} from "./handlers/DonationHandler.sol";
 import {OracleHandler} from "./handlers/OracleHandler.sol";
 import {ReentrancyHandler} from "./handlers/ReentrancyHandler.sol";
 import {ReentrantAttackToken} from "../fixtures/ReentrantAttackToken.sol";
+import {GuardianVaultAdapter} from "../kit/adapters/GuardianVaultAdapter.sol";
+import {LendingInvariants} from "../kit/LendingInvariants.sol";
 
 /// @title InvariantVault — Foundry invariant fuzz harness
 /// @notice Wires seven handlers — deposit/withdraw, collateral
@@ -62,6 +64,15 @@ import {ReentrantAttackToken} from "../fixtures/ReentrantAttackToken.sol";
 ///         `DonationHandler` exists so the donation/inflation attack class
 ///         is actually exercised on *both* assets; `OracleHandler` exists so
 ///         the oracle-priced collateral surface is actually tensioned.
+///
+///         Invariant kit: INV-01..04, INV-06..10, the share-price
+///         monotonicity check and the GUA-01 solvency floor read the vault
+///         through {GuardianVaultAdapter} and evaluate the vault-agnostic
+///         predicates in `test/kit/LendingInvariants.sol`, so the same
+///         checks can be pointed at another lending vault by writing an
+///         adapter (`test/kit/README.md`). INV-05 (borrow index), INV-11
+///         (oracle freshness), INV-12 (accrue idempotence) and the GUA-01
+///         reentry counter are specific to this Vault and read it directly.
 contract InvariantVault is Test {
     Vault internal vault;
     MockERC20 internal debt;
@@ -76,6 +87,10 @@ contract InvariantVault is Test {
     DonationHandler internal donationHandler;
     OracleHandler internal oracleHandler;
 
+    /// @notice Kit adapters over {vault} and {reentrantVault}.
+    GuardianVaultAdapter internal adapter;
+    GuardianVaultAdapter internal reentrantAdapter;
+
     /// @notice Parallel vault whose debt asset is the {ReentrantAttackToken}.
     ///         Used by {invariant_reentrancySafe} so the harness — which
     ///         could not otherwise reach this surface with non-callback
@@ -89,6 +104,9 @@ contract InvariantVault is Test {
     /// @notice Highest solvency margin observed so far in this run, used to
     ///         assert {invariant_solvencyMonotone}.
     uint256 internal priorSolvencyMargin;
+
+    /// @notice Last share-price observation, for {invariant_sharePriceMonotone}.
+    LendingInvariants.SharePriceObservation internal priorSharePrice;
 
     /// @notice Last-seen `userBorrowShares` per actor — paired with
     ///         {priorUserDebt} to assert {invariant_debtMonotoneUnderAccrual}.
@@ -107,12 +125,13 @@ contract InvariantVault is Test {
         oracle = new MockOracle(INITIAL_PRICE);
         // 10% APR, 5% liquidation bonus.
         vault = new Vault(address(debt), address(collateral), address(oracle), 10_00, 5_00);
+        adapter = new GuardianVaultAdapter(vault);
 
         depositHandler = new DepositHandler(vault, debt, collateral);
         collateralHandler = new CollateralHandler(vault, debt, collateral);
         borrowHandler = new BorrowHandler(vault, debt, collateral);
         warpHandler = new WarpHandler(vault, oracle);
-        liquidateHandler = new LiquidateHandler(vault, debt, collateral);
+        liquidateHandler = new LiquidateHandler(vault, debt, collateral, adapter);
         donationHandler = new DonationHandler(vault, debt, collateral);
         oracleHandler = new OracleHandler(oracle);
 
@@ -125,6 +144,7 @@ contract InvariantVault is Test {
         reentrantDebt = new ReentrantAttackToken();
         reentrantVault = new Vault(address(reentrantDebt), address(collateral), address(oracle), 10_00, 5_00);
         reentrancyHandler = new ReentrancyHandler(reentrantVault, reentrantDebt, collateral);
+        reentrantAdapter = new GuardianVaultAdapter(reentrantVault);
         reentrantDebt.setTarget(address(reentrantVault));
         reentrantDebt.setActive(true);
 
@@ -145,6 +165,8 @@ contract InvariantVault is Test {
         excludeContract(address(oracle));
         excludeContract(address(reentrantVault));
         excludeContract(address(reentrantDebt));
+        excludeContract(address(adapter));
+        excludeContract(address(reentrantAdapter));
     }
 
     /// @notice Coverage safety-net — runs once after the campaign and asserts
@@ -195,9 +217,8 @@ contract InvariantVault is Test {
 
     /// @notice INV-01 Protocol solvency — assets always cover lender claims.
     function invariant_solvency() public view {
-        assertGe(
-            vault.totalAssets(),
-            vault.totalSupplyAssets(),
+        assertTrue(
+            LendingInvariants.solvent(adapter),
             "INV-01: cash + totalBorrowed < totalSupplyAssets - vault is insolvent"
         );
     }
@@ -205,9 +226,8 @@ contract InvariantVault is Test {
     /// @notice INV-02 Supply-share integrity — totalSupplyShares equals the
     ///         sum of every lender's shares.
     function invariant_supplyShareIntegrity() public view {
-        assertEq(
-            vault.totalSupplyShares(),
-            depositHandler.sumSupplyShares(),
+        assertTrue(
+            LendingInvariants.supplySharesConserved(adapter, depositHandler.getActors()),
             "INV-02: totalSupplyShares != sum of userSupplyShares"
         );
     }
@@ -215,9 +235,8 @@ contract InvariantVault is Test {
     /// @notice INV-03 Debt-share integrity — totalBorrowShares equals the
     ///         sum of every borrower's shares.
     function invariant_debtShareIntegrity() public view {
-        assertEq(
-            vault.totalBorrowShares(),
-            depositHandler.sumBorrowShares(),
+        assertTrue(
+            LendingInvariants.debtSharesConserved(adapter, depositHandler.getActors()),
             "INV-03: totalBorrowShares != sum of userBorrowShares"
         );
     }
@@ -228,13 +247,32 @@ contract InvariantVault is Test {
     ///         conversion floors in the protocol's favour. The campaign's
     ///         value here is empirical confirmation that no deposit,
     ///         withdrawal, liquidation, oracle move or donation path
-    ///         violates that floor.
+    ///         violates that floor. `sharePrice() >= 1e18` is the same
+    ///         predicate as `totalSupplyAssets >= totalSupplyShares`: the
+    ///         floored ratio reaches 1e18 exactly when assets >= shares, and
+    ///         an empty vault reports 1e18.
     function invariant_lenderValueFloor() public view {
-        assertGe(
-            vault.totalSupplyAssets(),
-            vault.totalSupplyShares(),
+        assertTrue(
+            LendingInvariants.sharePriceAtLeast(adapter, 1e18),
             "INV-04: totalSupplyAssets < totalSupplyShares - share price below 1:1"
         );
+    }
+
+    /// @notice Kit share-price monotonicity — the lender share price never
+    ///         falls between consecutive handler calls while shares are
+    ///         outstanding, except across a realised loss.
+    /// @dev    Stronger than INV-04's 1:1 floor. Deposit and withdraw floor
+    ///         in the vault's favour and accrual only adds assets, so the
+    ///         ratio can only rise; this Vault never realises a loss
+    ///         ({GuardianVaultAdapter.realizedLosses} is 0). The check is
+    ///         skipped across an empty vault, where the price resets to 1e18.
+    function invariant_sharePriceMonotone() public {
+        LendingInvariants.SharePriceObservation memory current = LendingInvariants.observeSharePrice(adapter);
+        assertTrue(
+            LendingInvariants.sharePriceMonotone(priorSharePrice, current),
+            "KIT: share price fell between calls without a realised loss"
+        );
+        priorSharePrice = current;
     }
 
     /// @notice INV-05 Interest-index floor — the borrow index only ever
@@ -252,13 +290,10 @@ contract InvariantVault is Test {
     function invariant_noUncollateralisedDebt() public view {
         address[] memory actors = depositHandler.getActors();
         for (uint256 i = 0; i < actors.length; i++) {
-            if (vault.userCollateral(actors[i]) == 0) {
-                assertEq(
-                    vault.userDebt(actors[i]),
-                    0,
-                    "INV-06: account with zero collateral holds debt"
-                );
-            }
+            assertTrue(
+                LendingInvariants.noDebtWithoutCollateral(adapter, actors[i]),
+                "INV-06: account with zero collateral holds debt"
+            );
         }
     }
 
@@ -277,10 +312,9 @@ contract InvariantVault is Test {
     ///         invariant. Proven load-bearing by
     ///         `test/mutant/MutantINV07.t.sol`.
     function invariant_solvencyMonotone() public {
-        uint256 current = vault.totalAssets() - vault.totalSupplyAssets();
-        assertGe(
-            current,
-            priorSolvencyMargin,
+        uint256 current = LendingInvariants.solvencyMargin(adapter);
+        assertTrue(
+            LendingInvariants.solvencyMarginNonDecreasing(priorSolvencyMargin, current),
             "INV-07: solvency margin shrank between calls"
         );
         priorSolvencyMargin = current;
@@ -302,16 +336,15 @@ contract InvariantVault is Test {
         address[] memory actors = depositHandler.getActors();
         for (uint256 i = 0; i < actors.length; i++) {
             address actor = actors[i];
-            uint256 sharesNow = vault.userBorrowShares(actor);
-            uint256 debtNow = vault.userDebt(actor);
+            uint256 sharesNow = adapter.debtSharesOf(actor);
+            uint256 debtNow = adapter.debtOf(actor);
 
-            if (sharesNow == priorBorrowShares[actor]) {
-                assertGe(
-                    debtNow,
-                    priorUserDebt[actor],
-                    "INV-09: userDebt decreased while userBorrowShares was flat"
-                );
-            }
+            assertTrue(
+                LendingInvariants.debtMonotoneUnderAccrual(
+                    priorBorrowShares[actor], priorUserDebt[actor], sharesNow, debtNow
+                ),
+                "INV-09: userDebt decreased while userBorrowShares was flat"
+            );
 
             priorBorrowShares[actor] = sharesNow;
             priorUserDebt[actor] = debtNow;
@@ -330,14 +363,8 @@ contract InvariantVault is Test {
     ///         this invariant would fire. Proven load-bearing by
     ///         `test/mutant/MutantINV10.t.sol`.
     function invariant_debtRoundingFavoursProtocol() public view {
-        address[] memory actors = depositHandler.getActors();
-        uint256 sumUserDebt;
-        for (uint256 i = 0; i < actors.length; i++) {
-            sumUserDebt += vault.userDebt(actors[i]);
-        }
-        assertLe(
-            sumUserDebt,
-            vault.totalBorrowed(),
+        assertTrue(
+            LendingInvariants.debtRoundingFavoursProtocol(adapter, depositHandler.getActors()),
             "INV-10: sum of userDebt exceeds totalBorrowed - rounding flipped against protocol"
         );
     }
@@ -446,9 +473,8 @@ contract InvariantVault is Test {
             reentrantDebt.reentryReverts(),
             "GUA-01: reentry attempted by callback token was NOT blocked by nonReentrant"
         );
-        assertGe(
-            reentrantVault.totalAssets(),
-            reentrantVault.totalSupplyAssets(),
+        assertTrue(
+            LendingInvariants.solvent(reentrantAdapter),
             "GUA-01: solvency broken on the reentrant-asset vault"
         );
     }
