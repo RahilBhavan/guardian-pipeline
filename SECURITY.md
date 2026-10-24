@@ -113,7 +113,7 @@ alone is not enough — assume it is compromised the moment it is pushed).
 These are documented design boundaries, not undisclosed bugs:
 
 - **The vault is a teaching example.** Single asset, a fixed-rate interest
-  model, no price oracle, and no bad-debt reserve (review finding GUA-08). Do not
+  model, no price oracle, and no bad-debt reserve (review finding GUA-07). Do not
   custody real value.
 - **`MockERC20` has unrestricted `mint` and no transfer hooks** — test-only.
   Never deploy it to a real network.
