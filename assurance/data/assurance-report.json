@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-06-10T09:23:48.059Z",
-  "gitSha": "b349ec8",
+  "generatedAt": "2026-10-24T21:17:51.618Z",
+  "gitSha": "d992265",
   "thesis": "The Assurance Score rolls the repository's pre-deployment evidence into one reproducible number — static verification, exploit-replay resistance, and the traceability of every security-review finding to a re-runnable check. It is a worked demonstration of one design response — recomputing assurance on every commit — to the open empirical question both cited papers raise about audit effectiveness. The \"continuous, multi-layered\" framing is this project's, not a claim of either paper.",
   "research": [
     {
@@ -19,13 +19,13 @@
       {
         "key": "staticVerification",
         "label": "Static Verification",
-        "score": 86.1,
+        "score": 86.5,
         "available": true,
         "weight": 0.45,
-        "detail": "Vault.sol 100% line / 88.9% branch; fuzz campaign 2000x150 (intensity 64/100)",
+        "detail": "Vault.sol 100% line / 90.3% branch; fuzz campaign 2000x150 (intensity 64/100)",
         "metrics": {
           "lineCoverage": 100,
-          "branchCoverage": 88.9,
+          "branchCoverage": 90.3,
           "invariantRuns": 2000,
           "invariantDepth": 150,
           "fuzzIntensity": 64,
@@ -149,7 +149,7 @@
       },
       {
         "id": "GUA-08",
-        "title": "Vault trusts the oracle implicitly — no staleness, deviation or circuit-breaker checks",
+        "title": "Oracle adapter must enforce deviation and circuit-breaker beyond vault staleness gate",
         "severity": "Medium",
         "status": "Acknowledged",
         "category": "Oracle Risk",
@@ -157,26 +157,22 @@
         "tier": "fully-assured",
         "weight": 1,
         "layers": {
-          "invariants": 2,
-          "harnessTests": 2,
-          "liveMonitors": 2,
-          "exploitReplays": 2
+          "invariants": 1,
+          "harnessTests": 1,
+          "liveMonitors": 1,
+          "exploitReplays": 1
         },
         "invariants": [
-          "INV-01",
-          "INV-06"
+          "INV-11"
         ],
         "harnessTests": [
-          "invariant_solvency",
-          "invariant_noUncollateralisedDebt"
+          "invariant_oracleFreshnessGate"
         ],
         "liveMonitors": [
-          "INV-01",
-          "INV-06"
+          "INV-11"
         ],
         "exploitReplays": [
-          "EXP-03",
-          "EXP-07"
+          "EXP-09"
         ],
         "issues": []
       },
@@ -608,6 +604,12 @@
     {
       "at": "2026-06-10T09:23:48.059Z",
       "gitSha": "b349ec8",
+      "overall": 94,
+      "grade": "A"
+    },
+    {
+      "at": "2026-10-24T21:17:51.618Z",
+      "gitSha": "d992265",
       "overall": 94,
       "grade": "A"
     }

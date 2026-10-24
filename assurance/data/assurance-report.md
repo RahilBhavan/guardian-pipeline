@@ -1,7 +1,7 @@
 # Guardian Pipeline — Assurance Report
 
 > **Assurance Score: 94/100 — grade A**  
-> Generated 2026-06-10T09:23:48.059Z · commit `b349ec8`
+> Generated 2026-10-24T21:17:51.618Z · commit `d992265`
 
 The Assurance Score rolls the repository's pre-deployment evidence into one reproducible number — static verification, exploit-replay resistance, and the traceability of every security-review finding to a re-runnable check. It is a worked demonstration of one design response — recomputing assurance on every commit — to the open empirical question both cited papers raise about audit effectiveness. The "continuous, multi-layered" framing is this project's, not a claim of either paper.
 
@@ -9,7 +9,7 @@ The Assurance Score rolls the repository's pre-deployment evidence into one repr
 
 | Component | Score | Weight | Detail |
 |---|---|---|---|
-| Static Verification | 86.1 | 45% | Vault.sol 100% line / 88.9% branch; fuzz campaign 2000x150 (intensity 64/100) |
+| Static Verification | 86.5 | 45% | Vault.sol 100% line / 90.3% branch; fuzz campaign 2000x150 (intensity 64/100) |
 | Exploit Resistance | 100 | 35% | 10/10 exploit classes resisted (10 prevented, 0 detected, 0 missed) |
 | Finding Traceability | 100 | 20% | 100% weighted coverage of security-relevant findings |
 
@@ -22,7 +22,7 @@ The Assurance Score rolls the repository's pre-deployment evidence into one repr
 | GUA-02 Full-close repayment could erode the solvency margin by one wei | High | fully assured | INV-01 | 1 | INV-01 | — |
 | GUA-01 Reentrancy exposure on state-mutating functions | Medium | fully assured | INV-01 | 1 | INV-01 | — |
 | GUA-03 Liquidation seizing all collateral must clear the full debt | Medium | fully assured | INV-06 | 1 | INV-06 | EXP-05, EXP-07 |
-| GUA-08 Vault trusts the oracle implicitly — no staleness, deviation or circuit-breaker checks | Medium | fully assured | INV-01, INV-06 | 2 | INV-01, INV-06 | EXP-03, EXP-07 |
+| GUA-08 Oracle adapter must enforce deviation and circuit-breaker beyond vault staleness gate | Medium | fully assured | INV-11 | 1 | INV-11 | EXP-09 |
 | GUA-04 Sustained interest can make a lender redemption exceed idle cash | Low | fully assured | INV-01 | 1 | INV-01 | — |
 | GUA-07 Deeply under-water positions can leave residual bad debt | Low | fully assured | INV-01 | 1 | INV-01 | EXP-05, EXP-07 |
 | GUA-05 Share price and collateral accounting are immune to direct token donations | Informational | fully assured | INV-01, INV-04 | 2 | INV-01, INV-04 | EXP-01 |
