@@ -17,7 +17,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
         with:
-          version: stable
+          version: v1.8.6
 
       - name: Install deps
         run: forge install
@@ -57,7 +57,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
         with:
-          version: stable
+          version: v1.8.6
 
       - name: Install deps
         run: forge install
@@ -141,7 +141,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
         with:
-          version: stable
+          version: v1.8.6
 
       - name: Install deps
         run: forge install
@@ -187,7 +187,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
         with:
-          version: stable
+          version: v1.8.6
 
       - name: Install deps
         run: forge install
@@ -249,7 +249,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
         with:
-          version: stable
+          version: v1.8.6
 
       - name: Install deps
         run: forge install
@@ -328,7 +328,7 @@ jobs:
         run: npm run trace -- --check-exploit-docs
 
       - name: docs-drift-check — fail on known-stale substrings
-        # Greps every committed `.md` outside MEMORY.md / CHANGELOG.md for
+        # Greps every committed `.md` outside CHANGELOG.md for
         # substrings the prose sweep declared stale (e.g. "all 6 invariants",
         # the three deleted ghost-catalogue entries, "monitored-only" applied
         # to a specific GUA-* finding). Catches drift in pages where no
@@ -364,16 +364,16 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
         with:
-          version: stable
+          version: v1.8.6
 
       - name: Install deps
         run: forge install
 
       - name: Run gas snapshot
-        run: forge snapshot --check 2>&1 | tee gas-diff.txt || true
+        run: forge snapshot --check 2>&1 | tee gas-diff.txt
 
       - name: Comment gas diff on PR
-        if: github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request'
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
