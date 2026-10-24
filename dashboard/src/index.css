@@ -1119,3 +1119,26 @@ button:focus-visible {
   color: var(--primary-hover);
   border-color: var(--primary-focus);
 }
+
+/* ---------- Recorded-run banner (no live backend) ---------- */
+.recorded-banner {
+  padding: var(--s-xs) var(--s-md);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+  border-bottom: 1px solid var(--border-strong);
+}
+.recorded-banner strong {
+  font-weight: 600;
+}
+.recorded-banner code {
+  font-family: var(--mono);
+}
+.recorded-banner a {
+  color: inherit;
+  text-decoration: underline;
+}
+.dot.recorded {
+  background: var(--text-dim);
+}

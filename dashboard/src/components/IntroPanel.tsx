@@ -20,7 +20,10 @@ const GLOSSARY: CopyKey[] = [
   'gl:ci-gate',
 ];
 
-export function IntroPanel({ onDismiss }: { onDismiss: () => void }) {
+const RECORDED_INTRO =
+  'This page normally shows a monitor re-checking a demo lending vault\'s 12 math-based safety rules ("invariants") on Base Sepolia, a free test network. That live monitor is offline, so what you see is a recorded run: the same monitor code replayed over a scripted scenario on a local test chain. The run ends with a deliberate breach so you can see what a detected violation looks like. The assurance panels (score, traceability, exploit replays) are build-time reports from CI.';
+
+export function IntroPanel({ onDismiss, recorded = false }: { onDismiss: () => void; recorded?: boolean }) {
   const c = copy('intro');
   return (
     <section className="intro" role="note" aria-label="How to read this dashboard">
@@ -29,7 +32,7 @@ export function IntroPanel({ onDismiss }: { onDismiss: () => void }) {
       </span>
       <div className="intro-body">
         <div className="intro-title">{c.label ?? 'How to read this'}</div>
-        <div className="intro-text">{c.plain}</div>
+        <div className="intro-text">{recorded ? RECORDED_INTRO : c.plain}</div>
         {c.technical && <div className="intro-tech">{c.technical}</div>}
         <div className="intro-glossary">
           <span className="intro-glossary-label">Jargon</span>

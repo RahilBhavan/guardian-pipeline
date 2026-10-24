@@ -13,10 +13,15 @@
 #   SUPABASE_SERVICE_KEY  — Supabase service-role key (bypasses RLS to write)
 name: Guardian Monitor
 
+# RETIRED (issue #23): the schedule is removed because the Supabase project this
+# job wrote to was deleted, so every scheduled run would fail. The hosted
+# dashboard renders a recorded run instead (scripts/record-demo-run.sh). To run a
+# live monitor again, point SUPABASE_URL below at a new project, set the secrets
+# and restore the trigger:
+#   schedule:
+#     - cron: '*/5 * * * *'
 on:
-  schedule:
-    - cron: '*/5 * * * *'   # every 5 minutes (best-effort; GitHub may delay)
-  workflow_dispatch: {}     # allow manual runs from the Actions tab
+  workflow_dispatch: {}     # manual runs only
 
 permissions:
   contents: read

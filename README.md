@@ -3,9 +3,9 @@
 [![Invariant CI](https://github.com/RahilBhavan/guardian-pipeline/actions/workflows/invariant-ci.yml/badge.svg)](https://github.com/RahilBhavan/guardian-pipeline/actions/workflows/invariant-ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-**Live:** https://guardian.rahilbhavan.com
+**Dashboard:** https://guardian.rahilbhavan.com (a static demo of a recorded run; the live monitor is offline, see [Scope and limits](#scope-and-limits))
 
-![The live dashboard's assurance panels on 2026-10-21: an AMC score of 94/100, 8 of 8 review findings traced to a re-runnable check, and 10 of 10 exploit replays prevented](docs/dashboard.png)
+![The dashboard's assurance panels on 2026-10-21: an AMC score of 94/100, 8 of 8 review findings traced to a re-runnable check, and 10 of 10 exploit replays prevented](docs/dashboard.png)
 
 Guardian Pipeline is a Solidity lending vault with 12 safety invariants. A Foundry invariant harness tests the invariants in CI before deployment. A TypeScript monitor re-checks the same 12 invariants against a demo vault on Base Sepolia, a test network that holds no real value, and writes any violation to Supabase for a React dashboard. An assurance layer replays 10 exploit classes, traces each self-review finding to a test, and computes a methodology score that CI gates on.
 
@@ -39,7 +39,7 @@ The two sentences below are generated from `security-review/findings.json` and `
 1. `src/Vault.sol` is an interest-bearing, over-collateralised, two-asset lending vault. Lenders supply the debt asset. Borrowers post a separate collateral asset that an `IPriceOracle` prices. The demo uses `src/MockOracle.sol`.
 2. `test/invariant/InvariantVault.t.sol` drives the vault through random call sequences with eight handlers and asserts the 12 invariants after each call.
 3. `guardian/src/evaluator.ts` evaluates the same 12 invariants against live vault state. `guardian/src/bot.ts` runs it once per block. `guardian/src/once.ts` runs it once, from the scheduled workflow `.github/workflows/guardian-monitor.yml`. Violations go to Supabase (`supabase/migrations/`).
-4. `dashboard/` is a React 18 and Vite app that reads Supabase. Vercel builds it from `vercel.json`.
+4. `dashboard/` is a React 18 and Vite app. With a live backend (`VITE_GUARDIAN_LIVE=true` and the Supabase variables) it reads Supabase. Without one, which is how the hosted site is built, it renders `dashboard/src/data/recorded-run.json` under a "Recorded run — live monitor offline" banner. Vercel builds it from `vercel.json`.
 5. `assurance/` computes the AMC score from coverage, the exploit replays in `test/exploit/` and the finding bindings in `security-review/findings.json`.
 6. `.github/workflows/invariant-ci.yml` runs 7 jobs: build, mirror parity, invariant fuzz, coverage, static analysis (Slither and Aderyn), assurance and gas snapshot. The job table is in [docs/architecture.md](docs/architecture.md#ci-jobs).
 
@@ -106,7 +106,9 @@ The monitor and the dashboard need an Alchemy key and a Supabase project. The mo
 - The security review is a self-review by the repository author, not a third-party audit.
 - The AMC score is self-graded. The same author writes the invariants, picks the exploit set, binds the findings and grades the result.
 - Fuzzing does not prove the invariants. No Certora or Halmos proof exists. See [docs/invariants.md](docs/invariants.md#formal-verification--a-known-gap).
-- The monitor is a best-effort reference implementation, not a service with an uptime promise. Its scheduled workflow last ran on 2026-08-23, and GitHub has since disabled it for inactivity. On 2026-10-21 the live dashboard showed "Guardian down" and no recent checks.
+- **The live monitor is offline.** The scheduled workflow last ran on 2026-08-23, GitHub disabled it for inactivity, and its Supabase project has since been deleted. It will not be revived. The hosted dashboard is a static demo and says so.
+- **The dashboard shows a recorded run, not live data.** `scripts/record-demo-run.sh` starts a local anvil chain, deploys the demo contracts, plays a scripted scenario (deposit, borrow, one day of interest, a price fall with a partial liquidation, then `AttackableVault.attack()`) and replays the repo's own fetcher and evaluator over each of the 16 blocks. The result is committed as `dashboard/src/data/recorded-run.json`: 16 blocks, 3 alerts (INV-01 and INV-07 at the breach block, INV-01 again on the next block), recorded on 2026-10-24. The chain is local, not Base Sepolia. The latencies are local-RPC timings. The assurance panels are separate build-time CI reports.
+- `guardian/src/once.ts` and `bot.ts` remain a best-effort reference implementation, not a service with an uptime promise. `guardian-monitor.yml` has no schedule and runs only by manual dispatch.
 - The staged demo is not an exploit. `AttackableVault.attack()` is a demo-only flag that forces an INV-01 violation so you can watch the monitor alert.
 
 ## License
