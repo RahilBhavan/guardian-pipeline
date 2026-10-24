@@ -23,7 +23,7 @@
  *     pinning a finding to that tier has drifted from
  *     `security-review/findings.json`.
  *
- * Markdown files under MEMORY.md / CHANGELOG.md are exempt — they are
+ * Markdown files named CHANGELOG.md are exempt — they are
  * historical records and intentionally preserve the prior prose.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -45,7 +45,7 @@ const SKIP_DIRS = new Set([
 ]);
 
 /** Per-file exemptions — historical records that legitimately keep stale prose. */
-const SKIP_FILES = new Set(['MEMORY.md', 'CHANGELOG.md']);
+const SKIP_FILES = new Set(['CHANGELOG.md']);
 
 /**
  * Drift rules. `pattern` is a RegExp tested against each line; `name` is the
