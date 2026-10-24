@@ -22,9 +22,8 @@
   "services": {
     "dashboard": "https://guardian.rahilbhavan.com",
     "supabase": {
-      "url": "https://klbqkgyyqkmqoebxbawy.supabase.co",
-      "anonKeyPublic": false,
-      "note": "The hosted dashboard already has VITE_SUPABASE_* configured. To run the dashboard locally, copy the anon key from Supabase Settings → API (read-only; safe in the browser bundle)."
+      "status": "deleted",
+      "note": "The Supabase project was deleted when the hosted monitor was retired (#23). The dashboard shows a recorded run."
     }
   },
   "commands": {

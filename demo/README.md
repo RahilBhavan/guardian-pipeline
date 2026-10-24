@@ -22,7 +22,7 @@ Machine-readable source of truth: [`addresses.json`](./addresses.json).
 | Deploy block | `42751398` |
 | Demo attacker | `0x2497c84b19676b71a1A730A06c4dFac728094D16` |
 | Dashboard (recorded run; the live monitor is retired) | https://guardian.rahilbhavan.com |
-| Supabase (read) | https://klbqkgyyqkmqoebxbawy.supabase.co |
+| Supabase | Deleted with the retired monitor (#23) |
 
 Explorer: [vault on BaseScan](https://sepolia.basescan.org/address/0xfF9D77D1EC64C212D0552aEf587fa12125f803AF).
 

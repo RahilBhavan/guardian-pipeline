@@ -370,6 +370,7 @@ jobs:
         run: forge install
 
       - name: Run gas snapshot
+        shell: bash  # bash -eo pipefail, so a failed check is not hidden by tee
         run: forge snapshot --check 2>&1 | tee gas-diff.txt
 
       - name: Comment gas diff on PR
