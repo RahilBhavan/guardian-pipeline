@@ -8,7 +8,8 @@ daemon (`bot.ts`, ~2 s cadence), and as a single-pass check (`once.ts`) for
 hosts that cannot keep a process alive — notably the free, best-effort
 **scheduled GitHub Actions** job in
 [`.github/workflows/guardian-monitor.yml`](../.github/workflows/guardian-monitor.yml)
-(~5-min cadence) against the public demo vault. It is a reference
+(~5-min cadence) against the public demo vault. That schedule is retired; see
+[setup.md](setup.md#hosting-the-bot-for-free-github-actions). It is a reference
 implementation, not a hardened production service.
 
 This document is the module-by-module reference. For the bigger picture see

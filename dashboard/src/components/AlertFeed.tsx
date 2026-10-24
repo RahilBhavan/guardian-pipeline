@@ -3,6 +3,8 @@ import type { AlertRow } from '../types';
 
 interface Props {
   alerts: AlertRow[];
+  /** True for a recorded run: show absolute dates and no block-explorer links. */
+  recorded?: boolean;
   /** Whether a "Load older" page is likely available (last page was full). */
   canLoadOlder?: boolean;
   /** True while a page fetch is in flight; disables the button. */
@@ -23,7 +25,7 @@ function timeAgo(iso: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-export function AlertFeed({ alerts, canLoadOlder, loadingOlder, onLoadOlder }: Props) {
+export function AlertFeed({ alerts, recorded = false, canLoadOlder, loadingOlder, onLoadOlder }: Props) {
   if (alerts.length === 0) {
     return <div className="empty">No violations detected — all invariants healthy.</div>;
   }
@@ -37,15 +39,19 @@ export function AlertFeed({ alerts, canLoadOlder, loadingOlder, onLoadOlder }: P
             <div className="name">{a.invariant_name}</div>
             <div className="meta">
               <span>
-                <a
-                  href={`https://sepolia.basescan.org/block/${a.block_number}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  block #{a.block_number}
-                </a>
+                {recorded ? (
+                  `local block #${a.block_number}`
+                ) : (
+                  <a
+                    href={`https://sepolia.basescan.org/block/${a.block_number}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    block #{a.block_number}
+                  </a>
+                )}
               </span>
-              <span>{timeAgo(a.created_at)}</span>
+              {!recorded && <span>{timeAgo(a.created_at)}</span>}
               {a.detection_latency_ms != null && <span>{a.detection_latency_ms}ms latency</span>}
             </div>
           </div>

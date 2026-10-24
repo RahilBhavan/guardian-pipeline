@@ -1,11 +1,20 @@
 /**
  * App.tsx — the Guardian monitoring dashboard.
  *
- * Reads the `alerts` and `blocks_checked` tables on mount, then keeps both live
- * via Supabase Postgres real-time subscriptions. No polling, no page refresh.
+ * With a live backend (VITE_GUARDIAN_LIVE=true plus Supabase variables) it reads
+ * the `alerts` and `blocks_checked` tables on mount, then keeps both live via
+ * Supabase Postgres real-time subscriptions. Without one it renders the recorded
+ * run in data/recorded-run.json and labels it as such; it never claims to be live.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase, VAULT_ADDRESS } from './supabase';
+import {
+  recordedAlerts,
+  recordedFinalStatus,
+  recordedLatency,
+  recordedRun,
+} from './recorded';
+import { RecordedBanner } from './components/RecordedBanner';
 import { INVARIANTS } from './types';
 import type { AlertRow, BlockCheckedRow, LatencyPoint } from './types';
 import { InvariantHealth } from './components/InvariantHealth';
@@ -84,21 +93,30 @@ const REALTIME_BANNER_COPY: Record<Exclude<RealtimeStatus, 'CONNECTING' | 'SUBSC
   TIMED_OUT: 'Realtime channel timed out — reconnecting. Data shown may be stale.',
 };
 
+/** True when no live backend is configured and the recorded run is shown. */
+const RECORDED_MODE = supabase === null;
+
 export function App() {
-  const [latestBlock, setLatestBlock] = useState<number | null>(null);
-  const [invariantStatus, setInvariantStatus] = useState<Record<string, boolean | null>>(
-    allInvariants(null),
+  const [latestBlock, setLatestBlock] = useState<number | null>(
+    RECORDED_MODE ? recordedRun.lastBlock : null,
   );
-  const [alerts, setAlerts] = useState<AlertRow[]>([]);
-  const [latencyHistory, setLatencyHistory] = useState<LatencyPoint[]>([]);
-  const [lastChecked, setLastChecked] = useState<Date | null>(null);
+  const [invariantStatus, setInvariantStatus] = useState<Record<string, boolean | null>>(
+    RECORDED_MODE ? recordedFinalStatus() : allInvariants(null),
+  );
+  const [alerts, setAlerts] = useState<AlertRow[]>(RECORDED_MODE ? recordedAlerts() : []);
+  const [latencyHistory, setLatencyHistory] = useState<LatencyPoint[]>(
+    RECORDED_MODE ? recordedLatency() : [],
+  );
+  const [lastChecked, setLastChecked] = useState<Date | null>(
+    RECORDED_MODE ? new Date(recordedRun.recordedAt) : null,
+  );
   const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>('CONNECTING');
   const [initialLoadError, setInitialLoadError] = useState<string | null>(null);
   const [initialLoadAttempts, setInitialLoadAttempts] = useState<number>(0);
   const [nextRetryMs, setNextRetryMs] = useState<number | null>(null);
   /** Pages of alerts beyond the first that have been fetched via "Load older". */
   const [extraAlertPagesLoaded, setExtraAlertPagesLoaded] = useState<number>(0);
-  const [canLoadOlder, setCanLoadOlder] = useState<boolean>(true);
+  const [canLoadOlder, setCanLoadOlder] = useState<boolean>(!RECORDED_MODE);
   const [loadingOlder, setLoadingOlder] = useState<boolean>(false);
 
   /** Whether the "How to read this" intro shows; dismissal persists locally. */
@@ -140,6 +158,7 @@ export function App() {
    * scheduling. Sets `initialLoadError` on failure so the banner renders.
    */
   const load = useCallback(async (): Promise<boolean> => {
+    if (!supabase) return true;
     const { data: recentAlerts, error: alertsError } = await supabase
       .from('alerts')
       .select('*')
@@ -248,6 +267,7 @@ export function App() {
   }, [load, scheduleRetry]);
 
   useEffect(() => {
+    if (!supabase) return;
     cancelledRef.current = false;
     attemptRef.current = 1;
     setInitialLoadAttempts(1);
@@ -312,7 +332,7 @@ export function App() {
       cancelledRef.current = true;
       if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
       retryTimeoutRef.current = null;
-      void supabase.removeChannel(channel);
+      void supabase?.removeChannel(channel);
     };
     // load/scheduleRetry are stable (useCallback with no state deps), so this
     // effect runs once on mount and tears down on unmount.
@@ -335,7 +355,7 @@ export function App() {
    * tail; no more pages exist.
    */
   const loadOlderAlerts = useCallback(async (): Promise<void> => {
-    if (loadingOlder || !canLoadOlder) return;
+    if (!supabase || loadingOlder || !canLoadOlder) return;
     setLoadingOlder(true);
     const from = alerts.length;
     const to = from + ALERT_PAGE_SIZE - 1;
@@ -390,12 +410,19 @@ export function App() {
         <div className="brand">
           <span className="shield">◈</span>Guardian Pipeline
         </div>
-        <LatencyBadge latencyMs={avgLatency} blockNumber={latestBlock} lastChecked={lastChecked} />
+        <LatencyBadge
+          latencyMs={avgLatency}
+          blockNumber={latestBlock}
+          lastChecked={lastChecked}
+          recorded={RECORDED_MODE}
+        />
         <Tip
           plain={copy('topbar:vault-address').plain}
           technical={copy('topbar:vault-address').technical}
         >
-          <span className="vault">{VAULT_ADDRESS}</span>
+          <span className="vault">
+            {RECORDED_MODE ? `${recordedRun.vault} (local test chain)` : VAULT_ADDRESS}
+          </span>
         </Tip>
         {!showIntro && (
           <button type="button" className="btn help-btn" onClick={reopenIntro}>
@@ -404,7 +431,9 @@ export function App() {
         )}
       </header>
 
-      {showIntro && <IntroPanel onDismiss={dismissIntro} />}
+      {RECORDED_MODE && <RecordedBanner />}
+
+      {showIntro && <IntroPanel onDismiss={dismissIntro} recorded={RECORDED_MODE} />}
 
       {initialBanner && (
         <div className="realtime-banner" role="alert">
@@ -463,13 +492,14 @@ export function App() {
               <PanelHeader
                 title="Alert Feed"
                 copyKey="panel:alert-feed"
-                suffix={`· latest ${alerts.length}`}
+                suffix={`· ${RECORDED_MODE ? 'recorded' : 'latest'} ${alerts.length}`}
               />
               <AlertFeed
                 alerts={alerts}
+                recorded={RECORDED_MODE}
                 canLoadOlder={canLoadOlder}
                 loadingOlder={loadingOlder}
-                onLoadOlder={loadOlderAlerts}
+                onLoadOlder={RECORDED_MODE ? undefined : loadOlderAlerts}
               />
             </section>
           </ErrorBoundary>
@@ -478,7 +508,7 @@ export function App() {
               <PanelHeader
                 title="Detection Latency"
                 copyKey="panel:detection-latency"
-                suffix={`· last ${latencyHistory.length} blocks`}
+                suffix={`· ${RECORDED_MODE ? 'recorded' : 'last'} ${latencyHistory.length} blocks`}
               />
               <LatencyChart points={latencyHistory} />
             </section>
