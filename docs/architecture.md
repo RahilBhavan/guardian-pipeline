@@ -157,7 +157,7 @@ git push ──▶ GitHub Actions ──▶ Forge fuzz + Slither/Aderyn + Assura
 
 | Component | Reads from | Writes to |
 |-----------|-----------|-----------|
-| Runtime monitor | Base L2 (via Alchemy) | Supabase `alerts`, `blocks_checked` |
+| Runtime monitor (retired; see issue #23) | Base L2 (via Alchemy) | Supabase `alerts`, `blocks_checked` |
 | Dashboard | Supabase (anon key, real-time) | — |
 | CI assurance job | Forge output, `security-review/findings.json` | `assurance/data/*` |
 
