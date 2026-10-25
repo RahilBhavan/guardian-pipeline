@@ -78,6 +78,12 @@ forge test --match-path "test/exploit/*" -vvv
 cd guardian && npm run typecheck && cd ..
 ```
 
+### Gas snapshot
+
+CI is the reference for `.gas-snapshot`. A local `forge snapshot --check` can differ from CI by 12 gas on a few mutant tests (on 2026-10-25 with forge 1.8.6: `test_solvency_holdsOnReal_failsOnMutant07`, `test_mutantVault_borrowShrinksTotalAssets` and `test_mutantVault_acceptsStaleBorrow`). If only such small differences appear, do not commit the local numbers. Regenerate `.gas-snapshot` only when CI's `gas-snapshot` job shows a real change, and copy the numbers from its diff.
+
+We did not add `--tolerance 1`. Forge reads the value as a percentage, so 1 would hide a 1% regression on every test to absorb a 12-gas wobble on three. The job is non-gating and posts a diff, so the note is enough.
+
 ## PR checklist
 
 - [ ] Branch is not `main`; commits follow Conventional Commits
