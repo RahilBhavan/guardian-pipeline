@@ -7,7 +7,7 @@
 
 ![The dashboard's assurance panels on 2026-10-21: an AMC score of 94/100, 8 of 8 review findings traced to a re-runnable check, and 10 of 10 exploit replays prevented](docs/dashboard.png)
 
-Guardian Pipeline is a Solidity lending vault with 12 safety invariants. A Foundry invariant harness tests the invariants in CI before deployment. A TypeScript monitor re-checks the same 12 invariants against a demo vault on Base Sepolia, a test network that holds no real value, and writes any violation to Supabase for a React dashboard. An assurance layer replays 10 exploit classes, traces each self-review finding to a test, and computes a methodology score that CI gates on.
+Guardian Pipeline is a Solidity lending vault with 12 safety invariants. A Foundry invariant harness tests the invariants in CI before deployment. A TypeScript monitor re-checks the same 12 invariants against a demo vault on Base Sepolia, a test network that holds no real value, and wrote violations to Supabase for a React dashboard. That hosted monitor is retired and its Supabase project was deleted ([issue #23](https://github.com/RahilBhavan/guardian-pipeline/issues/23)), so the dashboard now shows a recorded run. An assurance layer replays 10 exploit classes, traces each self-review finding to a test, and computes a methodology score that CI gates on.
 
 ## Results
 
@@ -18,7 +18,7 @@ Guardian Pipeline is a Solidity lending vault with 12 safety invariants. A Found
 - **The runtime monitor mirrors all 12 invariants.** `guardian/src/evaluator.ts` has one check per invariant, and the `mirror-parity` CI job fails if the monitor and the harness drift apart.
 - **`src/Vault.sol` has 100% line coverage** (130 of 130 lines, 28 of 31 branches), observed with `forge coverage` on 2026-10-21. CI fails below 85% line coverage.
 - **The self-review lists 8 findings**, GUA-01 to GUA-08: 3 resolved and 5 acknowledged (`security-review/findings.json`).
-- **The Assurance Methodology Coverage (AMC) score was 94/100 (grade A)** on 2026-06-10 at commit `b349ec8` (`assurance/data/assurance-report.json`). AMC measures how fully the project applied its own verification method. It is self-graded and is not a security rating. See [docs/assurance.md](docs/assurance.md).
+- **The Assurance Methodology Coverage (AMC) score was 94/100 (grade A)** on 2026-10-24 at commit `d992265`, regenerated from a CI-profile fuzz run and `forge coverage` (`assurance/data/assurance-report.json`). AMC measures how fully the project applied its own verification method. It is self-graded and is not a security rating. See [docs/assurance.md](docs/assurance.md).
 
 The two sentences below are generated from `security-review/findings.json` and `assurance/data/exploit-replays.json`. The `invariant-ci` workflow fails if they drift.
 
@@ -56,19 +56,19 @@ cd assurance && npm install && npm test && cd ..
 cd guardian && npm install && npm test && cd ..
 ```
 
-Observed on 2026-10-21 with forge 1.8.6 and Node.js 26.8.1:
+Observed on 2026-10-24 with forge 1.8.6 and Node.js 26.8.1:
 
 - `forge test` passed all 99 test functions. Forge prints "86 tests" because it reports the 14 `invariant_*` functions of `InvariantVault` as one suite entry. Each of the 14 prints its own `[PASS]` line.
 - `assurance`: 50 of 50 tests passed.
 - `guardian`: 66 of 66 tests passed.
 
-To run the invariant campaign with the CI profile (2,000 runs, depth 150). On 2026-10-21 this run made 300,000 handler calls in 243 s, and all 14 invariant functions passed. Reading the vault through the kit adapter costs time: the same campaign on `main` before the kit took 137 s on the same machine:
+To run the invariant campaign with the CI profile (2,000 runs, depth 150). On 2026-10-24 all 14 invariant functions passed in 271 s, and the corpus-coverage gate showed every handler selector firing at least 18,573 times. Reading the vault through the kit adapter costs time: the same campaign on `main` before the kit took 137 s on the same machine:
 
 ```bash
 FOUNDRY_PROFILE=ci forge test --match-contract InvariantVault -vvv
 ```
 
-The monitor and the dashboard need an Alchemy key and a Supabase project. The monitor reads `ALCHEMY_KEY`, `VAULT_ADDRESS`, `DEBT_ASSET`, `SUPABASE_URL` and `SUPABASE_SERVICE_KEY`. The dashboard reads `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. Deployment, keystore setup and the staged detection demo are in [docs/setup.md](docs/setup.md). The public demo addresses are in [demo/README.md](demo/README.md).
+The monitor and a live-backend dashboard need an Alchemy key and a new Supabase project, because the original one is gone. Without them, `dashboard/` builds and shows the recorded run (`cd dashboard && npm ci && npm run build`). The monitor reads `ALCHEMY_KEY`, `VAULT_ADDRESS`, `DEBT_ASSET`, `SUPABASE_URL` and `SUPABASE_SERVICE_KEY`. The dashboard reads `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. Deployment, keystore setup and the staged detection demo are in [docs/setup.md](docs/setup.md). The public demo addresses are in [demo/README.md](demo/README.md).
 
 ## Repository layout
 
@@ -83,7 +83,8 @@ The monitor and the dashboard need an Alchemy key and a Supabase project. The mo
 - `supabase/`: database migrations and row-level security policies.
 - `demo/`: public Base Sepolia addresses.
 - `docs/`: reference and explanation pages.
-- `.github/workflows/`: CI, the deep fuzz, the monitor and the oracle keeper.
+- `.github/workflows/`: CI, the deep fuzz, the monitor (manual dispatch only) and the oracle keeper.
+- `AGENTS.md`, `CLAUDE.md`: agent workflow files for the author's coding agents. They are not needed to build or run the project.
 
 ## Documentation
 
@@ -97,7 +98,6 @@ The monitor and the dashboard need an Alchemy key and a Supabase project. The mo
 - [docs/setup.md](docs/setup.md): local setup, Base Sepolia deployment and the staged demo.
 - [docs/glossary.md](docs/glossary.md): project identifiers and terms.
 - [docs/explainer.html](docs/explainer.html): an interactive explainer page.
-- [docs/social.md](docs/social.md): launch posts for X.
 
 ## Scope and limits
 

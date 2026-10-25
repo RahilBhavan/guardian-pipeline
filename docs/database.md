@@ -1,5 +1,7 @@
 # Database reference
 
+> **Status:** the Supabase project this page describes was deleted (issue #23). The schema and migrations still work against a new project.
+
 Guardian Pipeline uses one Supabase (Postgres) project as the boundary between
 the bot and the dashboard. The bot **writes**, the dashboard **reads**, and
 Postgres real-time pushes every insert to the dashboard with no polling.

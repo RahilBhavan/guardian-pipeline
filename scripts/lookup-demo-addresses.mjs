@@ -113,7 +113,7 @@ function printHuman(registry, contracts) {
   console.log('Services');
   console.log('--------');
   console.log(`  dashboard          ${services.dashboard}`);
-  console.log(`  supabase           ${services.supabase.url}`);
+  console.log(`  supabase           ${services.supabase.status}`);
   console.log(`  note               ${services.supabase.note}`);
   console.log();
   console.log('Quick start');

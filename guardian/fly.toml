@@ -22,7 +22,7 @@ primary_region = "iad"
   VAULT_DEPLOY_BLOCK = "42751398"
   BLOCK_POLL_INTERVAL_MS = "2000"
   HEALTH_PORT = "9090"
-  SUPABASE_URL = "https://klbqkgyyqkmqoebxbawy.supabase.co"
+  # SUPABASE_URL: the project was deleted with the retired monitor (#23); set a new one to revive it.
 
 # Secrets (set out-of-band, NOT in this file):
 #   ALCHEMY_KEY           — Alchemy Base Sepolia API key

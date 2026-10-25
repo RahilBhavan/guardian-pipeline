@@ -21,8 +21,8 @@ Machine-readable source of truth: [`addresses.json`](./addresses.json).
 | Debt asset (`MockERC20`) | `0x5E4FFa88822890f52002195D6DD45205B29D20Eb` |
 | Deploy block | `42751398` |
 | Demo attacker | `0x2497c84b19676b71a1A730A06c4dFac728094D16` |
-| Live dashboard | https://guardian.rahilbhavan.com |
-| Supabase (read) | https://klbqkgyyqkmqoebxbawy.supabase.co |
+| Dashboard (recorded run; the live monitor is retired) | https://guardian.rahilbhavan.com |
+| Supabase | Deleted with the retired monitor (#23) |
 
 Explorer: [vault on BaseScan](https://sepolia.basescan.org/address/0xfF9D77D1EC64C212D0552aEf587fa12125f803AF).
 
@@ -34,16 +34,6 @@ Explorer: [vault on BaseScan](https://sepolia.basescan.org/address/0xfF9D77D1EC6
 4. **Run the Guardian bot locally** — set `VAULT_ADDRESS`, `DEBT_ASSET`, and `VAULT_DEPLOY_BLOCK` in `guardian/.env` (see [`docs/setup.md`](../docs/setup.md)).
 
 Calling `attack()` (STAGED-01 detection demo) on the demo vault is **one-way** — it permanently violates INV-01. Only the demo attacker wallet can call it; redeploy for a fresh vault.
-
-## Cursor subagent
-
-A project subagent knows this registry and how to use it:
-
-```
-Use the guardian-demo subagent to show me the public demo addresses
-```
-
-Definition: [`.cursor/agents/guardian-demo.md`](../.cursor/agents/guardian-demo.md).
 
 ## Updating after redeploy
 

@@ -17,9 +17,9 @@
 #   ALCHEMY_KEY        — already used by guardian-monitor.yml.
 name: Oracle Keeper
 
+# Manual only since the monitor was retired (#23); restore the schedule
+# (cron '0 */6 * * *') if the live monitor returns.
 on:
-  schedule:
-    - cron: '0 */6 * * *'   # every 6 hours — well inside MAX_STALENESS (1 day)
   workflow_dispatch: {}
 
 permissions:

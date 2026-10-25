@@ -1,0 +1,18 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /guardian
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /assurance
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /dashboard
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

@@ -19,7 +19,7 @@ Registry and explorer links: **[demo/README.md](../demo/README.md)**.
 
 | What | Value |
 |------|-------|
-| Live dashboard | https://guardian.rahilbhavan.com |
+| Dashboard (recorded run; the live monitor is retired) | https://guardian.rahilbhavan.com |
 | Vault | `0xfF9D77D1EC64C212D0552aEf587fa12125f803AF` |
 | Debt asset | `0x5E4FFa88822890f52002195D6DD45205B29D20Eb` |
 | Deploy block | `42751398` |
