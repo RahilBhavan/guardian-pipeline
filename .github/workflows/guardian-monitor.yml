@@ -48,7 +48,7 @@ jobs:
         env:
           ALCHEMY_KEY: ${{ secrets.ALCHEMY_KEY }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          SUPABASE_URL: https://klbqkgyyqkmqoebxbawy.supabase.co
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           VAULT_ADDRESS: '0xfF9D77D1EC64C212D0552aEf587fa12125f803AF'
           DEBT_ASSET: '0x5E4FFa88822890f52002195D6DD45205B29D20Eb'
           VAULT_DEPLOY_BLOCK: '42751398'

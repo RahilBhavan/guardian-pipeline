@@ -6,20 +6,29 @@
   "scripts": {
     "dev": "tsx watch src/bot.ts",
     "start": "node dist/bot.js",
-    "build": "tsup src/bot.ts --format esm --dts",
+    "build": "tsup src/bot.ts src/ha.ts --format esm",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --import tsx src/health.test.ts test/evaluator.test.ts test/fixtures.test.ts test/stateHistory.test.ts test/accrue-sim.test.ts",
-    "parity": "node scripts/parity-check.mjs"
+    "test": "node --test --import tsx src/health.test.ts test/evaluator.test.ts test/fixtures.test.ts test/stateHistory.test.ts test/accrue-sim.test.ts test/telemetry.test.ts",
+    "parity": "node scripts/parity-check.mjs",
+    "start:ha": "node dist/ha.js",
+    "ha": "tsx src/ha.ts",
+    "test:ha": "node --test --import tsx test/atomicMonitor.test.ts"
   },
   "dependencies": {
+    "@opentelemetry/api": "~1.9.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.223.0",
+    "@opentelemetry/resources": "~2.12.0",
+    "@opentelemetry/sdk-trace-node": "~2.12.0",
     "@supabase/supabase-js": "^2.118.0",
     "dotenv": "^18.0.9",
+    "pg": "^8.23.1",
     "pino": "^10.4.0",
     "pino-pretty": "^11.0.0",
     "viem": "^2.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "@types/pg": "^8.23.1",
     "fast-check": "^4.10.2",
     "tsup": "^9.0.0",
     "tsx": "^4.0.0",

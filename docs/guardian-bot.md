@@ -333,24 +333,30 @@ liveness rows.
 
 ---
 
-## Production-readiness gaps
+## Operational validation and remaining gaps
 
-The bot is a **reference implementation**, not a hosted production
-service. The following are intentionally **not** built — they are the
-natural next steps for anyone deploying it for real:
+This is a **portfolio/research reference implementation**, not a production
+service. See [the operations runbook](operations.md) for opt-in tracing,
+transactional redundant workers, proof commands and hosting requirements.
 
-- **No Sentry / OpenTelemetry integration.** The observability surface is
-  structured `pino` logs to stdout plus the `/metrics` scrape. Wiring up an
-  external error-tracker or trace exporter is straightforward but out of
-  scope for the demo build (no accounts to integrate against).
-- **No mainnet load benchmark.** The bot is tested against Base Sepolia,
-  not benchmarked against a busy mainnet vault with tens of thousands of
-  positions. The user-position multicall is paginated (`fetcher.ts`) so it
-  should survive — but the published latency numbers are testnet-only.
-- **No redundancy / HA.** Single-process daemon; one `VAULT_ADDRESS` per
-  process; no leader election, no checkpointing beyond the per-block
-  `blocks_checked` row. A production deployment would run two instances
-  behind a shared lock or sharded by vault.
+- **OpenTelemetry:** optional OTLP/HTTP exception spans in the daemon,
+  single-pass runner and HA worker. A forced-error integration test verifies
+  delivery to a real HTTP receiver and redaction of credential-bearing errors.
+  A managed collector/account has not been configured or verified.
+- **Mainnet read load:** the committed [Morpho benchmark](morpho-benchmark.md)
+  measures 100 and 1,000 actual position reads at a pinned Base mainnet block.
+  It is a sampled read-path benchmark; it does not measure full Guardian
+  detection or all positions in the market.
+- **Redundancy:** `ha.ts` uses a PostgreSQL transaction advisory lock per vault.
+  Alerts, the block row and the prior-state cursor commit together. Two real
+  worker processes pass a SIGKILL/standby replay test against PostgreSQL. This
+  does not claim cross-region uptime or an externally hosted failover exercise.
+- **Hosted monitor:** remains retired until a new Supabase project, valid
+  secrets, complete user discovery and deployment are verified. The dashboard
+  continues to label its recorded run honestly.
+- **Reorganizations:** no canonical block-hash reconciliation. Per-block replay
+  requires an archive-capable RPC; a cursor seeded from incomplete user history
+  cannot provide complete per-user invariant coverage.
 
 ---
 

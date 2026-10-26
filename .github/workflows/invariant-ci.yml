@@ -371,7 +371,8 @@ jobs:
 
       - name: Run gas snapshot
         shell: bash  # bash -eo pipefail, so a failed check is not hidden by tee
-        run: forge snapshot --check 2>&1 | tee gas-diff.txt
+        # Fork proofs are run with make morpho-fork; skipped setUp has no stable gas baseline.
+        run: forge snapshot --check --no-match-contract MorphoBlueForkTest 2>&1 | tee gas-diff.txt
 
       - name: Comment gas diff on PR
         if: always() && github.event_name == 'pull_request'
@@ -386,3 +387,50 @@ jobs:
               repo: context.repo.repo,
               body: `## Gas snapshot diff\n\`\`\`\n${diff}\n\`\`\``
             });
+
+  guardian:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: ${{ job.services.postgres.ports[5432] }}
+      PGUSER: postgres
+      TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:${{ job.services.postgres.ports[5432] }}/postgres
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4
+        with:
+          node-version: 22
+      - run: npm ci
+        working-directory: guardian
+      - run: npm run typecheck && npm test && npm run build
+        working-directory: guardian
+      - name: Initialize disposable test schema
+        run: |
+          psql -v ON_ERROR_STOP=1 -c 'CREATE PUBLICATION supabase_realtime;'
+          for migration in supabase/migrations/*.sql; do
+            psql -v ON_ERROR_STOP=1 -f "$migration"
+          done
+      - run: npm run test:ha
+        working-directory: guardian
+
+  invariant-kit:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
+        with:
+          version: v1.8.6
+      - run: forge test --match-path 'test/kit/*.t.sol' -vv

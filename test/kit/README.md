@@ -41,4 +41,40 @@ Morpho Blue holds many isolated markets in one contract. An adapter wraps one ma
 - `realizedLosses`: the cumulative `badDebtAssets` from `Liquidate` events. Morpho socialises bad debt to suppliers, so `sharePriceMonotone` must exempt it.
 - The fork needs a Base RPC URL. Pin the block number so the run is reproducible.
 
-Neither adapter is written in this repository. The mappings describe the intended shape and must be checked against each vault's source before use.
+`MorphoBlueAdapter.sol` now implements the Morpho mapping. `MorphoBlueFork.t.sol`
+uses canonical Base Morpho at block **53,120,000**, creates an isolated two-actor
+market through the real protocol and AdaptiveCurveIRM, drives supply/collateral/
+borrow/repay/accrual, checks the kit, and rejects an injected debt mutant. It also
+reads and accrues the existing cbBTC/USDC market. Run:
+
+```sh
+BASE_MAINNET_RPC=https://mainnet.base.org make morpho-fork
+```
+
+Without `BASE_MAINNET_RPC` the fork suite is explicitly **skipped**, not reported
+as live proof. The ordinary CI kit job runs the local Guardian mutant tests;
+reproduce the fork separately with an archive-capable RPC.
+
+Important limits:
+
+- Market solvency is an accounting identity, not a check of Morpho's shared token
+  custody. The fork only claims complete share conservation for its isolated
+  market, whose entire actor set it owns.
+- `debtOf` uses Morpho's virtual assets/shares and rounds down for the kit's debt
+  sum bound. Morpho's own health check rounds up. The generic `liquidatable`
+  predicate is not an exact replacement for Morpho health at rounding boundaries.
+- `realizedLosses()` deliberately **reverts**: a read-only adapter cannot derive
+  cumulative `Liquidate.badDebtAssets` from current storage. For share-price
+  monotonicity across bad debt, index those events and construct the kit's
+  `SharePriceObservation` with the real cumulative loss. Do not call
+  `observeSharePrice` on this adapter or assume zero losses.
+- Oracle conversion preserves raw token-unit accounting; collateral valuation
+  uses `mulDiv(collateral, price, 1e36)` before any 1e18 price truncation.
+- Bonus bps rounds up to avoid understating a fractional incentive. Validate
+  liquidation event rounding separately before using it as an exact bound.
+
+The Revert V4Vault adapter remains an optional extension; only its mapping is
+provided. Sources: [Morpho interface](https://github.com/morpho-org/morpho-blue/blob/main/src/interfaces/IMorpho.sol),
+[share math](https://github.com/morpho-org/morpho-blue/blob/main/src/libraries/SharesMathLib.sol),
+[liquidation constants](https://github.com/morpho-org/morpho-blue/blob/main/src/libraries/ConstantsLib.sol),
+and [deployments](https://docs.morpho.org/developers/contracts/addresses/).

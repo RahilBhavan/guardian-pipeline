@@ -41,7 +41,7 @@ The two sentences below are generated from `security-review/findings.json` and `
 3. `guardian/src/evaluator.ts` evaluates the same 12 invariants against live vault state. `guardian/src/bot.ts` runs it once per block. `guardian/src/once.ts` runs it once, from the scheduled workflow `.github/workflows/guardian-monitor.yml`. Violations go to Supabase (`supabase/migrations/`).
 4. `dashboard/` is a React 18 and Vite app. With a live backend (`VITE_GUARDIAN_LIVE=true` and the Supabase variables) it reads Supabase. Without one, which is how the hosted site is built, it renders `dashboard/src/data/recorded-run.json` under a "Recorded run — live monitor offline" banner. Vercel builds it from `vercel.json`.
 5. `assurance/` computes the AMC score from coverage, the exploit replays in `test/exploit/` and the finding bindings in `security-review/findings.json`.
-6. `.github/workflows/invariant-ci.yml` runs 7 jobs: build, mirror parity, invariant fuzz, coverage, static analysis (Slither and Aderyn), assurance and gas snapshot. The job table is in [docs/architecture.md](docs/architecture.md#ci-jobs).
+6. `.github/workflows/invariant-ci.yml` runs 9 jobs: build, mirror parity, invariant fuzz, coverage, static analysis (Slither and Aderyn), assurance, gas snapshot, Guardian operational tests and the invariant kit. The job table is in [docs/architecture.md](docs/architecture.md#ci-jobs).
 
 ## Run it
 

@@ -20,7 +20,7 @@
     }
   },
   "services": {
-    "dashboard": "https://guardian.rahilbhavan.com",
+    "dashboard": "https://guardian-pipeline.vercel.app",
     "supabase": {
       "status": "deleted",
       "note": "The Supabase project was deleted when the hosted monitor was retired (#23). The dashboard shows a recorded run."
