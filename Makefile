@@ -138,3 +138,15 @@ aderyn: ## Static analysis (non-gating; artifacts uploaded in CI)
 	else \
 		echo "[aderyn] binary not installed — CI uploads artifacts from invariant-ci"; \
 	fi
+
+.PHONY: morpho-fork guardian-ha-test benchmark-morpho
+morpho-fork: ## Pinned Base fork: real Morpho adapter + negative control (requires BASE_MAINNET_RPC)
+	@test -n "$$BASE_MAINNET_RPC" || (echo 'Set BASE_MAINNET_RPC to an archive-capable Base HTTP RPC'; exit 1)
+	forge test --match-contract MorphoBlueForkTest -vv
+
+guardian-ha-test: ## Kill leader and verify standby replay (disposable migrated TEST_DATABASE_URL)
+	@test -n "$$TEST_DATABASE_URL" || (echo 'Set TEST_DATABASE_URL to a disposable migrated database'; exit 1)
+	cd guardian && npm run test:ha
+
+benchmark-morpho: ## Reproduce the sampled mainnet position-read benchmark
+	cd guardian && npx tsx scripts/benchmark-morpho.ts

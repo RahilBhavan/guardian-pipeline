@@ -1,7 +1,7 @@
 /**
  * bot.ts — Guardian entry point.
  *
- * Subscribes to new Base L2 blocks, fetches vault state, evaluates all six
+ * Subscribes to new Base L2 blocks, fetches vault state, evaluates all twelve
  * invariants, and persists any violation to Supabase — typically within one
  * block (~2s) of the breach — where the dashboard surfaces it in real time.
  *
@@ -14,6 +14,8 @@
  *     shared GuardianState.
  */
 import 'dotenv/config';
+import { startTelemetry, recordError } from './telemetry.js';
+const telemetry = startTelemetry();
 import { createPublicClient, webSocket, type Chain, type PublicClient } from 'viem';
 import { base, baseSepolia } from 'viem/chains';
 import pino from 'pino';
@@ -379,6 +381,7 @@ async function main(): Promise<void> {
         state.consecutiveBlockCheckFailures = 0;
       }
     } catch (err) {
+      recordError('guardian.block_check');
       state.consecutiveBlockCheckFailures += 1;
       state.blockChecksFailedTotal += 1;
       const n = state.consecutiveBlockCheckFailures;
@@ -421,6 +424,7 @@ async function main(): Promise<void> {
       probeTimer = null;
     }
     unwatch();
+    void telemetry.shutdown();
     // Close health server first so probes stop hitting a daemon that is
     // tearing down its RPC client.
     healthServer.close(() => {
@@ -436,5 +440,6 @@ async function main(): Promise<void> {
 
 main().catch((err) => {
   logger.fatal({ err }, 'Guardian crashed during startup');
-  process.exit(1);
+  recordError('guardian.startup');
+  void telemetry.shutdown().finally(() => process.exit(1));
 });

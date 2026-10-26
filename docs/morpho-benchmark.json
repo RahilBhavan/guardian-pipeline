@@ -1,0 +1,84 @@
+{
+  "measuredAt": "2026-10-26T18:02:02.572Z",
+  "chainId": 8453,
+  "block": "53120000",
+  "morpho": "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
+  "market": "0x9103c3b4e834476c9a62ea009ba2c884ee42e94e6e314a26f04d312434191836",
+  "rpcHost": "mainnet.base.org",
+  "actorsSha256": "5fe8d7d65742e116f0148e1b8bc75220ca81fb3c9472f0ff50cd3d6253657067",
+  "methodology": "Pinned on-chain position reads, serial batches of 100 + subset debt-share/collateral checks. Five warm/cold mixed samples per size. Excludes actor discovery, persistence, interest accrual, and full Guardian evaluation. Historical empty positions count separately. Sample, not complete market coverage.",
+  "results": [
+    {
+      "positions": 100,
+      "p50Ms": 71,
+      "p95Ms": 1284
+    },
+    {
+      "positions": 1000,
+      "p50Ms": 2968,
+      "p95Ms": 3005
+    }
+  ],
+  "samples": [
+    {
+      "positions": 100,
+      "iteration": 0,
+      "populated": 100,
+      "latencyMs": 73
+    },
+    {
+      "positions": 100,
+      "iteration": 1,
+      "populated": 100,
+      "latencyMs": 65
+    },
+    {
+      "positions": 100,
+      "iteration": 2,
+      "populated": 100,
+      "latencyMs": 69
+    },
+    {
+      "positions": 100,
+      "iteration": 3,
+      "populated": 100,
+      "latencyMs": 1284
+    },
+    {
+      "positions": 100,
+      "iteration": 4,
+      "populated": 100,
+      "latencyMs": 71
+    },
+    {
+      "positions": 1000,
+      "iteration": 0,
+      "populated": 999,
+      "latencyMs": 2990
+    },
+    {
+      "positions": 1000,
+      "iteration": 1,
+      "populated": 999,
+      "latencyMs": 1730
+    },
+    {
+      "positions": 1000,
+      "iteration": 2,
+      "populated": 999,
+      "latencyMs": 3005
+    },
+    {
+      "positions": 1000,
+      "iteration": 3,
+      "populated": 999,
+      "latencyMs": 2906
+    },
+    {
+      "positions": 1000,
+      "iteration": 4,
+      "populated": 999,
+      "latencyMs": 2968
+    }
+  ]
+}

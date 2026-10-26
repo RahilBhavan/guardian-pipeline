@@ -52,17 +52,19 @@ so every handler call must succeed — see
 
 ### CI jobs
 
-`.github/workflows/invariant-ci.yml` runs **7 jobs** on every push/PR to `main`:
+`.github/workflows/invariant-ci.yml` runs **9 jobs** on every push/PR to `main`:
 
 | Job | What it does | Feeds AMC? |
 |-----|--------------|------------|
-| `build` | `forge build --sizes`; gates all other jobs | no |
+| `build` | `forge build --sizes`; compiles contracts for dependent jobs | no |
 | `mirror-parity` | Asserts every INV-tagged harness `invariant_*` has a paired entry in `guardian/src/evaluator.ts` | no |
 | `invariant-fuzz` | 2,000-run invariant campaign; fails on any `[FAIL]` | yes — emits `runs.json` artifact AMC consumes |
 | `coverage` | LCOV report; gates `src/Vault.sol` at ≥ 85% line coverage | no — capped runs/depth are coverage-budget only |
 | `static-analysis` | Slither + Aderyn, uploaded as artifacts (non-gating) | no |
 | `assurance` | Exploit replays + composite Assurance Score; gates at ≥ 80 | yes — computes the score |
-| `gas-snapshot` | `forge snapshot --check`; posts the gas diff as a PR comment | no |
+| `gas-snapshot` | `forge snapshot --check --no-match-contract MorphoBlueForkTest`; posts the gas diff as a PR comment | no |
+| `guardian` | Typecheck, runtime tests, build, and two-process PostgreSQL failover/rollback proof | no |
+| `invariant-kit` | Guardian adapter mutant tests; Morpho fork skipped unless an RPC is supplied separately | no |
 
 ## Layer 2 — Smart contract
 
@@ -104,7 +106,8 @@ ways from the same fetch → evaluate → route core: as a per-block daemon
 (`bot.ts`, ~2 s cadence) for a real host, and as a single-pass check (`once.ts`)
 driven by a free, best-effort **scheduled GitHub Actions** job (~5-min cadence)
 against the public demo vault. It is a reference implementation, not a hardened
-production service.
+production service. The hosted schedule is currently retired; see [operations](operations.md)
+for the opt-in transactional HA worker and the requirements for restoring it.
 
 ```
 watchBlockNumber ─▶ fetchVaultState ─▶ evaluateInvariants ─▶ router
@@ -170,7 +173,7 @@ git push ──▶ GitHub Actions ──▶ Forge fuzz + Slither/Aderyn + Assura
 - [guardian-bot.md](guardian-bot.md) — the off-chain bot, module by module
 - [database.md](database.md) — the Supabase schema and RLS model
 - [invariants.md#testing-strategy](invariants.md#testing-strategy) — the seven test tiers
-- [CI jobs](#ci-jobs) — the seven-job CI/CD pipeline summary
+- [CI jobs](#ci-jobs) — the nine-job CI/CD pipeline summary
 - [assurance.md](assurance.md) — the Assurance Score and exploit replays
 - [setup.md](setup.md) — running every layer locally
 - [glossary.md](glossary.md) — terminology

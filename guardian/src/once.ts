@@ -16,6 +16,8 @@
  * open socket to keep it alive after the single check completes.
  */
 import 'dotenv/config';
+import { startTelemetry, recordError } from './telemetry.js';
+const telemetry = startTelemetry();
 import { createPublicClient, http, type Chain, type PublicClient } from 'viem';
 import { base, baseSepolia } from 'viem/chains';
 import pino from 'pino';
@@ -182,8 +184,9 @@ async function run(): Promise<void> {
 }
 
 run()
-  .then(() => process.exit(0))
+  .then(async () => { await telemetry.shutdown(); process.exit(0); })
   .catch((err) => {
     logger.fatal({ err }, 'Single-pass Guardian check failed');
-    process.exit(1);
+    recordError('guardian.single_pass');
+    void telemetry.shutdown().finally(() => process.exit(1));
   });
