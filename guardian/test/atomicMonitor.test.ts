@@ -64,3 +64,33 @@ test('SIGKILL leader during block 3: standby replays every block, no duplicate w
     } finally { await pool.query('DROP TRIGGER fail_checkpoint_test ON public.vault_state_previous; DROP FUNCTION fail_checkpoint_test();'); }
   } finally { leader.kill('SIGKILL'); standby?.kill('SIGKILL'); await pool.end(); }
 });
+
+test('scheduled sampling backfills contiguous windows from deploy and rolls back a failed batch', { skip: !url }, async () => {
+  const pool = new Pool({ connectionString: url });
+  const vault = '0x00000000000000000000000000000000000000cd';
+  const windows: [bigint, bigint][] = [];
+  try {
+    const fetch = async (block: bigint, prior: import('../src/types.js').PriorVaultState) => {
+      const first = prior ? prior.blockNumber + 1n : 100n;
+      windows.push([first, block]);
+      return { blockNumber: block, blockTimestamp: 1000 + Number(block), cash: 0n,
+        totalSupplyAssets: 0n, totalSupplyShares: 0n, totalBorrowShares: 0n, totalBorrowed: 0n,
+        borrowIndex: 10n ** 18n, borrowRatePerSecond: 0n, collateralRatio: 8000n,
+        lastAccrualTime: 1000n + block, liquidationBonus: 500n, maxStaleness: 3600n,
+        oracleLastUpdatedAt: 1000n + block, users: [], liquidationEvents: [],
+      };
+    };
+    const params = { pool, vault, deployBlock: 100n, head: 1000n, maxBlocks: 300n, fetch } as const;
+    assert.equal(await checkNextBlock(params), 'checked');
+    assert.equal((await pool.query('SELECT block_number FROM vault_state_previous WHERE vault=$1', [vault])).rows[0].block_number, '399');
+    await assert.rejects(checkNextBlock({ ...params, fetch: async () => { throw new Error('RPC unavailable'); } }), /RPC unavailable/);
+    assert.equal((await pool.query('SELECT count(*) FROM blocks_checked WHERE vault=$1', [vault])).rows[0].count, '1');
+    for (let i = 0; i < 3; i++) assert.equal(await checkNextBlock(params), 'checked');
+    assert.equal(await checkNextBlock(params), 'caught-up');
+    assert.deepEqual(windows, [[100n,399n], [400n,699n], [700n,999n], [1000n,1000n]]);
+    assert.deepEqual((await pool.query('SELECT block_number FROM blocks_checked WHERE vault=$1 ORDER BY block_number', [vault])).rows.map((r) => r.block_number), ['399','699','999','1000']);
+  } finally {
+    for (const table of ['alerts', 'blocks_checked', 'vault_state_previous']) await pool.query(`DELETE FROM ${table} WHERE vault=$1`, [vault]);
+    await pool.end();
+  }
+});

@@ -68,7 +68,7 @@ To run the invariant campaign with the CI profile (2,000 runs, depth 150). On 20
 FOUNDRY_PROFILE=ci forge test --match-contract InvariantVault -vvv
 ```
 
-The monitor and a live-backend dashboard need an Alchemy key and a new Supabase project, because the original one is gone. Without them, `dashboard/` builds and shows the recorded run (`cd dashboard && npm ci && npm run build`). The monitor reads `ALCHEMY_KEY`, `VAULT_ADDRESS`, `DEBT_ASSET`, `SUPABASE_URL` and `SUPABASE_SERVICE_KEY`. The dashboard reads `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. Deployment, keystore setup and the staged detection demo are in [docs/setup.md](docs/setup.md). The public demo addresses are in [demo/README.md](demo/README.md).
+The monitor and a live-backend dashboard need an Alchemy key and a new Supabase project, because the original one is gone. Without them, `dashboard/` builds and shows the recorded run (`cd dashboard && npm ci && npm run build`). The monitor reads `ALCHEMY_KEY`, `VAULT_ADDRESS`, `DEBT_ASSET`, `SUPABASE_URL` and `SUPABASE_SERVICE_KEY`. The scheduled `once.ts` runner instead requires server-side `DATABASE_URL`, `VAULT_DEPLOY_BLOCK` and `ALCHEMY_KEY` (or `RPC_URL`); see [operations](docs/operations.md) before enabling it. The dashboard reads `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. Deployment, keystore setup and the staged detection demo are in [docs/setup.md](docs/setup.md). The public demo addresses are in [demo/README.md](demo/README.md).
 
 ## Repository layout
 
