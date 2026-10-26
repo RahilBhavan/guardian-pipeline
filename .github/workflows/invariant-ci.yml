@@ -402,9 +402,7 @@ jobs:
           --health-timeout 5s --health-retries 10
     env:
       PGHOST: 127.0.0.1
-      PGPORT: ${{ job.services.postgres.ports[5432] }}
       PGUSER: postgres
-      TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:${{ job.services.postgres.ports[5432] }}/postgres
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
       - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4
@@ -415,6 +413,8 @@ jobs:
       - run: npm run typecheck && npm test && npm run build
         working-directory: guardian
       - name: Initialize disposable test schema
+        env:
+          PGPORT: ${{ job.services.postgres.ports['5432'] }}
         run: |
           psql -v ON_ERROR_STOP=1 -c 'CREATE PUBLICATION supabase_realtime;'
           for migration in supabase/migrations/*.sql; do
@@ -422,6 +422,8 @@ jobs:
           done
       - run: npm run test:ha
         working-directory: guardian
+        env:
+          TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/postgres
 
   invariant-kit:
     needs: build
