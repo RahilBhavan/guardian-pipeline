@@ -20,8 +20,12 @@ export async function checkNextBlock(params: {
   vault: `0x${string}`;
   deployBlock: bigint;
   head: bigint;
+  /** Scheduled sampling only: discover every intervening event, then check the window end. */
+  maxBlocks?: bigint;
   fetch: (block: bigint, prior: PriorVaultState) => Promise<VaultState>;
 }): Promise<'standby' | 'caught-up' | 'checked'> {
+  const maxBlocks = params.maxBlocks ?? 1n;
+  if (maxBlocks < 1n) throw new Error('maxBlocks must be positive');
   const vault = params.vault.toLowerCase();
   const db = await params.pool.connect();
   try {
@@ -34,8 +38,10 @@ export async function checkNextBlock(params: {
     if (previous.rows.length > 1) throw new Error('Duplicate case variants in vault checkpoint; canonicalize before HA');
     const oldRow = previous.rows[0];
     const prior = oldRow ? rowToVaultState(oldRow) : null;
-    const block = prior ? prior.blockNumber + 1n : params.deployBlock;
-    if (block > params.head) { await db.query('ROLLBACK'); return 'caught-up'; }
+    const first = prior ? prior.blockNumber + 1n : params.deployBlock;
+    const end = first + maxBlocks - 1n;
+    const block = end < params.head ? end : params.head;
+    if (first > params.head) { await db.query('ROLLBACK'); return 'caught-up'; }
     const start = performance.now();
     const state = await params.fetch(block, prior);
     if (state.blockNumber !== block) throw new Error('Fetcher returned a different block');

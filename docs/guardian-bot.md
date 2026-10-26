@@ -343,10 +343,16 @@ transactional redundant workers, proof commands and hosting requirements.
   single-pass runner and HA worker. A forced-error integration test verifies
   delivery to a real HTTP receiver and redaction of credential-bearing errors.
   A managed collector/account has not been configured or verified.
-- **Mainnet read load:** the committed [Morpho benchmark](morpho-benchmark.md)
-  measures 100 and 1,000 actual position reads at a pinned Base mainnet block.
-  It is a sampled read-path benchmark; it does not measure full Guardian
-  detection or all positions in the market.
+- **Mainnet detection sample:** the [Morpho runtime benchmark](morpho-detection-benchmark.md)
+  measures 100/1,000 positions through the dedicated fetch/accrue/evaluate/JSON
+  path. It covers five Morpho checks and health-risk observations, with explicit
+  unavailable checks. It excludes full-holder discovery, database delivery and
+  the twelve Guardian Vault predicates. The earlier read-only baseline remains
+  available in [Morpho read load](morpho-benchmark.md).
+- **Scheduled persistence:** `once.ts` uses the same PostgreSQL transaction as HA,
+  samples window endpoints after complete contiguous event discovery, and fails
+  while behind head. It requires `DATABASE_URL`; the daemon configuration below
+  does not apply to that writer. See [operations](operations.md).
 - **Redundancy:** `ha.ts` uses a PostgreSQL transaction advisory lock per vault.
   Alerts, the block row and the prior-state cursor commit together. Two real
   worker processes pass a SIGKILL/standby replay test against PostgreSQL. This

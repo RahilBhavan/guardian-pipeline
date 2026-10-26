@@ -1,192 +1,73 @@
-/**
- * once.ts — single-pass Guardian check.
- *
- * A one-shot variant of the bot's per-block work (see bot.ts `onBlock`) for
- * environments that cannot host a long-running daemon — notably the free
- * GitHub Actions schedule (.github/workflows/guardian-monitor.yml).
- *
- * It checks the latest block once and exits:
- *   1. seed the user set from the persisted prior state (no full-history rescan),
- *   2. incrementally scan only the gap since the last run for new users +
- *      liquidations (bounded by LOOKBACK so a long gap can't blow up one run),
- *   3. fetch vault state at head, evaluate all 12 invariants,
- *   4. persist the block-check, any alerts, and the new prior state, then exit.
- *
- * Uses an HTTP RPC transport (not the daemon's WebSocket) so the process has no
- * open socket to keep it alive after the single check completes.
+/** Scheduled sampling with complete discovery and atomic persistence.
+ * Backfills at most 300 blocks per invocation; never drops an older event gap.
+ * Unlike HA, this records only each window's endpoint, not every block.
  */
 import 'dotenv/config';
-import { startTelemetry, recordError } from './telemetry.js';
-const telemetry = startTelemetry();
-import { createPublicClient, http, type Chain, type PublicClient } from 'viem';
+import { Pool } from 'pg';
+import { createPublicClient, http, isAddress, type PublicClient, type Chain } from 'viem';
 import { base, baseSepolia } from 'viem/chains';
 import pino from 'pino';
-import { createClient } from '@supabase/supabase-js';
-import {
-  discoverUsers,
-  fetchLiquidationsInRange,
-  fetchOracleAddress,
-  fetchVaultState,
-} from './fetcher.js';
-import { evaluateInvariants } from './evaluator.js';
-import { loadPreviousState, savePreviousState } from './stateHistory.js';
-import { logAlertToSupabase, logBlockCheck } from './router.js';
-import { createGuardianState } from './health.js';
-import type { AlertPayload, PriorVaultState } from './types.js';
+import { discoverUsers, fetchLiquidationsInRange, fetchOracleAddress, fetchVaultState } from './fetcher.js';
+import { checkNextBlock } from './atomicMonitor.js';
+import { startTelemetry, recordError } from './telemetry.js';
 
-const logger = pino({
-  level: process.env.LOG_LEVEL ?? 'info',
-  transport: { target: 'pino-pretty', options: { translateTime: 'SYS:standard' } },
-});
-
-/**
- * Widest gap (in blocks) a single run will scan for new users / liquidations.
- * Seeded users come from the prior state, so this only bounds discovery of
- * accounts that appeared since the last run; a larger gap is clamped and
- * logged rather than scanned in full.
- */
-const LOOKBACK = 300n;
-
-/**
- * Pause between each paginated getLogs window during discovery. `discoverUsers`
- * issues four `eth_getLogs` per window; at ~75 CU each that is 300 CU, so a
- * ~1.1 s gap keeps the sweep under a free RPC tier's ~330 CU/s cap. Without it
- * the catch-up scan bursts well past the cap and 429s the whole run *before* it
- * can persist its cursor — leaving the next run to rescan from scratch and fail
- * the same way (the failure that kept the hosted monitor permanently "down").
- */
-const SCAN_THROTTLE_MS = 1100;
-
-const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
-
-function requireEnv(key: string): string {
-  const v = process.env[key];
-  if (!v) throw new Error(`Missing required env var: ${key}`);
-  return v;
+const logger = pino();
+const telemetry = startTelemetry();
+function required(key: string): string {
+  const value = process.env[key];
+  if (!value) throw new Error(`Missing ${key}`);
+  return value;
 }
-
+function address(key: string): `0x${string}` {
+  const value = required(key);
+  if (!isAddress(value)) throw new Error(`Invalid ${key}`);
+  return value;
+}
 async function run(): Promise<void> {
-  const startedAt = Date.now();
-  for (const key of ['ALCHEMY_KEY', 'SUPABASE_URL', 'SUPABASE_SERVICE_KEY']) requireEnv(key);
-  const vaultAddress = requireEnv('VAULT_ADDRESS') as `0x${string}`;
-  const debtAsset = requireEnv('DEBT_ASSET') as `0x${string}`;
-  for (const [k, v] of [['VAULT_ADDRESS', vaultAddress], ['DEBT_ASSET', debtAsset]] as const) {
-    if (!ADDRESS_RE.test(v)) throw new Error(`Invalid ${k}: expected a 0x-prefixed 40-hex address`);
-  }
-
-  const chainName = (process.env.CHAIN ?? 'base-sepolia') as 'base-sepolia' | 'base';
-  const alchemyHost = chainName === 'base' ? 'base-mainnet' : 'base-sepolia';
-  const rpcUrl = `https://${alchemyHost}.g.alchemy.com/v2/${process.env.ALCHEMY_KEY}`;
-  const deployBlock = BigInt(process.env.VAULT_DEPLOY_BLOCK ?? '0');
-
+  const vault = address('VAULT_ADDRESS');
+  const asset = address('DEBT_ASSET');
+  const chainName = process.env.CHAIN ?? 'base-sepolia';
+  if (chainName !== 'base' && chainName !== 'base-sepolia') throw new Error('Invalid CHAIN');
   const chain: Chain = chainName === 'base' ? base : baseSepolia;
-  // Retry/backoff so a transient free-tier rate limit (Alchemy CU/s) on the
-  // paginated getLogs scan is absorbed rather than failing the whole run.
-  const client: PublicClient = createPublicClient({
-    chain,
-    transport: http(rpcUrl, { retryCount: 6, retryDelay: 300 }),
-  });
-  const supabase = createClient(requireEnv('SUPABASE_URL'), requireEnv('SUPABASE_SERVICE_KEY'));
-
-  // logBlockCheck / logAlertToSupabase mutate a GuardianState; create one without
-  // starting the health server (single-pass has no liveness surface to expose).
-  const state = createGuardianState({ blockPollIntervalMs: 0, maxHealthyBlocks: 0 });
-
-  const headBlock = await client.getBlockNumber();
-  const oracleAddress = await fetchOracleAddress(client, vaultAddress);
-
-  // Seed the user set from the persisted prior state instead of rescanning all
-  // history every run — the prior snapshot already carries every known account.
-  const priorState: PriorVaultState = await loadPreviousState(supabase, vaultAddress, logger);
-  const knownUsers = new Set<`0x${string}`>();
-  for (const u of priorState?.users ?? []) knownUsers.add(u.address);
-
-  // Scan only the gap since the last run for new users + liquidations, bounded
-  // to LOOKBACK so a long first-run gap can't turn into a giant getLogs sweep.
-  const priorBlock = priorState ? BigInt(priorState.blockNumber) : deployBlock;
-  let scanFrom = priorBlock + 1n;
-  const floor = headBlock > LOOKBACK ? headBlock - LOOKBACK : 0n;
-  if (scanFrom < floor) {
-    logger.warn(
-      { gapFrom: scanFrom.toString(), clampedTo: floor.toString() },
-      'Discovery gap exceeds LOOKBACK — scanning only the most recent window; ' +
-        'users seeded from prior state cover the rest',
+  const host = chainName === 'base' ? 'base-mainnet' : 'base-sepolia';
+  const rpc = new URL(process.env.RPC_URL ?? `https://${host}.g.alchemy.com/v2/${required('ALCHEMY_KEY')}`);
+  if (!['http:', 'https:'].includes(rpc.protocol)) throw new Error('RPC_URL must use HTTP(S)');
+  const deployBlock = BigInt(required('VAULT_DEPLOY_BLOCK'));
+  if (deployBlock < 0n) throw new Error('Invalid VAULT_DEPLOY_BLOCK');
+  const client: PublicClient = createPublicClient({ chain, transport: http(rpc.href, { timeout: 15_000, retryCount: 6 }) });
+  if (await client.getChainId() !== chain.id) throw new Error('RPC chain does not match CHAIN');
+  const pool = new Pool({ connectionString: required('DATABASE_URL'), max: 1, connectionTimeoutMillis: 10_000 });
+  pool.on('error', () => { recordError('database.idle_connection'); logger.error('Database idle connection lost'); });
+  try {
+    const head = await client.getBlockNumber();
+    const oracle = await fetchOracleAddress(client, vault);
+    const result = await checkNextBlock({ pool, vault, deployBlock, head, maxBlocks: 300n,
+      fetch: async (block, prior) => {
+        const from = prior ? prior.blockNumber + 1n : deployBlock;
+        const users = new Set(prior?.users.map((user) => user.address) ?? []);
+        for (const user of await discoverUsers(client, vault, from, block, 1100)) users.add(user);
+        const events = await fetchLiquidationsInRange(client, vault, oracle, from, block, 1100);
+        const snapshot = await fetchVaultState(client, vault, asset, oracle, block, [...users], events);
+        logger.info({ from: from.toString(), checked: block.toString(), head: head.toString(), users: users.size }, 'Complete discovery window fetched');
+        return snapshot;
+      },
+    });
+    if (result === 'standby') throw new Error('Another worker owns this vault');
+    const checkpoint = await pool.query<{ block_number: string }>(
+      'SELECT block_number FROM public.vault_state_previous WHERE vault=$1', [vault.toLowerCase()],
     );
-    scanFrom = floor;
-  }
-
-  let blockLiquidations: Awaited<ReturnType<typeof fetchLiquidationsInRange>> = [];
-  if (headBlock >= scanFrom) {
-    // Run the two scans serially (not Promise.all) and throttle each window:
-    // both share the free RPC tier's CU/s budget, so overlapping them or
-    // sweeping at full speed bursts past the rate limit. See SCAN_THROTTLE_MS.
-    const fresh = await discoverUsers(client, vaultAddress, scanFrom, headBlock, SCAN_THROTTLE_MS);
-    for (const u of fresh) knownUsers.add(u);
-    blockLiquidations = await fetchLiquidationsInRange(
-      client,
-      vaultAddress,
-      oracleAddress,
-      scanFrom,
-      headBlock,
-      SCAN_THROTTLE_MS,
-    );
-  }
-
-  const vaultState = await fetchVaultState(
-    client,
-    vaultAddress,
-    debtAsset,
-    oracleAddress,
-    headBlock,
-    [...knownUsers],
-    blockLiquidations,
-  );
-  const results = evaluateInvariants(vaultState, priorState);
-  const violations = results.filter((r) => !r.passed);
-  const detectionLatencyMs = Date.now() - startedAt;
-
-  // Awaited (not fire-and-forget like the daemon) so every write lands before
-  // the process exits.
-  await logBlockCheck(
-    supabase,
-    {
-      vaultAddress,
-      blockNumber: headBlock,
-      allPassed: violations.length === 0,
-      latencyMs: detectionLatencyMs,
-      violationsCount: violations.length,
-    },
-    logger,
-    state,
-  );
-  await savePreviousState(supabase, vaultState, vaultAddress, logger);
-
-  if (violations.length > 0) {
-    const payload: AlertPayload = {
-      vaultAddress,
-      blockNumber: headBlock,
-      timestamp: vaultState.blockTimestamp,
-      violations,
-      detectedAt: Date.now(),
-      detectionLatencyMs,
-    };
-    await logAlertToSupabase(supabase, payload, logger, state);
-    logger.error(
-      { block: headBlock.toString(), violations: violations.map((v) => v.id), detectionLatencyMs },
-      'INVARIANT VIOLATION DETECTED',
-    );
-  } else {
-    logger.info(
-      { block: headBlock.toString(), users: knownUsers.size, detectionLatencyMs },
-      'All invariants healthy',
-    );
-  }
+    const row = checkpoint.rows[0];
+    if (!row || BigInt(row.block_number) < head) {
+      logger.warn({ checkpoint: row?.block_number, head: head.toString() }, 'Backfill incomplete; rerun to continue');
+      // Historical progress is durable, but a green scheduled run must mean head was checked.
+      throw new Error('Backfill incomplete; rerun to continue from durable checkpoint');
+    }
+    logger.info({ head: head.toString(), result }, 'Single-pass check committed');
+  } finally { await pool.end(); }
 }
-
-run()
-  .then(async () => { await telemetry.shutdown(); process.exit(0); })
-  .catch((err) => {
-    logger.fatal({ err }, 'Single-pass Guardian check failed');
-    recordError('guardian.single_pass');
-    void telemetry.shutdown().finally(() => process.exit(1));
-  });
+run().catch(() => {
+  // Provider errors may contain credentials. Detailed state is in structured progress logs.
+  recordError('guardian.single_pass');
+  logger.fatal('Single-pass check failed or backfill incomplete; checkpoint retained');
+  process.exitCode = 1;
+}).finally(() => telemetry.shutdown());

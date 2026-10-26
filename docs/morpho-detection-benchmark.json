@@ -1,0 +1,131 @@
+{
+  "measuredAt": "2026-10-26T19:26:46.946Z",
+  "chainId": 8453,
+  "block": "53120000",
+  "morpho": "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
+  "market": "0x9103c3b4e834476c9a62ea009ba2c884ee42e94e6e314a26f04d312434191836",
+  "rpcHost": "mainnet.base.org",
+  "actorsSha256": "5fe8d7d65742e116f0148e1b8bc75220ca81fb3c9472f0ff50cd3d6253657067",
+  "methodology": "Five samples per size through detectMorpho and JSON serialization. Explicit atomic eth_call batches of 100 simulate accrueInterest then read market/oracle/positions at the same pinned block. Includes five Morpho checks and sampled health-risk observations. Excludes discovery, DB delivery, network scheduling and twelve Guardian Vault predicates. Sample coverage only; not all market holders.",
+  "unavailable": [
+    "complete-holder conservation",
+    "shared-token custody",
+    "historical loss/delta checks",
+    "oracle timestamp",
+    "Guardian Vault parity"
+  ],
+  "results": [
+    {
+      "positions": 100,
+      "p50Ms": 214,
+      "p95Ms": 301
+    },
+    {
+      "positions": 1000,
+      "p50Ms": 819,
+      "p95Ms": 923
+    }
+  ],
+  "samples": [
+    {
+      "positions": 100,
+      "iteration": 0,
+      "populated": 100,
+      "liquidatable": 0,
+      "violations": [],
+      "outputBytes": 1170,
+      "latencyMs": 301,
+      "blockHash": "0x433cc3e2cd8e39e64e5a05aef03550a68fef6728f95ae2a4c5a5036097e1d67c"
+    },
+    {
+      "positions": 100,
+      "iteration": 1,
+      "populated": 100,
+      "liquidatable": 0,
+      "violations": [],
+      "outputBytes": 1170,
+      "latencyMs": 213,
+      "blockHash": "0x433cc3e2cd8e39e64e5a05aef03550a68fef6728f95ae2a4c5a5036097e1d67c"
+    },
+    {
+      "positions": 100,
+      "iteration": 2,
+      "populated": 100,
+      "liquidatable": 0,
+      "violations": [],
+      "outputBytes": 1171,
+      "latencyMs": 195,
+      "blockHash": "0x433cc3e2cd8e39e64e5a05aef03550a68fef6728f95ae2a4c5a5036097e1d67c"
+    },
+    {
+      "positions": 100,
+      "iteration": 3,
+      "populated": 100,
+      "liquidatable": 0,
+      "violations": [],
+      "outputBytes": 1170,
+      "latencyMs": 214,
+      "blockHash": "0x433cc3e2cd8e39e64e5a05aef03550a68fef6728f95ae2a4c5a5036097e1d67c"
+    },
+    {
+      "positions": 100,
+      "iteration": 4,
+      "populated": 100,
+      "liquidatable": 0,
+      "violations": [],
+      "outputBytes": 1171,
+      "latencyMs": 233,
+      "blockHash": "0x433cc3e2cd8e39e64e5a05aef03550a68fef6728f95ae2a4c5a5036097e1d67c"
+    },
+    {
+      "positions": 1000,
+      "iteration": 0,
+      "populated": 999,
+      "liquidatable": 0,
+      "violations": [],
+      "outputBytes": 1172,
+      "latencyMs": 923,
+      "blockHash": "0x433cc3e2cd8e39e64e5a05aef03550a68fef6728f95ae2a4c5a5036097e1d67c"
+    },
+    {
+      "positions": 1000,
+      "iteration": 1,
+      "populated": 999,
+      "liquidatable": 0,
+      "violations": [],
+      "outputBytes": 1172,
+      "latencyMs": 804,
+      "blockHash": "0x433cc3e2cd8e39e64e5a05aef03550a68fef6728f95ae2a4c5a5036097e1d67c"
+    },
+    {
+      "positions": 1000,
+      "iteration": 2,
+      "populated": 999,
+      "liquidatable": 0,
+      "violations": [],
+      "outputBytes": 1172,
+      "latencyMs": 850,
+      "blockHash": "0x433cc3e2cd8e39e64e5a05aef03550a68fef6728f95ae2a4c5a5036097e1d67c"
+    },
+    {
+      "positions": 1000,
+      "iteration": 3,
+      "populated": 999,
+      "liquidatable": 0,
+      "violations": [],
+      "outputBytes": 1172,
+      "latencyMs": 819,
+      "blockHash": "0x433cc3e2cd8e39e64e5a05aef03550a68fef6728f95ae2a4c5a5036097e1d67c"
+    },
+    {
+      "positions": 1000,
+      "iteration": 4,
+      "populated": 999,
+      "liquidatable": 0,
+      "violations": [],
+      "outputBytes": 1172,
+      "latencyMs": 803,
+      "blockHash": "0x433cc3e2cd8e39e64e5a05aef03550a68fef6728f95ae2a4c5a5036097e1d67c"
+    }
+  ]
+}

@@ -26,8 +26,10 @@ not sent. This proves exporter wiring, not delivery to a managed external accoun
 ## Two redundant workers
 
 `guardian/src/ha.ts` is the opt-in **transactional worker**. The original daemon
-and scheduled single-pass runner remain single-writer entry points: never run
-those alongside HA for the same vault. Both HA workers must use the same database,
+remains a single-writer entry point: never run it alongside HA for the same
+vault. The scheduled runner shares the transactional lock but uses sampled
+window endpoints; do not mix it with per-block HA if gap-free block rows matter.
+Both HA workers must use the same database,
 chain and canonical vault. Use separate databases for different chains because the
 existing schema keys observations by vault address only.
 
@@ -79,11 +81,19 @@ PostgreSQL service; never point this test at a live project.
 1. Connect Supabase and create/select the replacement demo project. Apply the
    existing migrations 0001–0004 and check RLS. Public keys may read alert/block
    tables, may not insert, and may not read `vault_state_previous`.
-2. Set Actions variable `SUPABASE_URL`, secret `SUPABASE_SERVICE_KEY`, and a valid
-   `ALCHEMY_KEY`. Remove/replace credentials for the deleted project.
-3. Bootstrap **complete** historical user discovery before enabling the old
-   scheduled runner, or deploy two HA workers on a persistent host with a complete
-   checkpoint. The public shared AttackableVault may already be attacked; only
+2. Set Actions secrets `DATABASE_URL` (replacement PostgreSQL URL, with TLS) and
+   a valid `ALCHEMY_KEY`. The scheduled runner writes through PostgreSQL directly,
+   not through a Supabase service-role key. The WebSocket daemon still uses
+   `SUPABASE_URL` and `SUPABASE_SERVICE_KEY`. Replace deleted-project credentials.
+3. Bootstrap **complete** historical user discovery before enabling the schedule,
+   or deploy two HA workers on a persistent host with a complete checkpoint.
+   `npx tsx src/once.ts` now replays up to 300 contiguous blocks per invocation
+   from deployment (including the deployment block), checks the endpoint, and
+   commits results/checkpoint together. It exits nonzero while behind head or
+   after any failed write; rerun to resume. It never drops the gap. For an old
+   deployment this can take many runs: keep live mode off while backfilling.
+   Historical endpoint checks do not imply every intervening block was evaluated.
+   The public shared AttackableVault may already be attacked; only
    its operator may stage `attack()` or deploy a replacement.
 4. For the scheduled option restore `schedule: [{cron: '*/5 * * * *'}]`, enable the
    Guardian Monitor workflow, and verify three actual scheduled runs each write
