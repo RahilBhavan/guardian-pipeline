@@ -87,7 +87,7 @@ PostgreSQL service; never point this test at a live project.
    `SUPABASE_URL` and `SUPABASE_SERVICE_KEY`. Replace deleted-project credentials.
 3. Bootstrap **complete** historical user discovery before enabling the schedule,
    or deploy two HA workers on a persistent host with a complete checkpoint.
-   `npx tsx src/once.ts` now replays up to 1800 contiguous blocks per invocation
+   `npx tsx src/once.ts` now replays up to 1200 contiguous blocks per invocation
    from deployment (including the deployment block), checks the endpoint, and
    commits results/checkpoint together. It exits nonzero while behind head or
    after any failed write; rerun to resume. It never drops the gap. For an old
