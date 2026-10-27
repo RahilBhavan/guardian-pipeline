@@ -18,7 +18,8 @@ enforces the identical definition in two places:
 - **Before deployment** — as Foundry `invariant_*` functions, fuzzed against
   hundreds of thousands of randomised call sequences.
 - **After deployment** — as a TypeScript evaluator that re-checks the same
-  formulas against live on-chain state, every block.
+  formulas against live on-chain state (every block in the `bot.ts` daemon;
+  the latest block per run in the hosted ~5-minute scheduled runner).
 
 `guardian/src/evaluator.ts` is a deliberate 1:1 mirror of
 `test/invariant/InvariantVault.t.sol`. If the two ever diverge, the project has

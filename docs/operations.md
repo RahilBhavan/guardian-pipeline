@@ -98,9 +98,10 @@ PostgreSQL service; never point this test at a live project.
 4. For the scheduled option restore `schedule: [{cron: '*/5 * * * *'}]`, enable the
    Guardian Monitor workflow, and verify three actual scheduled runs each write
    a recent row. GitHub scheduling is best effort, not a per-block daemon.
-5. Set Vercel `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and
-   `VITE_GUARDIAN_LIVE=true`, rebuild/deploy, and verify a recent block from the
-   browser. Keep the recorded mode until this is verified.
+5. Put `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` and `VITE_GUARDIAN_LIVE=true`
+   in `dashboard/.env.production` (Vercel project env vars, if set, take
+   precedence), deploy, and verify a recent block from the browser. Keep the
+   recorded mode until this is verified.
 
 No replacement Supabase project, hosted collector or two-host deployment has been
 verified by the local tests. Keep issue #47's external acceptance checks open
