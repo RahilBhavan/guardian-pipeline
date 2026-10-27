@@ -19,7 +19,7 @@ Registry and explorer links: **[demo/README.md](../demo/README.md)**.
 
 | What | Value |
 |------|-------|
-| Dashboard (recorded run; the live monitor is retired) | https://guardian.rahilbhavan.com |
+| Dashboard (recorded run) | https://guardian.rahilbhavan.com |
 | Vault | `0xfF9D77D1EC64C212D0552aEf587fa12125f803AF` |
 | Debt asset | `0x5E4FFa88822890f52002195D6DD45205B29D20Eb` |
 | Deploy block | `42751398` |
@@ -187,13 +187,11 @@ address, Supabase URL) are inlined in the workflow. The schedule runs every
 > For real-time, run `guardian/Dockerfile` on a paid host: `guardian/fly.toml`
 > is kept for Fly.io (~$2/mo), and the same image works on Koyeb or Railway.
 
-> **Current state:** the hosted monitor is retired. `guardian-monitor.yml` last
-> ran on 2026-08-23, GitHub disabled it for inactivity, and its Supabase project
-> was deleted. The workflow no longer has a `schedule:` trigger, and the hosted
-> dashboard renders a recorded run instead (see
-> [Recorded run](#regenerating-the-recorded-run)). To run a live monitor again,
-> create a Supabase project, apply the migrations, set the secrets, add the
-> `schedule:` trigger back and build the dashboard with `VITE_GUARDIAN_LIVE=true`.
+> **Current state:** `guardian-monitor.yml` runs on its `*/5` schedule again
+> (restored 2026-10-27, issue #47) and writes to the restored Supabase project.
+> The hosted dashboard still renders a recorded run (see
+> [Recorded run](#regenerating-the-recorded-run)) until it is built with
+> `VITE_GUARDIAN_LIVE=true`.
 
 ### Regenerating the recorded run
 

@@ -3,11 +3,11 @@
 [![Invariant CI](https://github.com/RahilBhavan/guardian-pipeline/actions/workflows/invariant-ci.yml/badge.svg)](https://github.com/RahilBhavan/guardian-pipeline/actions/workflows/invariant-ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-**Dashboard:** https://guardian.rahilbhavan.com (a static demo of a recorded run; the live monitor is offline, see [Scope and limits](#scope-and-limits))
+**Dashboard:** https://guardian.rahilbhavan.com (a static demo of a recorded run, see [Scope and limits](#scope-and-limits))
 
 ![The dashboard's assurance panels on 2026-10-21: an AMC score of 94/100, 8 of 8 review findings traced to a re-runnable check, and 10 of 10 exploit replays prevented](docs/dashboard.png)
 
-Guardian Pipeline is a Solidity lending vault with 12 safety invariants. A Foundry invariant harness tests the invariants in CI before deployment. A TypeScript monitor re-checks the same 12 invariants against a demo vault on Base Sepolia, a test network that holds no real value, and wrote violations to Supabase for a React dashboard. That hosted monitor is retired and its Supabase project was deleted ([issue #23](https://github.com/RahilBhavan/guardian-pipeline/issues/23)), so the dashboard now shows a recorded run. An assurance layer replays 10 exploit classes, traces each self-review finding to a test, and computes a methodology score that CI gates on.
+Guardian Pipeline is a Solidity lending vault with 12 safety invariants. A Foundry invariant harness tests the invariants in CI before deployment. A TypeScript monitor re-checks the same 12 invariants against a demo vault on Base Sepolia, a test network that holds no real value, and writes violations to Supabase for a React dashboard. The hosted monitor runs every 5 minutes on GitHub Actions; the hosted dashboard still shows a recorded run. An assurance layer replays 10 exploit classes, traces each self-review finding to a test, and computes a methodology score that CI gates on.
 
 ## Results
 
@@ -83,7 +83,7 @@ The monitor and a live-backend dashboard need an Alchemy key and a new Supabase 
 - `supabase/`: database migrations and row-level security policies.
 - `demo/`: public Base Sepolia addresses.
 - `docs/`: reference and explanation pages.
-- `.github/workflows/`: CI, the deep fuzz, the monitor (manual dispatch only) and the oracle keeper.
+- `.github/workflows/`: CI, the deep fuzz, the scheduled monitor and the oracle keeper.
 - `AGENTS.md`, `CLAUDE.md`: agent workflow files for the author's coding agents. They are not needed to build or run the project.
 
 ## Documentation
@@ -106,9 +106,9 @@ The monitor and a live-backend dashboard need an Alchemy key and a new Supabase 
 - The security review is a self-review by the repository author, not a third-party audit.
 - The AMC score is self-graded. The same author writes the invariants, picks the exploit set, binds the findings and grades the result.
 - Fuzzing does not prove the invariants. No Certora or Halmos proof exists. See [docs/invariants.md](docs/invariants.md#formal-verification--a-known-gap).
-- **The live monitor is offline.** The scheduled workflow last ran on 2026-08-23, GitHub disabled it for inactivity, and its Supabase project has since been deleted. It will not be revived. The hosted dashboard is a static demo and says so.
+- **The scheduled monitor checks the shared demo vault every ~5 minutes** (restored 2026-10-27, issue #47). Each run checks the latest block, not every block. INV-11 fails on every run because the demo oracle's price is stale until a funded keeper refreshes it. The hosted dashboard is still a static demo and says so.
 - **The dashboard shows a recorded run, not live data.** `scripts/record-demo-run.sh` starts a local anvil chain, deploys the demo contracts, plays a scripted scenario (deposit, borrow, one day of interest, a price fall with a partial liquidation, then `AttackableVault.attack()`) and replays the repo's own fetcher and evaluator over each of the 16 blocks. The result is committed as `dashboard/src/data/recorded-run.json`: 16 blocks, 3 alerts (INV-01 and INV-07 at the breach block, INV-01 again on the next block), recorded on 2026-10-24. The chain is local, not Base Sepolia. The latencies are local-RPC timings. The assurance panels are separate build-time CI reports.
-- `guardian/src/once.ts` and `bot.ts` remain a best-effort reference implementation, not a service with an uptime promise. `guardian-monitor.yml` has no schedule and runs only by manual dispatch.
+- `guardian/src/once.ts` and `bot.ts` remain a best-effort reference implementation, not a service with an uptime promise. `guardian-monitor.yml` runs on a best-effort `*/5` schedule; GitHub may delay or skip runs.
 - The staged demo is not an exploit. `AttackableVault.attack()` is a demo-only flag that forces an INV-01 violation so you can watch the monitor alert.
 
 ## License

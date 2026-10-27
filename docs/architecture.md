@@ -106,8 +106,8 @@ ways from the same fetch → evaluate → route core: as a per-block daemon
 (`bot.ts`, ~2 s cadence) for a real host, and as a single-pass check (`once.ts`)
 driven by a free, best-effort **scheduled GitHub Actions** job (~5-min cadence)
 against the public demo vault. It is a reference implementation, not a hardened
-production service. The hosted schedule is currently retired; see [operations](operations.md)
-for the opt-in transactional HA worker and the requirements for restoring it.
+production service. See [operations](operations.md) for the opt-in transactional HA worker and
+how the hosted schedule was restored.
 
 ```
 watchBlockNumber ─▶ fetchVaultState ─▶ evaluateInvariants ─▶ router
@@ -160,7 +160,7 @@ git push ──▶ GitHub Actions ──▶ Forge fuzz + Slither/Aderyn + Assura
 
 | Component | Reads from | Writes to |
 |-----------|-----------|-----------|
-| Runtime monitor (retired; see issue #23) | Base L2 (via Alchemy) | Supabase `alerts`, `blocks_checked` |
+| Runtime monitor (scheduled, ~5 min) | Base L2 (via Alchemy) | Supabase `alerts`, `blocks_checked` |
 | Dashboard | Supabase (anon key, real-time) | — |
 | CI assurance job | Forge output, `security-review/findings.json` | `assurance/data/*` |
 
