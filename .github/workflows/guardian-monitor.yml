@@ -9,7 +9,7 @@
 # the next run, within minutes.
 #
 # Required repo secrets (Settings → Secrets and variables → Actions):
-#   ALCHEMY_KEY           — Alchemy Base Sepolia API key
+#   (none for RPC: the run uses the public Base Sepolia RPC, see RPC_URL below)
 #   DATABASE_URL         — replacement PostgreSQL connection URL (TLS required)
 name: Guardian Monitor
 
@@ -45,7 +45,11 @@ jobs:
       - name: Single-pass invariant check
         working-directory: guardian
         env:
-          ALCHEMY_KEY: ${{ secrets.ALCHEMY_KEY }}
+          # Base Sepolia makes a block every 0.2 s, so a 5-minute run must scan
+          # ~1500 blocks. Alchemy's free tier allows 10-block getLogs; the public
+          # RPC allows 200.
+          RPC_URL: https://sepolia.base.org
+          LOG_RANGE: '200'
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           # The Supabase pooler's chain ends at Supabase's own root CA.
           NODE_EXTRA_CA_CERTS: certs/supabase-prod-ca-2021.crt
