@@ -19,7 +19,7 @@ Registry and explorer links: **[demo/README.md](../demo/README.md)**.
 
 | What | Value |
 |------|-------|
-| Dashboard (recorded run) | https://guardian.rahilbhavan.com |
+| Dashboard (live) | https://guardian.rahilbhavan.com |
 | Vault | `0xfF9D77D1EC64C212D0552aEf587fa12125f803AF` |
 | Debt asset | `0x5E4FFa88822890f52002195D6DD45205B29D20Eb` |
 | Deploy block | `42751398` |
@@ -189,9 +189,9 @@ address, Supabase URL) are inlined in the workflow. The schedule runs every
 
 > **Current state:** `guardian-monitor.yml` runs on its `*/5` schedule again
 > (restored 2026-10-27, issue #47) and writes to the restored Supabase project.
-> The hosted dashboard still renders a recorded run (see
-> [Recorded run](#regenerating-the-recorded-run)) until it is built with
-> `VITE_GUARDIAN_LIVE=true`.
+> The hosted dashboard reads it live via the committed `dashboard/.env.production`.
+> A build without those variables renders the
+> [recorded run](#regenerating-the-recorded-run).
 
 ### Regenerating the recorded run
 

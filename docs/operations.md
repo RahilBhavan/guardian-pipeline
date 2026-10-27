@@ -1,8 +1,8 @@
 # Operations and proof
 
 Guardian remains a portfolio/research demo. The public dashboard is
-<https://guardian-pipeline.vercel.app>; it shows a labelled recorded run. The scheduled
-monitor runs again since 2026-10-27 (issue #47). Do not label the dashboard live until backend readback and recent
+<https://guardian-pipeline.vercel.app>; it reads the scheduled monitor's rows live
+since 2026-10-27 (issue #47). Do not label a dashboard live until backend readback and recent
 `blocks_checked` rows have been verified.
 
 ## OpenTelemetry

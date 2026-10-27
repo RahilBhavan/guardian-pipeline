@@ -359,7 +359,7 @@ transactional redundant workers, proof commands and hosting requirements.
   does not claim cross-region uptime or an externally hosted failover exercise.
 - **Hosted monitor:** the `*/5` scheduled runner writes to the restored
   Supabase project. It checks the latest block per run, not every block. The
-  dashboard continues to label its recorded run honestly.
+  hosted dashboard reads those rows live.
 - **Reorganizations:** no canonical block-hash reconciliation. Per-block replay
   requires an archive-capable RPC; a cursor seeded from incomplete user history
   cannot provide complete per-user invariant coverage.
