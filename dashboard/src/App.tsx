@@ -159,17 +159,18 @@ export function App() {
    */
   const load = useCallback(async (): Promise<boolean> => {
     if (!supabase) return true;
+    // The monitor writes `vault` lowercased (guardian/src/atomicMonitor.ts).
     const { data: recentAlerts, error: alertsError } = await supabase
       .from('alerts')
       .select('*')
-      .eq('vault', VAULT_ADDRESS)
+      .eq('vault', VAULT_ADDRESS.toLowerCase())
       .order('created_at', { ascending: false })
       .limit(ALERT_PAGE_SIZE);
 
     const { data: recentBlocks, error: blocksError } = await supabase
       .from('blocks_checked')
       .select('*')
-      .eq('vault', VAULT_ADDRESS)
+      .eq('vault', VAULT_ADDRESS.toLowerCase())
       .order('checked_at', { ascending: false })
       .limit(LATENCY_HISTORY_SIZE);
 
@@ -362,7 +363,7 @@ export function App() {
     const { data, error } = await supabase
       .from('alerts')
       .select('*')
-      .eq('vault', VAULT_ADDRESS)
+      .eq('vault', VAULT_ADDRESS.toLowerCase())
       .order('created_at', { ascending: false })
       .range(from, to);
     if (cancelledRef.current) return;

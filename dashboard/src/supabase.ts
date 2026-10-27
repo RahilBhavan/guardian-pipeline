@@ -8,8 +8,7 @@ const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
  * The dashboard reads a live Supabase backend only when VITE_GUARDIAN_LIVE is
  * "true" and both Supabase variables are set. Otherwise `supabase` is null and
  * the app renders the recorded run in `data/recorded-run.json`. The hosted
- * Supabase project was deleted (issue #23), so the hosted build leaves
- * VITE_GUARDIAN_LIVE unset even if stale Supabase variables remain configured.
+ * build reads all three from the committed `.env.production`.
  */
 export const LIVE_BACKEND = import.meta.env.VITE_GUARDIAN_LIVE === 'true' && !!url && !!anonKey;
 

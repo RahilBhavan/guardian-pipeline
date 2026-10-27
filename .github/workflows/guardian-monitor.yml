@@ -13,15 +13,14 @@
 #   DATABASE_URL         — replacement PostgreSQL connection URL (TLS required)
 name: Guardian Monitor
 
-# RETIRED (issue #23): the schedule is removed because the Supabase project this
-# job wrote to was deleted, so every scheduled run would fail. The hosted
-# dashboard renders a recorded run instead (scripts/record-demo-run.sh). To run a
-# live monitor again, set DATABASE_URL to a new project, bootstrap history, set the secrets
-# and restore the trigger:
-#   schedule:
-#     - cron: '*/5 * * * *'
+# Restored (issue #47): DATABASE_URL points at the `guardian_monitor` role
+# through the Supabase session pooler. The checkpoint was seeded at block
+# 50920945; the vault has emitted no logs since deployment, so its user set is
+# complete (docs/operations.md, "Restore the hosted demo").
 on:
-  workflow_dispatch: {}     # manual runs only
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -48,6 +47,8 @@ jobs:
         env:
           ALCHEMY_KEY: ${{ secrets.ALCHEMY_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          # The Supabase pooler's chain ends at Supabase's own root CA.
+          NODE_EXTRA_CA_CERTS: certs/supabase-prod-ca-2021.crt
           VAULT_ADDRESS: '0xfF9D77D1EC64C212D0552aEf587fa12125f803AF'
           DEBT_ASSET: '0x5E4FFa88822890f52002195D6DD45205B29D20Eb'
           VAULT_DEPLOY_BLOCK: '42751398'

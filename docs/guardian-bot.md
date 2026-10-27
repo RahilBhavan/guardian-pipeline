@@ -8,7 +8,7 @@ daemon (`bot.ts`, ~2 s cadence), and as a single-pass check (`once.ts`) for
 hosts that cannot keep a process alive — notably the free, best-effort
 **scheduled GitHub Actions** job in
 [`.github/workflows/guardian-monitor.yml`](../.github/workflows/guardian-monitor.yml)
-(~5-min cadence) against the public demo vault. That schedule is retired; see
+(~5-min cadence) against the public demo vault. See
 [setup.md](setup.md#hosting-the-bot-for-free-github-actions). It is a reference
 implementation, not a hardened production service.
 
@@ -357,9 +357,9 @@ transactional redundant workers, proof commands and hosting requirements.
   Alerts, the block row and the prior-state cursor commit together. Two real
   worker processes pass a SIGKILL/standby replay test against PostgreSQL. This
   does not claim cross-region uptime or an externally hosted failover exercise.
-- **Hosted monitor:** remains retired until a new Supabase project, valid
-  secrets, complete user discovery and deployment are verified. The dashboard
-  continues to label its recorded run honestly.
+- **Hosted monitor:** the `*/5` scheduled runner writes to the restored
+  Supabase project. It checks the latest block per run, not every block. The
+  hosted dashboard reads those rows live.
 - **Reorganizations:** no canonical block-hash reconciliation. Per-block replay
   requires an archive-capable RPC; a cursor seeded from incomplete user history
   cannot provide complete per-user invariant coverage.
