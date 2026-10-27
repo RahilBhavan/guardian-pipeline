@@ -122,10 +122,12 @@ export const ERC20_ABI = [
 
 /**
  * Maximum `eth_getLogs` block span per request. Alchemy's free tier rejects
- * any wider range, so the scan is paginated into windows of this size. A
- * window of N blocks is the inclusive range `[from, from + N - 1]`.
+ * any range wider than 10 (the default); the public Base RPC allows 200. Set
+ * `LOG_RANGE` to match the RPC. A window of N blocks is the inclusive range
+ * `[from, from + N - 1]`.
  */
-const MAX_LOG_RANGE = 10n;
+const MAX_LOG_RANGE = BigInt(process.env.LOG_RANGE ?? '10');
+if (MAX_LOG_RANGE < 1n) throw new Error('LOG_RANGE must be positive');
 
 /** Resolve after `ms` milliseconds — used to throttle the paginated getLogs
  *  sweep so a single-pass run on a free RPC tier stays under its CU/s cap. */

@@ -1,7 +1,8 @@
 /** Scheduled sampling with complete discovery and atomic persistence.
- * Backfills at most 1200 blocks (~40 minutes on Base) per invocation, so a
- * delayed schedule still reaches head inside the 10-minute job timeout; a
- * larger window can time out, roll back and retry the same window forever.
+ * Backfills at most 6000 blocks (~20 minutes of Base Sepolia at 0.2 s per
+ * block) per invocation, so a delayed schedule still reaches head. With
+ * LOG_RANGE=200 that is 30 log windows per scan, well inside the 10-minute job
+ * timeout; a window that times out rolls back and is retried whole.
  * Never drops an older event gap.
  * Unlike HA, this records only each window's endpoint, not every block.
  */
@@ -44,7 +45,7 @@ async function run(): Promise<void> {
   try {
     const head = await client.getBlockNumber();
     const oracle = await fetchOracleAddress(client, vault);
-    const result = await checkNextBlock({ pool, vault, deployBlock, head, maxBlocks: 1200n,
+    const result = await checkNextBlock({ pool, vault, deployBlock, head, maxBlocks: 6000n,
       fetch: async (block, prior) => {
         const from = prior ? prior.blockNumber + 1n : deployBlock;
         const users = new Set(prior?.users.map((user) => user.address) ?? []);
