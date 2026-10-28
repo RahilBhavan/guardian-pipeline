@@ -8,6 +8,8 @@ import {RevertV4VaultAdapter, IV4Vault} from "./adapters/RevertV4VaultAdapter.so
 
 interface IV4VaultLoanInfo {
     function loanInfo(uint256 tokenId) external view returns (uint256, uint256, uint256, uint256, uint256);
+    function totalAssets() external view returns (uint256);
+    function convertToAssets(uint256 shares) external view returns (uint256);
 }
 
 contract RevertDebtMutant is RevertV4VaultAdapter {
@@ -21,7 +23,7 @@ contract RevertDebtMutant is RevertV4VaultAdapter {
 
 /// @notice Deployed Revert Lend USDC V4Vault on Base. The actor set is complete: every
 /// vault log from deployment (block 51,223,937) to block 53,203,450 shows two lenders
-/// (share mints sum to totalSupply), one borrower, no Liquidate event and no lend-rate drop.
+/// (share mints sum to totalSupply), one of whom is also the only borrower, no Liquidate event and no lend-rate drop.
 contract RevertV4VaultForkTest is Test {
     IV4Vault constant VAULT = IV4Vault(0xaf98803a1f43afC14335360e089F6B12947924ED);
     address constant USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
@@ -72,6 +74,9 @@ contract RevertV4VaultForkTest is Test {
         assertLe(adapter.debtOf(BORROWER), debt);
         assertGe(adapter.debtOf(BORROWER) + 1, debt);
         assertEq(liquidationCost, 0);
+        // Pin both sides of solvency and the lend-rate share price to the vault's ERC-4626 views.
+        assertEq(adapter.totalSupplyAssets(), IV4VaultLoanInfo(address(VAULT)).totalAssets());
+        assertEq(adapter.sharePrice(), IV4VaultLoanInfo(address(VAULT)).convertToAssets(1e18));
         assertEq(adapter.liquidationThresholdBps(), 7749); // min(ETH 77.5%, USDC 85%), floored
         assertEq(adapter.liquidationBonusBps(), 1000);
 

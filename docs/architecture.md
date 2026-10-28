@@ -65,7 +65,7 @@ so every handler call must succeed — see
 | `assurance` | Exploit replays + composite Assurance Score; gates at ≥ 80 | yes — computes the score |
 | `gas-snapshot` | `forge snapshot --check --no-match-contract '(MorphoBlue\|RevertV4Vault)ForkTest'`; posts the gas diff as a PR comment | no |
 | `guardian` | Typecheck, runtime tests, build, and two-process PostgreSQL failover/rollback proof | no |
-| `invariant-kit` | Guardian adapter mutant tests; Morpho fork skipped unless an RPC is supplied separately | no |
+| `invariant-kit` | Guardian adapter mutant tests; Morpho and Revert fork suites skipped unless an RPC is supplied separately | no |
 
 ## Layer 2 — Smart contract
 

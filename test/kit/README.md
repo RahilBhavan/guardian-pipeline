@@ -35,7 +35,7 @@ deployed Revert Lend USDC `V4Vault` on Base,
 (listed in revert-finance/v4lend
 [`docs/deployment-checklist.md`](https://github.com/revert-finance/v4lend/blob/main/docs/deployment-checklist.md)),
 at block **52,800,000**. All vault logs from deployment (block 51,223,937) to block
-53,203,450 show two lenders, whose share mints sum to `totalSupply()`, and one borrower.
+53,203,450 show two lenders, whose share mints sum to `totalSupply()`. One of them is also the only borrower.
 They show no liquidation and no drop in the lend rate. The test uses that complete actor
 set to check share conservation on the real vault. It checks the kit, compares the
 adapter's debt and collateral with the vault's own `loanInfo`, and rejects an injected
