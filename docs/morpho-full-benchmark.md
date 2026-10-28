@@ -1,6 +1,6 @@
 # Morpho full-holder detection benchmark
 
-On 2026-10-28, one detection pass over **every one of the 77,611 holders** of
+On 2026-10-28, one detection pass over **all 77,611 discovered holders** of
 Morpho Blue's cbBTC/USDC market on Base took **11,744 ms p50 / 13,876 ms p95**
 end to end, from the first RPC read to the PostgreSQL commit. That is 25 samples
 with 0 errors, a range of 10,788–14,148 ms, and the same pinned block in every
@@ -56,8 +56,9 @@ which is the code in `guardian/src/morpho.ts`:
    sum of all `borrowShares` must equal `totalBorrowShares`. Health-risk
    observations are computed separately; they are not alerts.
 4. Deliver in one PostgreSQL transaction: one `alerts` row per failed check,
-   then the `blocks_checked` row. This is the same write shape as
-   `atomicMonitor.ts`. If any insert fails, all of them roll back.
+   then the `blocks_checked` row. These are the same alert and checked-block
+   rows as `atomicMonitor.ts`, without its advisory lock or
+   `vault_state_previous` upsert. If any insert fails, all of them roll back.
 
 Before each sample, the benchmark deletes this block's rows (untimed). After each
 sample, it reads the row back (untimed). Every sample wrote exactly one
@@ -87,8 +88,10 @@ Fee shares are minted without a `Supply` event.
   resumed from a checkpoint after a rate-limit lockout of about 8 minutes.
   Another endpoint can be used with `BASE_LOGS_RPC`.
 
-Exact conservation on the live snapshot is the end-to-end completeness proof.
-A single missing supplier or borrower, or one wrong share, breaks the equality.
+Exact conservation on the live snapshot proves that no holder with supply or
+borrow shares is missing. A single missing supplier or borrower, or one wrong
+share, breaks the equality. A holder with collateral only and no debt could be
+missed without breaking it, because collateral has no market total.
 Before timing, the benchmark checks this on real data with two mutants.
 Dropping the largest supplier fails `MORPHO-SUPPLY-CONSERVATION`. Adding one
 borrow share to one borrower fails `MORPHO-BORROW-CONSERVATION`. The unit test
@@ -99,7 +102,9 @@ checks the same two mutants offline.
 - **Limiter:** RPC round trips. One 4,000-position call waited 0.34–1.15 s for
   response headers (a 2.0 MB request plus server execution) and then downloaded
   1.8 MB in under 10 ms. Local ABI decoding took 35–57 ms per call, about 7% of
-  a sample. PostgreSQL delivery is under 0.1%.
+  a sample. Counting call encoding, building the 2 MB request bodies and parsing
+  the responses too, a review pass measured about 3 s of local work per sample
+  (about 20%), so parallel batches could not remove more than about 80%. PostgreSQL delivery is under 0.1%.
 - **Tuning:** batch size was swept on 27,436 real holders at this block, with
   interleaved runs. 500 positions per call took 9.4–13.7 s, 1,000 took 6.7–9.0 s,
   2,000 took 5.9–6.4 s, 4,000 took 4.3–5.1 s, and 8,000–14,000 took 3.5–4.3 s,
