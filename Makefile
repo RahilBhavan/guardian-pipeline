@@ -139,10 +139,14 @@ aderyn: ## Static analysis (non-gating; artifacts uploaded in CI)
 		echo "[aderyn] binary not installed — CI uploads artifacts from invariant-ci"; \
 	fi
 
-.PHONY: morpho-fork guardian-ha-test benchmark-morpho
+.PHONY: morpho-fork revert-fork guardian-ha-test benchmark-morpho
 morpho-fork: ## Pinned Base fork: real Morpho adapter + negative control (requires BASE_MAINNET_RPC)
 	@test -n "$$BASE_MAINNET_RPC" || (echo 'Set BASE_MAINNET_RPC to an archive-capable Base HTTP RPC'; exit 1)
 	forge test --match-contract MorphoBlueForkTest -vv
+
+revert-fork: ## Pinned Base fork: real Revert V4Vault adapter + negative control (requires BASE_MAINNET_RPC)
+	@test -n "$$BASE_MAINNET_RPC" || (echo 'Set BASE_MAINNET_RPC to an archive-capable Base HTTP RPC'; exit 1)
+	forge test --match-contract RevertV4VaultForkTest -vv
 
 guardian-ha-test: ## Kill leader and verify standby replay (disposable migrated TEST_DATABASE_URL)
 	@test -n "$$TEST_DATABASE_URL" || (echo 'Set TEST_DATABASE_URL to a disposable migrated database'; exit 1)

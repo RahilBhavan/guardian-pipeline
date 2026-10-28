@@ -17,15 +17,53 @@ The kit holds the lending-vault invariants that do not depend on how one vault i
 
 ### Example mapping: Revert Lend `V4Vault`
 
-`V4Vault` is an ERC-4626 vault. Lenders hold vault shares, and borrowers borrow against Uniswap v4 LP position NFTs. Debt is tracked per token id.
+`V4Vault` is an ERC-4626 vault. Lenders hold vault shares, and borrowers borrow against Uniswap v4 LP position NFTs. Debt is tracked per token id. An adapter wraps one vault and one collateral pair (`currency0`, `currency1`). The values come from `vaultInfo()`, which accrues interest in a view.
 
-- `totalAssets`, `totalSupplyShares`, `supplySharesOf`, `sharePrice`: the ERC-4626 `totalAssets()`, `totalSupply()`, `balanceOf(account)` and `convertToAssets(1e18 shares)`, rescaled to 1e18 when the share decimals differ.
-- `totalSupplyAssets`: the lender claim, `convertToAssets(totalSupply())`.
-- `totalDebt`, `totalDebtShares`: the vault's debt total and debt-share total, converted with its debt exchange rate.
-- `debtSharesOf`, `debtOf`, `collateralOf`, `collateralValueOf`: the sum over the token ids the account owns in the vault. Collateral is the LP position's full value from the vault's oracle, so `collateralOf` can be that value and `collateralPrice` can be 1e18. Use the full value, not a value that already applies the collateral factor.
-- `liquidationThresholdBps`: the collateral factor configured for the position's tokens, converted to basis points.
-- `liquidationBonusBps`: the maximum liquidation penalty. Revert's penalty varies with how far under water the position is, so the maximum is the bound `liquidationWithinBonus` must check.
-- `realizedLosses`: the cumulative loss written off against lenders after reserves are used, measured as the drop in the lend exchange rate from liquidation shortfalls. Without it, a legitimate loss would trip `sharePriceMonotone`.
+- `totalAssets`: the vault's asset balance plus debt, the `balance` and `debt` from `vaultInfo()`. Do not use the ERC-4626 `totalAssets()`: in `V4Vault` it is `convertToAssets(totalSupply())`, the lender claim, so solvency would be an identity.
+- `totalSupplyAssets`, `totalSupplyShares`, `supplySharesOf`: the `lent` from `vaultInfo()` (the lender claim, rounded down), `totalSupply()` and `balanceOf(account)`.
+- `totalDebt`, `totalDebtShares`: the `debt` from `vaultInfo()` (rounded up) and `debtSharesTotal()`.
+- `debtSharesOf`, `debtOf`: the sum of `loans(tokenId)` over the token ids from `loanCount(account)` and `loanAtIndex`. `debtOf` converts with the debt exchange rate and rounds down. The vault's health check rounds up.
+- `collateralOf`, `collateralValueOf`: the sum of the oracle's full position value, `getValue(tokenId, asset)`, in asset units. `collateralPrice` is then 1e18. Use the full value, not a value that already applies the collateral factor. A position with no liquidity counts as 0 without the oracle call. A v4 position with no liquidity holds no tokens and no unclaimed fees, because v4 pays out fees on every liquidity change. The oracle's pool-price check reverts on pools whose hook was retired.
+- `liquidationThresholdBps`: the lower `collateralFactorX32` of the pair's two tokens, converted to basis points and rounded down. The vault takes the lower factor for each position. A position outside the adapter's pair makes the read revert.
+- `liquidationBonusBps`: `MAX_LIQUIDATION_PENALTY_X32` (10%), rounded up. The bound holds only while the position is worth at least the debt plus the maximum penalty. Below that, the liquidator pays the position value minus the penalty, and reserves pay the rest of the debt. The liquidator's gain over what they paid can then go past the bound, so `liquidationWithinBonus` does not hold there.
+- `realizedLosses`: the cumulative loss written off against lenders after reserves are used. `V4Vault` writes a loss off by lowering the stored lend exchange rate (`ExchangeRateUpdate`). Current storage does not record a total, so the adapter reverts.
+- `sharePrice`: the lend exchange rate, Q96 rescaled to 1e18. Shares and assets have the same decimals, and the rate starts at Q96, so the floor is 1e18.
+
+`RevertV4VaultAdapter.sol` implements this mapping. `RevertV4VaultFork.t.sol` uses the
+deployed Revert Lend USDC `V4Vault` on Base,
+[`0xaf98803a1f43afC14335360e089F6B12947924ED`](https://basescan.org/address/0xaf98803a1f43afC14335360e089F6B12947924ED)
+(listed in revert-finance/v4lend
+[`docs/deployment-checklist.md`](https://github.com/revert-finance/v4lend/blob/main/docs/deployment-checklist.md)),
+at block **52,800,000**. All vault logs from deployment (block 51,223,937) to block
+53,203,450 show two lenders, whose share mints sum to `totalSupply()`, and one borrower.
+They show no liquidation and no drop in the lend rate. The test uses that complete actor
+set to check share conservation on the real vault. It checks the kit, compares the
+adapter's debt and collateral with the vault's own `loanInfo`, and rejects an injected
+debt mutant. It also deposits as a new lender, accrues one day of interest and fuzzes
+partial repayments. Run:
+
+```sh
+BASE_MAINNET_RPC=https://mainnet.base.org make revert-fork
+```
+
+Without `BASE_MAINNET_RPC` the suite is skipped, as with the Morpho fork.
+
+Important limits:
+
+- The vault is small. At the pinned block it holds about 10.7 USDC of lender claims and
+  6.3 USDC of debt on one ETH/USDC position. The test checks the real code and state,
+  not behaviour under load.
+- The deployed bytecode has no verified source on Sourcify. The adapter uses only views
+  whose results the test checks on the fork. It does not claim the deployment matches
+  the current v4lend source.
+- The oracle's pool-price check makes `getValue` revert at many blocks. The pin uses a
+  block where the borrower's position can be valued. After a one-day `vm.warp` the
+  oracle reverts with `ChainlinkPriceError`, so the tests do not read collateral after
+  a warp.
+- No liquidation runs on the fork. `liquidationWithinBonus` and `liquidatable` near a
+  rounding boundary are not exercised. See the bonus limit above.
+- `realizedLosses()` reverts. The share-price check passes `losses: 0` itself, based on
+  the log scan above. For later blocks, index `ExchangeRateUpdate` drops.
 
 ### Example mapping: Morpho Blue on a Base fork
 
@@ -73,8 +111,8 @@ Important limits:
 - Bonus bps rounds up to avoid understating a fractional incentive. Validate
   liquidation event rounding separately before using it as an exact bound.
 
-The Revert V4Vault adapter remains an optional extension; only its mapping is
-provided. Sources: [Morpho interface](https://github.com/morpho-org/morpho-blue/blob/main/src/interfaces/IMorpho.sol),
+Sources: [Morpho interface](https://github.com/morpho-org/morpho-blue/blob/main/src/interfaces/IMorpho.sol),
 [share math](https://github.com/morpho-org/morpho-blue/blob/main/src/libraries/SharesMathLib.sol),
 [liquidation constants](https://github.com/morpho-org/morpho-blue/blob/main/src/libraries/ConstantsLib.sol),
-and [deployments](https://docs.morpho.org/developers/contracts/addresses/).
+and [deployments](https://docs.morpho.org/developers/contracts/addresses/);
+[Revert `V4Vault`](https://github.com/revert-finance/v4lend/blob/main/src/vault/V4Vault.sol).
