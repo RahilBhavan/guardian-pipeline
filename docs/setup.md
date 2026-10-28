@@ -187,8 +187,11 @@ address, Supabase URL) are inlined in the workflow. The schedule runs every
 > For real-time, run `guardian/Dockerfile` on a paid host: `guardian/fly.toml`
 > is kept for Fly.io (~$2/mo), and the same image works on Koyeb or Railway.
 
-> **Current state:** `guardian-monitor.yml` runs on its `*/5` schedule again
+> **Current state:** `guardian-monitor.yml` runs every 5 minutes again
 > (restored 2026-10-27, issue #47) and writes to the restored Supabase project.
+> GitHub ran its own `*/5` schedule only every 3 to 4 hours, so a Supabase
+> `pg_cron` job starts it through the workflow-dispatch API
+> ([operations](operations.md#restore-the-hosted-demo)).
 > The hosted dashboard reads it live via the committed `dashboard/.env.production`.
 > A build without those variables renders the
 > [recorded run](#regenerating-the-recorded-run).

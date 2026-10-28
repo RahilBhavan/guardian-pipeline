@@ -1,8 +1,8 @@
 /** Scheduled sampling with complete discovery and atomic persistence.
- * Backfills at most 6000 blocks (~20 minutes of Base Sepolia at 0.2 s per
- * block) per invocation, so a delayed schedule still reaches head. With
- * LOG_RANGE=200 that is 30 log windows per scan, well inside the 10-minute job
- * timeout; a window that times out rolls back and is retried whole.
+ * Commits 6000-block windows (~20 minutes of Base Sepolia at 0.2 s per block)
+ * until head or a 7-minute budget, so a delayed schedule still catches up
+ * inside the 10-minute job timeout. With LOG_RANGE=200 a window is 30 log
+ * scans; a window that times out rolls back and is retried whole.
  * Never drops an older event gap.
  * Unlike HA, this records only each window's endpoint, not every block.
  */
@@ -45,7 +45,9 @@ async function run(): Promise<void> {
   try {
     const head = await client.getBlockNumber();
     const oracle = await fetchOracleAddress(client, vault);
-    const result = await checkNextBlock({ pool, vault, deployBlock, head, maxBlocks: 6000n,
+    const deadline = Date.now() + 7 * 60_000;
+    let result: Awaited<ReturnType<typeof checkNextBlock>>;
+    do result = await checkNextBlock({ pool, vault, deployBlock, head, maxBlocks: 6000n,
       fetch: async (block, prior) => {
         const from = prior ? prior.blockNumber + 1n : deployBlock;
         const users = new Set(prior?.users.map((user) => user.address) ?? []);
@@ -56,6 +58,7 @@ async function run(): Promise<void> {
         return snapshot;
       },
     });
+    while (result === 'checked' && Date.now() < deadline);
     if (result === 'standby') throw new Error('Another worker owns this vault');
     const checkpoint = await pool.query<{ block_number: string }>(
       'SELECT block_number FROM public.vault_state_previous WHERE vault=$1', [vault.toLowerCase()],
