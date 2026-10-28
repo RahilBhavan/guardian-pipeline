@@ -87,9 +87,10 @@ PostgreSQL service; never point this test at a live project.
    `SUPABASE_URL` and `SUPABASE_SERVICE_KEY`. Replace deleted-project credentials.
 3. Bootstrap **complete** historical user discovery before enabling the schedule,
    or deploy two HA workers on a persistent host with a complete checkpoint.
-   `npx tsx src/once.ts` now replays up to 6000 contiguous blocks per invocation
-   from deployment (including the deployment block), checks the endpoint, and
-   commits results/checkpoint together. It exits nonzero while behind head or
+   `npx tsx src/once.ts` replays contiguous 6000-block windows from deployment
+   (including the deployment block) until it reaches head or 5 minutes pass. It
+   checks each window's endpoint and commits results/checkpoint together per
+   window. It exits nonzero while behind head or
    after any failed write; rerun to resume. It never drops the gap. For an old
    deployment this can take many runs: keep live mode off while backfilling.
    Historical endpoint checks do not imply every intervening block was evaluated.
@@ -97,7 +98,15 @@ PostgreSQL service; never point this test at a live project.
    its operator may stage `attack()` or deploy a replacement.
 4. For the scheduled option restore `schedule: [{cron: '*/5 * * * *'}]`, enable the
    Guardian Monitor workflow, and verify three actual scheduled runs each write
-   a recent row. GitHub scheduling is best effort, not a per-block daemon.
+   a recent row. GitHub scheduling is best effort, not a per-block daemon. On
+   this repository GitHub ran the `*/5` schedule only every 3 to 4 hours, so
+   apply `supabase/cron/monitor_dispatch.sql` and store a
+   fine-grained token (Actions read/write on this repository only) in Vault as
+   `github_monitor_dispatch_token`. `pg_cron` then starts the workflow every 5
+   minutes through the workflow-dispatch API. Check deliveries with
+   `select status_code, created from net._http_response order by created desc limit 5;`.
+   Expect 204. A 401 means the token expired or was revoked: create a new one and
+   replace it with `vault.update_secret`.
 5. Put `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` and `VITE_GUARDIAN_LIVE=true`
    in `dashboard/.env.production` (Vercel project env vars, if set, take
    precedence), deploy, and verify a recent block from the browser. Keep the

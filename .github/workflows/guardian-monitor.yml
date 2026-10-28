@@ -4,9 +4,11 @@
 # (Fly/Koyeb/Railway). Each run executes guardian/src/once.ts — one invariant
 # check against the latest block, persisted to Supabase — then exits.
 #
-# Trade-off vs the daemon: cadence is ~5 min (GitHub may delay scheduled runs
-# under load), not per-block ~2s. A triggered violation (attack()) surfaces on
-# the next run, within minutes.
+# Trade-off vs the daemon: cadence is ~5 min, not per-block ~2s. A triggered
+# violation (attack()) surfaces on the next run, within minutes. GitHub ran the
+# schedule below only every 3-4 hours, so Supabase pg_cron starts this workflow
+# every 5 minutes via workflow_dispatch
+# (supabase/cron/monitor_dispatch.sql); the schedule is a fallback.
 #
 # Required repo secrets (Settings → Secrets and variables → Actions):
 #   (none for RPC: the run uses the public Base Sepolia RPC, see RPC_URL below)

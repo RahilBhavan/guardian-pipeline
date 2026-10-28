@@ -358,8 +358,8 @@ transactional redundant workers, proof commands and hosting requirements.
   Alerts, the block row and the prior-state cursor commit together. Two real
   worker processes pass a SIGKILL/standby replay test against PostgreSQL. This
   does not claim cross-region uptime or an externally hosted failover exercise.
-- **Hosted monitor:** the `*/5` scheduled runner writes to the restored
-  Supabase project. It checks the latest block per run, not every block. The
+- **Hosted monitor:** the scheduled runner, started every 5 minutes by a
+  Supabase `pg_cron` job, writes to the restored Supabase project. It checks the latest block per run, not every block. The
   hosted dashboard reads those rows live.
 - **Reorganizations:** no canonical block-hash reconciliation. Per-block replay
   requires an archive-capable RPC; a cursor seeded from incomplete user history
