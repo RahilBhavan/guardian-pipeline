@@ -371,8 +371,8 @@ jobs:
 
       - name: Run gas snapshot
         shell: bash  # bash -eo pipefail, so a failed check is not hidden by tee
-        # Fork proofs are run with make morpho-fork; skipped setUp has no stable gas baseline.
-        run: forge snapshot --check --no-match-contract MorphoBlueForkTest 2>&1 | tee gas-diff.txt
+        # Fork proofs are run with make morpho-fork / revert-fork; skipped setUp has no stable gas baseline.
+        run: forge snapshot --check --no-match-contract '(MorphoBlue|RevertV4Vault)ForkTest' 2>&1 | tee gas-diff.txt
 
       - name: Comment gas diff on PR
         if: always() && github.event_name == 'pull_request'

@@ -67,7 +67,7 @@ A PR is mergeable only when all gating jobs pass:
 | `coverage` | `src/Vault.sol` ≥ 85% line coverage |
 | `assurance` | composite Assurance Score ≥ 80 |
 | `static-analysis` | Slither + Aderyn run (non-gating, artifacts uploaded) |
-| `gas-snapshot` | `forge snapshot --check --no-match-contract MorphoBlueForkTest` (non-gating, posts a PR diff) |
+| `gas-snapshot` | `forge snapshot --check --no-match-contract '(MorphoBlue\|RevertV4Vault)ForkTest'` (non-gating, posts a PR diff) |
 
 Run them locally before pushing:
 
