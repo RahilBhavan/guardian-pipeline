@@ -12,9 +12,11 @@
     "parity": "node scripts/parity-check.mjs",
     "start:ha": "node dist/ha.js",
     "ha": "tsx src/ha.ts",
-    "test:ha": "node --test --import tsx test/atomicMonitor.test.ts",
+    "test:ha": "node --test --test-concurrency=1 --import tsx test/atomicMonitor.test.ts test/morphoDelivery.test.ts",
     "morpho": "tsx scripts/run-morpho.ts",
-    "benchmark:morpho-detection": "tsx scripts/benchmark-morpho-detection.ts"
+    "benchmark:morpho-detection": "tsx scripts/benchmark-morpho-detection.ts",
+    "discover:morpho-holders": "tsx scripts/discover-morpho-holders.ts",
+    "benchmark:morpho-full": "tsx scripts/benchmark-morpho-full.ts"
   },
   "dependencies": {
     "@opentelemetry/api": "~1.9.1",

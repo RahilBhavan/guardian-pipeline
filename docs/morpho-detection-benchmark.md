@@ -49,6 +49,7 @@ Five samples give a descriptive p95 (the maximum here), not an SLA; RPC caching,
 provider limits and location affect latency. The earlier read-load run used a
 different request shape and time, so these figures do not establish a speedup.
 
-This completes a reproducible sampled Morpho detection measurement. It does not
-establish the original twelve-predicate Guardian Vault mainnet benchmark or live
-hosted monitoring acceptance. Those remain separately tracked in issue #47.
+This completes a reproducible sampled Morpho detection measurement. The
+[full-holder benchmark](morpho-full-benchmark.md) adds discovery of all 77,611
+holders, exact share conservation and PostgreSQL delivery. Neither establishes
+the twelve-predicate Guardian Vault mainnet benchmark or live hosted monitoring.
