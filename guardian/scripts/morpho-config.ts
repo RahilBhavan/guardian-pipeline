@@ -4,6 +4,9 @@ import { readFile } from 'node:fs/promises';
 import { createPublicClient, http, isAddress, isHex } from 'viem';
 import { base } from 'viem/chains';
 
+export const morphoTarget = { morpho: '0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb' as const,
+  market: '0x9103c3b4e834476c9a62ea009ba2c884ee42e94e6e314a26f04d312434191836' as const, block: 53_120_000n };
+
 export async function morphoInputs() {
   const file = new URL('../../demo/morpho-benchmark-actors.json', import.meta.url);
   const bytes = await readFile(file, 'utf8');
@@ -19,5 +22,5 @@ export async function morphoInputs() {
   const client = createPublicClient({ chain: base, transport: http(rpc.href, { timeout: 30_000 }) });
   if (await client.getChainId() !== base.id) throw new Error('Expected Base mainnet');
   return { bytes, rpcHost: rpc.hostname, params: { client, actors, market: fixture.market,
-    morpho: '0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb' as const, block: 53_120_000n } };
+    morpho: morphoTarget.morpho, block: morphoTarget.block } };
 }

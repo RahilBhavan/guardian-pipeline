@@ -41,6 +41,38 @@ test('corrupted market accounting and position sums trip the detector', () => {
     'MORPHO-LIQUIDITY', 'MORPHO-SUPPLY-SUBSET', 'MORPHO-BORROW-SUBSET', 'MORPHO-ACCRUAL', 'MORPHO-FEE',
   ]);
 });
+test('complete coverage requires exact share conservation; a dropped holder or altered shares fail', () => {
+  const s = state();
+  const holder = s.positions[0];
+  assert.ok(holder);
+  const other = '0x0000000000000000000000000000000000000002';
+  s.positions = [{ ...holder, supplyShares: 60_000_000n, borrowShares: 20_000_000n },
+    { address: other, supplyShares: 40_000_000n, borrowShares: 30_000_000n, collateral: 100n }];
+  const complete = evaluateMorpho(s, 'complete');
+  assert.deepEqual(complete.violations, []);
+  assert.equal(complete.coverage, 'complete');
+  assert.ok(!complete.unavailable.includes('complete-holder conservation'));
+  const ids = (snapshot: MorphoSnapshot) => evaluateMorpho(snapshot, 'complete').violations.map((v) => v.id);
+  // Mutant 1: discovery missed a holder. The sampled subset checks would still pass.
+  const dropped = { ...s, positions: s.positions.slice(1) };
+  assert.deepEqual(evaluateMorpho(dropped).violations, []);
+  assert.deepEqual(ids(dropped), ['MORPHO-SUPPLY-CONSERVATION', 'MORPHO-BORROW-CONSERVATION']);
+  // Mutant 2: one share of one holder altered.
+  assert.deepEqual(ids({ ...s, positions: [{ ...s.positions[0]!, borrowShares: 20_000_001n }, s.positions[1]!] }),
+    ['MORPHO-BORROW-CONSERVATION']);
+});
+test('committed holder fixture matches its hash, range and market', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const { createHash } = await import('node:crypto');
+  const { morphoTarget } = await import('../scripts/morpho-config.js');
+  const fixture = JSON.parse(await readFile(new URL('../../demo/morpho-holders.json', import.meta.url), 'utf8'));
+  assert.equal(fixture.market, morphoTarget.market);
+  assert.equal(fixture.toBlock, morphoTarget.block.toString());
+  assert.equal(fixture.holders.length, fixture.holderCount);
+  assert.equal(new Set(fixture.holders).size, fixture.holderCount);
+  assert.deepEqual([...fixture.holders].sort(), fixture.holders);
+  assert.equal(createHash('sha256').update(fixture.holders.join('\n')).digest('hex'), fixture.holdersSha256);
+});
 test('mainnet batches simulate accrual without changing stored state', { skip: !process.env.BASE_MAINNET_RPC, timeout: 120_000 }, async () => {
   const { morphoInputs } = await import('../scripts/morpho-config.js');
   const { params } = await morphoInputs();

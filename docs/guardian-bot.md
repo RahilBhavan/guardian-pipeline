@@ -344,12 +344,14 @@ transactional redundant workers, proof commands and hosting requirements.
   single-pass runner and HA worker. A forced-error integration test verifies
   delivery to a real HTTP receiver and redaction of credential-bearing errors.
   A managed collector/account has not been configured or verified.
-- **Mainnet detection sample:** the [Morpho runtime benchmark](morpho-detection-benchmark.md)
-  measures 100/1,000 positions through the dedicated fetch/accrue/evaluate/JSON
-  path. It covers five Morpho checks and health-risk observations, with explicit
-  unavailable checks. It excludes full-holder discovery, database delivery and
-  the twelve Guardian Vault predicates. The earlier read-only baseline remains
-  available in [Morpho read load](morpho-benchmark.md).
+- **Mainnet load benchmark:** the [Morpho full-holder benchmark](morpho-full-benchmark.md)
+  reads all 77,611 discovered holders of Base cbBTC/USDC at a pinned block,
+  checks exact share conservation and commits alerts plus a `blocks_checked` row
+  to local PostgreSQL in one transaction: 11,744 ms p50 / 13,876 ms p95 over 25
+  samples. It uses a dedicated Morpho detector, not the twelve Guardian Vault
+  predicates, and does not time incremental discovery. Smaller earlier runs:
+  [sampled detection](morpho-detection-benchmark.md) and
+  [read load](morpho-benchmark.md).
 - **Scheduled persistence:** `once.ts` uses the same PostgreSQL transaction as HA,
   samples window endpoints after complete contiguous event discovery, and fails
   while behind head. It requires `DATABASE_URL`; the daemon configuration below

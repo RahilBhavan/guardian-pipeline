@@ -1,4 +1,5 @@
-/** Morpho Blue sampled runtime detector. Separate from the twelve Vault predicates. */
+/** Morpho Blue runtime detector. Separate from the twelve Vault predicates. */
+import type { Pool } from 'pg';
 import { parseAbi, encodeFunctionData, decodeFunctionResult, type Address, type Hex, type PublicClient } from 'viem';
 
 const aggregateAbi = parseAbi(['function aggregate3((address target,bool allowFailure,bytes callData)[] calls) payable returns ((bool success,bytes returnData)[])']);
@@ -29,11 +30,11 @@ export interface MorphoSnapshot {
  * Every batch starts from the same pinned state, so deterministic IRM/oracle outputs agree.
  */
 export async function fetchMorphoSnapshot(params: {
-  client: PublicClient; morpho: Address; market: Hex; block: bigint; actors: Address[];
+  client: PublicClient; morpho: Address; market: Hex; block: bigint; actors: Address[]; batchSize?: number;
 }): Promise<MorphoSnapshot> {
   if (!params.actors.length) throw new Error('At least one actor is required');
   if (new Set(params.actors.map((a) => a.toLowerCase())).size !== params.actors.length) throw new Error('Duplicate actors');
-  const { client, morpho, market, block, actors } = params;
+  const { client, morpho, market, block, actors, batchSize = 100 } = params;
   const before = await client.getBlock({ blockNumber: block });
   const [loanToken, collateralToken, oracle, irm, lltv] = await client.readContract({
     address: morpho, abi, functionName: 'idToMarketParams', args: [market], blockNumber: block,
@@ -41,8 +42,8 @@ export async function fetchMorphoSnapshot(params: {
   if (lltv <= 0n || lltv >= 10n ** 18n) throw new Error('Invalid or uncreated market');
   const marketParams = { loanToken, collateralToken, oracle, irm, lltv };
   let snapshot: MorphoSnapshot | undefined;
-  for (let offset = 0; offset < actors.length; offset += 100) {
-    const batch = actors.slice(offset, offset + 100);
+  for (let offset = 0; offset < actors.length; offset += batchSize) {
+    const batch = actors.slice(offset, offset + batchSize);
     const multicall = client.chain?.contracts?.multicall3?.address;
     if (!multicall) throw new Error('Chain has no configured Multicall3');
     const calls = [
@@ -94,7 +95,8 @@ export function morphoDebtUp(shares: bigint, assets: bigint, totalShares: bigint
   const denominator = totalShares + 1_000_000n;
   return (shares * (assets + 1n) + denominator - 1n) / denominator;
 }
-export function evaluateMorpho(snapshot: MorphoSnapshot) {
+/** `complete` asserts the snapshot holds every market holder: share sums must then equal totals exactly. */
+export function evaluateMorpho(snapshot: MorphoSnapshot, coverage: 'sample' | 'complete' = 'sample') {
   const s = snapshot;
   let supplied = 0n;
   let borrowed = 0n;
@@ -110,8 +112,13 @@ export function evaluateMorpho(snapshot: MorphoSnapshot) {
   }
   const checks = [
     { id: 'MORPHO-LIQUIDITY', passed: s.totalBorrowAssets <= s.totalSupplyAssets, actual: s.totalBorrowAssets, bound: s.totalSupplyAssets },
-    { id: 'MORPHO-SUPPLY-SUBSET', passed: supplied <= s.totalSupplyShares, actual: supplied, bound: s.totalSupplyShares },
-    { id: 'MORPHO-BORROW-SUBSET', passed: borrowed <= s.totalBorrowShares, actual: borrowed, bound: s.totalBorrowShares },
+    ...coverage === 'complete' ? [
+      { id: 'MORPHO-SUPPLY-CONSERVATION', passed: supplied === s.totalSupplyShares, actual: supplied, bound: s.totalSupplyShares },
+      { id: 'MORPHO-BORROW-CONSERVATION', passed: borrowed === s.totalBorrowShares, actual: borrowed, bound: s.totalBorrowShares },
+    ] : [
+      { id: 'MORPHO-SUPPLY-SUBSET', passed: supplied <= s.totalSupplyShares, actual: supplied, bound: s.totalSupplyShares },
+      { id: 'MORPHO-BORROW-SUBSET', passed: borrowed <= s.totalBorrowShares, actual: borrowed, bound: s.totalBorrowShares },
+    ],
     { id: 'MORPHO-ACCRUAL', passed: s.lastUpdate === s.timestamp, actual: s.lastUpdate, bound: s.timestamp },
     { id: 'MORPHO-FEE', passed: s.fee <= 250_000_000_000_000_000n, actual: s.fee, bound: 250_000_000_000_000_000n },
   ];
@@ -119,21 +126,52 @@ export function evaluateMorpho(snapshot: MorphoSnapshot) {
     // These are risk observations, not protocol invariant failures: liquidation is permissionless.
     liquidatable, debtWithoutCollateral, sampledPositions: s.positions.length,
     populatedPositions: s.positions.filter((p) => p.supplyShares || p.borrowShares || p.collateral).length,
-    coverage: 'sample' as const,
-    unavailable: ['complete-holder conservation', 'shared-token custody across all markets',
+    coverage,
+    unavailable: [...coverage === 'complete' ? [] : ['complete-holder conservation'], 'shared-token custody across all markets',
       'historical bad-debt/share-price deltas', 'oracle freshness (no timestamp in oracle ABI)',
       'Guardian Vault-specific INV-01 through INV-12 parity'],
   };
 }
 
 /** Shared by the runtime CLI and benchmark: reads -> accrual -> evaluation -> alert payload. */
-export async function detectMorpho(params: Parameters<typeof fetchMorphoSnapshot>[0]) {
+export async function detectMorpho(params: Parameters<typeof fetchMorphoSnapshot>[0], coverage: 'sample' | 'complete' = 'sample') {
   const start = performance.now();
   const snapshot = await fetchMorphoSnapshot(params);
-  const results = evaluateMorpho(snapshot);
+  const results = evaluateMorpho(snapshot, coverage);
   return { protocol: 'morpho-blue' as const, market: params.market, morpho: params.morpho,
     block: snapshot.blockNumber, blockHash: snapshot.blockHash, timestamp: snapshot.timestamp,
     results, detectionLatencyMs: performance.now() - start };
 }
 
 export const morphoJson = (_key: string, value: unknown): unknown => typeof value === 'bigint' ? value.toString() : value;
+
+/** Same delivery shape as atomicMonitor: accounting violations and one checked-block row, one transaction.
+ * Liquidatable positions are risk observations, not alerts. Returns inserted row counts for readback checks.
+ */
+export async function deliverMorpho(pool: Pool, report: Awaited<ReturnType<typeof detectMorpho>>) {
+  const vault = report.market.toLowerCase();
+  const latency = Math.round(report.detectionLatencyMs);
+  const { violations } = report.results;
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    let alerts = 0;
+    for (const v of violations) {
+      const inserted = await db.query(`INSERT INTO public.alerts
+        (vault,block_number,block_ts,invariant_id,invariant_name,passed,actual_value,bound_value,description,detection_latency_ms)
+        VALUES ($1,$2,to_timestamp($3),$4,$4,false,$5,$6,$7,$8)
+        ON CONFLICT (vault,block_number,invariant_id) DO NOTHING`,
+      [vault, report.block.toString(), report.timestamp.toString(), v.id, v.actual.toString(), v.bound.toString(),
+        `Morpho Blue ${report.results.coverage} accounting check failed`, latency]);
+      alerts += inserted.rowCount ?? 0;
+    }
+    const block = await db.query(`INSERT INTO public.blocks_checked (vault,block_number,all_passed,latency_ms,violations_count)
+      VALUES ($1,$2,$3,$4,$5) ON CONFLICT (vault,block_number) DO NOTHING`,
+    [vault, report.block.toString(), violations.length === 0, latency, violations.length]);
+    await db.query('COMMIT');
+    return { alerts, blocks: block.rowCount ?? 0 };
+  } catch (err) {
+    await db.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally { db.release(); }
+}
