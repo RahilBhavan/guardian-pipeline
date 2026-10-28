@@ -60,7 +60,7 @@ Observed on 2026-10-24 with forge 1.8.6 and Node.js 26.8.1:
 
 - `forge test` passed all 99 test functions. Forge prints "86 tests" because it reports the 14 `invariant_*` functions of `InvariantVault` as one suite entry. Each of the 14 prints its own `[PASS]` line.
 - `assurance`: 50 of 50 tests passed.
-- `guardian`: 66 of 66 tests passed.
+- `guardian`: 72 of 73 tests passed, 1 skipped (observed 2026-10-28, Node.js 26.8.1).
 
 To run the invariant campaign with the CI profile (2,000 runs, depth 150). On 2026-10-24 all 14 invariant functions passed in 271 s, and the corpus-coverage gate showed every handler selector firing at least 18,573 times. Reading the vault through the kit adapter costs time: the same campaign on `main` before the kit took 137 s on the same machine:
 
