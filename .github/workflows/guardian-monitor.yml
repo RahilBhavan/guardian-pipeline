@@ -8,7 +8,7 @@
 # violation (attack()) surfaces on the next run, within minutes. GitHub ran the
 # schedule below only every 3-4 hours, so Supabase pg_cron starts this workflow
 # every 5 minutes via workflow_dispatch
-# (supabase/migrations/0005_monitor_dispatch_cron.sql); the schedule is a fallback.
+# (supabase/cron/monitor_dispatch.sql); the schedule is a fallback.
 #
 # Required repo secrets (Settings → Secrets and variables → Actions):
 #   (none for RPC: the run uses the public Base Sepolia RPC, see RPC_URL below)

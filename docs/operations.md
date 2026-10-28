@@ -100,7 +100,7 @@ PostgreSQL service; never point this test at a live project.
    Guardian Monitor workflow, and verify three actual scheduled runs each write
    a recent row. GitHub scheduling is best effort, not a per-block daemon. On
    this repository GitHub ran the `*/5` schedule only every 3 to 4 hours, so
-   apply `supabase/migrations/0005_monitor_dispatch_cron.sql` and store a
+   apply `supabase/cron/monitor_dispatch.sql` and store a
    fine-grained token (Actions read/write on this repository only) in Vault as
    `github_monitor_dispatch_token`. `pg_cron` then starts the workflow every 5
    minutes through the workflow-dispatch API. Check deliveries with

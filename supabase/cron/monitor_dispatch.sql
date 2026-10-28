@@ -1,4 +1,4 @@
--- Guardian — Scheduled Monitor Trigger
+-- Guardian — Scheduled Monitor Trigger (hosted Supabase only; not a schema migration)
 -- GitHub runs the Guardian Monitor's own `*/5` schedule hours late on this
 -- repository, so the monitor falls behind 0.2 s Base Sepolia blocks. pg_cron
 -- starts the workflow through GitHub's workflow-dispatch API every 5 minutes.
