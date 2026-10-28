@@ -6,7 +6,8 @@
 -- Before this job can succeed, store a fine-grained GitHub token with only
 -- Actions read/write on this repository in Supabase Vault (never in git):
 --   select vault.create_secret('<token>', 'github_monitor_dispatch_token');
--- Check deliveries with:
+-- Fine-grained tokens expire; a 401 below means rotate it with vault.update_secret.
+-- Check deliveries (expect 204) with:
 --   select status_code, created from net._http_response order by created desc limit 5;
 
 create extension if not exists pg_cron with schema pg_catalog;

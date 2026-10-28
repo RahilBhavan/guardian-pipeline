@@ -88,7 +88,7 @@ PostgreSQL service; never point this test at a live project.
 3. Bootstrap **complete** historical user discovery before enabling the schedule,
    or deploy two HA workers on a persistent host with a complete checkpoint.
    `npx tsx src/once.ts` replays contiguous 6000-block windows from deployment
-   (including the deployment block) until it reaches head or 7 minutes pass. It
+   (including the deployment block) until it reaches head or 5 minutes pass. It
    checks each window's endpoint and commits results/checkpoint together per
    window. It exits nonzero while behind head or
    after any failed write; rerun to resume. It never drops the gap. For an old
@@ -105,6 +105,8 @@ PostgreSQL service; never point this test at a live project.
    `github_monitor_dispatch_token`. `pg_cron` then starts the workflow every 5
    minutes through the workflow-dispatch API. Check deliveries with
    `select status_code, created from net._http_response order by created desc limit 5;`.
+   Expect 204. A 401 means the token expired or was revoked: create a new one and
+   replace it with `vault.update_secret`.
 5. Put `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` and `VITE_GUARDIAN_LIVE=true`
    in `dashboard/.env.production` (Vercel project env vars, if set, take
    precedence), deploy, and verify a recent block from the browser. Keep the

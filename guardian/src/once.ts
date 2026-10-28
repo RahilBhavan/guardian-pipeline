@@ -1,6 +1,6 @@
 /** Scheduled sampling with complete discovery and atomic persistence.
  * Commits 6000-block windows (~20 minutes of Base Sepolia at 0.2 s per block)
- * until head or a 7-minute budget, so a delayed schedule still catches up
+ * until head or a 5-minute budget, so a delayed schedule still catches up
  * inside the 10-minute job timeout. With LOG_RANGE=200 a window is 30 log
  * scans; a window that times out rolls back and is retried whole.
  * Never drops an older event gap.
@@ -45,7 +45,7 @@ async function run(): Promise<void> {
   try {
     const head = await client.getBlockNumber();
     const oracle = await fetchOracleAddress(client, vault);
-    const deadline = Date.now() + 7 * 60_000;
+    const deadline = Date.now() + 5 * 60_000;
     let result: Awaited<ReturnType<typeof checkNextBlock>>;
     do result = await checkNextBlock({ pool, vault, deployBlock, head, maxBlocks: 6000n,
       fetch: async (block, prior) => {
