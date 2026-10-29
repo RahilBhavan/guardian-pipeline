@@ -1,18 +1,23 @@
 /** Scheduled sampling with complete discovery and atomic persistence.
  * Commits 6000-block windows (~20 minutes of Base Sepolia at 0.2 s per block)
- * until head or a 5-minute budget, so a delayed schedule still catches up
- * inside the 10-minute job timeout. With LOG_RANGE=200 a window is 30 log
+ * until head or the CATCHUP_MINUTES budget (default 5), so a delayed schedule
+ * still catches up inside the job timeout. With LOG_RANGE=200 a window is 30 log
  * scans; a window that times out rolls back and is retried whole.
  * Never drops an older event gap.
  * Unlike HA, this records only each window's endpoint, not every block.
+ * Exit code: 0 at head with no violation, 1 infrastructure failure,
+ * 2 invariant violated at the last block checked, 3 still behind head (see exitStatus.ts).
  */
 import 'dotenv/config';
+import { appendFileSync } from 'node:fs';
 import { Pool } from 'pg';
 import { createPublicClient, http, isAddress, type PublicClient, type Chain } from 'viem';
 import { base, baseSepolia } from 'viem/chains';
 import pino from 'pino';
 import { discoverUsers, fetchLiquidationsInRange, fetchOracleAddress, fetchVaultState } from './fetcher.js';
 import { checkNextBlock } from './atomicMonitor.js';
+import { evaluateInvariants } from './evaluator.js';
+import { classifyRun, EXIT_CODES, type RunOutcome } from './exitStatus.js';
 import { startTelemetry, recordError } from './telemetry.js';
 
 const logger = pino();
@@ -27,7 +32,11 @@ function address(key: string): `0x${string}` {
   if (!isAddress(value)) throw new Error(`Invalid ${key}`);
   return value;
 }
-async function run(): Promise<void> {
+/** Shown on the workflow run page; GITHUB_STEP_SUMMARY is unset locally. */
+function summarize(outcome: RunOutcome, detail: string): void {
+  if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### Guardian Monitor: ${outcome}\n\n${detail}\n`);
+}
+async function run(): Promise<RunOutcome> {
   const vault = address('VAULT_ADDRESS');
   const asset = address('DEBT_ASSET');
   const chainName = process.env.CHAIN ?? 'base-sepolia';
@@ -45,7 +54,10 @@ async function run(): Promise<void> {
   try {
     const head = await client.getBlockNumber();
     const oracle = await fetchOracleAddress(client, vault);
-    const deadline = Date.now() + 5 * 60_000;
+    const budgetMinutes = Number(process.env.CATCHUP_MINUTES ?? 5);
+    if (!(budgetMinutes > 0)) throw new Error('Invalid CATCHUP_MINUTES');
+    const deadline = Date.now() + budgetMinutes * 60_000;
+    let violations: string[] = [];
     let result: Awaited<ReturnType<typeof checkNextBlock>>;
     do result = await checkNextBlock({ pool, vault, deployBlock, head, maxBlocks: 6000n,
       fetch: async (block, prior) => {
@@ -54,6 +66,7 @@ async function run(): Promise<void> {
         for (const user of await discoverUsers(client, vault, from, block, 1100)) users.add(user);
         const events = await fetchLiquidationsInRange(client, vault, oracle, from, block, 1100);
         const snapshot = await fetchVaultState(client, vault, asset, oracle, block, [...users], events);
+        violations = evaluateInvariants(snapshot, prior).filter((r) => !r.passed).map((r) => r.id);
         logger.info({ from: from.toString(), checked: block.toString(), head: head.toString(), users: users.size }, 'Complete discovery window fetched');
         return snapshot;
       },
@@ -64,17 +77,19 @@ async function run(): Promise<void> {
       'SELECT block_number FROM public.vault_state_previous WHERE vault=$1', [vault.toLowerCase()],
     );
     const row = checkpoint.rows[0];
-    if (!row || BigInt(row.block_number) < head) {
-      logger.warn({ checkpoint: row?.block_number, head: head.toString() }, 'Backfill incomplete; rerun to continue');
-      // Historical progress is durable, but a green scheduled run must mean head was checked.
-      throw new Error('Backfill incomplete; rerun to continue from durable checkpoint');
-    }
-    logger.info({ head: head.toString(), result }, 'Single-pass check committed');
+    const reached = row ? BigInt(row.block_number) : undefined;
+    // Historical progress is durable, but a green scheduled run must mean head was checked.
+    const outcome = classifyRun(head, reached, violations);
+    const detail = `Head ${head}, checkpoint ${reached ?? 'none'}. ${violations.length ? `Violated at the last block checked: ${violations.join(', ')}.` : 'No violation at the last block checked.'}`;
+    logger.info({ head: head.toString(), checkpoint: reached?.toString(), violations, outcome }, 'Single-pass check committed');
+    summarize(outcome, outcome === 'behind' ? `${detail} Backfill incomplete; rerun to continue from the durable checkpoint.` : detail);
+    return outcome;
   } finally { await pool.end(); }
 }
-run().catch(() => {
+run().catch((): RunOutcome => {
   // Provider errors may contain credentials. Detailed state is in structured progress logs.
   recordError('guardian.single_pass');
-  logger.fatal('Single-pass check failed or backfill incomplete; checkpoint retained');
-  process.exitCode = 1;
-}).finally(() => telemetry.shutdown());
+  logger.fatal('Single-pass check failed; infrastructure failure, checkpoint retained');
+  summarize('infra', 'The check could not complete (RPC, database or configuration). Not an invariant violation; see the step log.');
+  return 'infra';
+}).then((outcome) => { process.exitCode = EXIT_CODES[outcome]; }).finally(() => telemetry.shutdown());
