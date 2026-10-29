@@ -61,7 +61,8 @@ jobs:
         run: |
           set -euo pipefail
           RPC="https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}"
-          PRICE=$(cast call "$ORACLE" "price()(uint256)" --rpc-url "$RPC")
+          # cast 1.8.6 prints "2000000000000000000000 [2e21]"; keep the integer.
+          PRICE=$(cast call "$ORACLE" "price()(uint256)" --rpc-url "$RPC" | awk '{print $1}')
           echo "Current oracle price: $PRICE (re-setting to refresh freshness)"
           cast send "$ORACLE" "setPrice(uint256)" "$PRICE" \
             --rpc-url "$RPC" \
