@@ -35,7 +35,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
       - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4
@@ -52,6 +52,9 @@ jobs:
           # RPC allows 200.
           RPC_URL: https://sepolia.base.org
           LOG_RANGE: '200'
+          # A schedule-only gap of ~6 h is ~108k blocks, ~20 minutes of windows at
+          # the ~66 s per 6000 blocks seen in the run logs.
+          CATCHUP_MINUTES: '25'
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           # The Supabase pooler's chain ends at Supabase's own root CA.
           NODE_EXTRA_CA_CERTS: certs/supabase-prod-ca-2021.crt

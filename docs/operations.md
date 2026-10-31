@@ -88,10 +88,12 @@ PostgreSQL service; never point this test at a live project.
 3. Bootstrap **complete** historical user discovery before enabling the schedule,
    or deploy two HA workers on a persistent host with a complete checkpoint.
    `npx tsx src/once.ts` replays contiguous 6000-block windows from deployment
-   (including the deployment block) until it reaches head or 5 minutes pass. It
+   (including the deployment block) until it reaches head or `CATCHUP_MINUTES` (default 5) pass. It
    checks each window's endpoint and commits results/checkpoint together per
-   window. It exits nonzero while behind head or
-   after any failed write; rerun to resume. It never drops the gap. For an old
+   window. Exit codes: 0 at head with no violation, 1 infrastructure failure
+   (RPC, database, configuration or a failed write), 2 an invariant failed at the
+   last block checked, 3 still behind head; rerun to resume. The run page shows
+   the same outcome in its job summary. It never drops the gap. For an old
    deployment this can take many runs: keep live mode off while backfilling.
    Historical endpoint checks do not imply every intervening block was evaluated.
    The public shared AttackableVault may already be attacked; only

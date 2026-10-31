@@ -94,6 +94,7 @@ partially configured.
 | `SUPABASE_URL` | yes | Supabase project URL. |
 | `SUPABASE_SERVICE_KEY` | yes | **Service-role** key — bypasses RLS so the bot can insert. |
 | `VAULT_DEPLOY_BLOCK` | no | Block the vault was deployed at — the start of the event scan that seeds the user set. Defaults to `0`. |
+| `CATCHUP_MINUTES` | no | `once.ts` only: minutes to keep committing windows toward head. Defaults to `5`; the scheduled runner uses `25`. |
 | `LOG_RANGE` | no | Blocks per `eth_getLogs` request. Defaults to `10` (Alchemy free tier); the public Base RPC allows `200`, which the scheduled runner uses. |
 | `BLOCK_POLL_INTERVAL_MS` | no | Block poll interval; defaults to `2000`. |
 | `CHAIN` | no | `base-sepolia` (default) or `base`. Selects the Alchemy host and viem chain. |
