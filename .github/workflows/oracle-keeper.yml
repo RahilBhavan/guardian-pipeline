@@ -64,7 +64,15 @@ jobs:
           # cast 1.8.6 prints "2000000000000000000000 [2e21]"; keep the integer.
           PRICE=$(cast call "$ORACLE" "price()(uint256)" --rpc-url "$RPC" | awk '{print $1}')
           echo "Current oracle price: $PRICE (re-setting to refresh freshness)"
-          cast send "$ORACLE" "setPrice(uint256)" "$PRICE" \
+          if ! OUT=$(cast send "$ORACLE" "setPrice(uint256)" "$PRICE" \
             --rpc-url "$RPC" \
-            --private-key "$ORACLE_KEEPER_KEY"
+            --private-key "$ORACLE_KEEPER_KEY" 2>&1); then
+            echo "$OUT"
+            case "$OUT" in
+              *"allowance (0)"*|*"insufficient funds"*)
+                echo "::error::Keeper wallet has no Base Sepolia ETH for gas. Fund the wallet behind ORACLE_KEEPER_KEY, then re-run." ;;
+            esac
+            exit 1
+          fi
+          echo "$OUT"
           echo "Oracle re-stamped at block timestamp."
